@@ -83,8 +83,6 @@ RTC::ReturnCode_t TendonJointController::onInitialize()
   RTC::Properties& prop = getProperties();
   coil::stringTo(m_dt, prop["dt"].c_str());
 
-  m_robot = hrp::BodyPtr(new hrp::Body());
-
   RTC::Manager& rtcManager = RTC::Manager::instance();
   std::string nameServer = rtcManager.getConfig()["corba.nameservers"];
   int comPos = nameServer.find(",");
@@ -93,10 +91,13 @@ RTC::ReturnCode_t TendonJointController::onInitialize()
   }
   nameServer = nameServer.substr(0, comPos);
   RTC::CorbaNaming naming(rtcManager.getORB(), nameServer.c_str());
+
+  // parameters for internal robot model
+  m_robot = hrp::BodyPtr(new hrp::Body());
   if (!loadBodyFromModelLoader(m_robot, prop["model"].c_str(),
-			       CosNaming::NamingContext::_duplicate(naming.getRootContext())
-	  )){
-      std::cerr << "failed to load model[" << prop["model"] << "] in "
+                               CosNaming::NamingContext::_duplicate(naming.getRootContext())
+          )){
+      std::cerr << "TJC failed to load model[" << prop["model"] << "] in "
                 << m_profile.instance_name << std::endl;
       return RTC::RTC_ERROR;
   }
@@ -105,9 +106,11 @@ RTC::ReturnCode_t TendonJointController::onInitialize()
   TendonPairParam tp1, tp2;
   tp1.joint_names.push_back("RLEG_JOINT4");
   tp1.joint_names.push_back("RLEG_JOINT4_2");
+  tp1.joint_names.push_back("RLEG_JOINT3");
   pair_params.push_back(tp1);
   tp2.joint_names.push_back("LLEG_JOINT4");
   tp2.joint_names.push_back("LLEG_JOINT4_2");
+  tp2.joint_names.push_back("LLEG_JOINT3");
   pair_params.push_back(tp2);
 
   return RTC::RTC_OK;
@@ -151,6 +154,27 @@ RTC::ReturnCode_t TendonJointController::onExecute(RTC::UniqueId ec_id)
 {
   static int loop = 0;
   //if (loop%200==0) std::cout << m_profile.instance_name<< ": onExecute(" << ec_id << ")" << std::endl;
+#if 1
+  if (loop%1000==0){
+    //for(int i=0; 1; i++){
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 0 << ")->q(" << m_robot->joint(0)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 1 << ")->q(" << m_robot->joint(1)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 2 << ")->q(" << m_robot->joint(2)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 3 << ")->q(" << m_robot->joint(3)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 4 << ")->q(" << m_robot->joint(4)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 5 << ")->q(" << m_robot->joint(5)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 6 << ")->q(" << m_robot->joint(6)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 7 << ")->q(" << m_robot->joint(7)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 8 << ")->q(" << m_robot->joint(8)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 9 << ")->q(" << m_robot->joint(9)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 10 << ")->q(" << m_robot->joint(10)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 11 << ")->q(" << m_robot->joint(11)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 12 << ")->q(" << m_robot->joint(12)->q << ")" << std::endl;
+      std::cout << m_profile.instance_name<< ": m_robot->joint(" << 13 << ")->q(" << m_robot->joint(13)->q << ")" << std::endl;
+      //std::cout << m_profile.instance_name<< ": m_qRef.data[(" << i << "](" << m_qRef.data[i] << ")" << std::endl;
+      //}
+  }
+#endif
   loop ++;
   if (m_qRefIn.isNew()) {
     m_qRefIn.read();
@@ -162,6 +186,7 @@ RTC::ReturnCode_t TendonJointController::onExecute(RTC::UniqueId ec_id)
   // m_robot->joint(m_robot->link("LLEG_JOINT4")->jointId)->q += offset_l;
   // m_robot->joint(m_robot->link("HEAD_JOINT2")->jointId)->q = m_robot->joint(m_robot->link("RLEG_JOINT4")->jointId)->q - offset_r;
   // m_robot->joint(m_robot->link("HEAD_JOINT3")->jointId)->q = m_robot->joint(m_robot->link("LLEG_JOINT4")->jointId)->q - offset_l;
+#if 0
   for ( int i = 0; i < pair_params.size(); i++ ){
     m_robot->joint(m_robot->link(pair_params[i].joint_names[1])->jointId)->q = m_robot->joint(m_robot->link(pair_params[i].joint_names[0])->jointId)->q - pair_params[i].offset;
     m_robot->joint(m_robot->link(pair_params[i].joint_names[0])->jointId)->q += pair_params[i].offset;
@@ -170,6 +195,7 @@ RTC::ReturnCode_t TendonJointController::onExecute(RTC::UniqueId ec_id)
   for ( int i = 0; i < m_robot->numJoints(); i++ ){
     m_qRef.data[i] = m_robot->joint(i)->q;
   }
+#endif
   m_qRefOut.write();
   return RTC::RTC_OK;
 }
