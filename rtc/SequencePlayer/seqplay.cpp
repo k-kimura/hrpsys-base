@@ -16,6 +16,15 @@ seqplay::seqplay(unsigned int i_dof, double i_dt, unsigned int i_fnum, unsigned 
     interpolators[TQ] = new interpolator(i_dof, i_dt);
     interpolators[WRENCHES] = new interpolator(6 * i_fnum, i_dt, interpolator::HOFFARBIB, 100); // wrenches = 6 * [number of force sensors]
 	interpolators[OPTIONAL_DATA] = new interpolator(optional_data_dim, i_dt);
+    // Set interpolator name
+    interpolators[Q]->setName("Q");
+    interpolators[ZMP]->setName("ZMP");
+    interpolators[ACC]->setName("ACC");
+    interpolators[P]->setName("P");
+    interpolators[RPY]->setName("RPY");
+    interpolators[TQ]->setName("TQ");
+    interpolators[WRENCHES]->setName("WRENCHES");
+    interpolators[OPTIONAL_DATA]->setName("OPTIONAL_DATA");
     //
 
 #ifdef WAIST_HEIGHT
@@ -477,11 +486,15 @@ bool seqplay::resetJointGroup(const char *gname, const double *full)
 	}
 }
 
-bool seqplay::setJointAnglesOfGroup(const char *gname, const double *i_qRef, double i_tm)
+bool seqplay::setJointAnglesOfGroup(const char *gname, const double* i_qRef, const size_t i_qsize, double i_tm)
 {
 	char *s = (char *)gname; while(*s) {*s=toupper(*s);s++;}
 	groupInterpolator *i = groupInterpolators[gname];
 	if (i){
+		if (i_qsize != i->indices.size() ) {
+			std::cerr << "[setJointAnglesOfGroup] group name " << gname << " : size of manipulater is not equal to input. " << i_qsize << " /= " << i->indices.size() << std::endl;
+			return false;
+		}
 		if (i->state == groupInterpolator::created){
 			double q[m_dof], dq[m_dof];
 			interpolators[Q]->get(q, dq, false);
@@ -580,4 +593,274 @@ bool seqplay::playPatternOfGroup(const char *gname, std::vector<const double *> 
 		std::cerr << "[playPatternOfGroup] group name " << gname << " is not installed" << std::endl;
 		return false;
 	}
+}
+
+bool seqplay::setJointAnglesSequence(std::vector<const double*> pos, std::vector<double> tm)
+{
+	// setJointAngles to override curren tgoal
+	double x[m_dof], v[m_dof], a[m_dof];
+	interpolators[Q]->get(x, v, a, false);
+	interpolators[Q]->set(x, v);
+	interpolators[Q]->clear();
+	interpolators[Q]->push(x, v, a, true);
+
+    const double *q=NULL;
+    for (unsigned int i=0; i<pos.size(); i++){
+        q = pos[i];
+		if (i < pos.size() - 1 ) {
+			double t0, t1;
+			if (tm.size() == pos.size()) {
+				t0 = tm[i]; t1 = tm[i+1];
+			} else {
+				t0 = t1 = tm[0];
+			}
+			const double *q_next = pos[i+1];
+			const double *q_prev = i==0?x:pos[i-1];
+			for (unsigned int j = 0; j < m_dof; j++) {
+				double d0, d1, v0, v1;
+				d0 = (q[j] - q_prev[j]);
+				d1 = (q_next[j] - q[j]);
+				v0 = d0/t0;
+				v1 = d1/t1;
+				if ( v0 * v1 >= 0 ) {
+					v[j] = 0.5 * (v0 + v1);
+				} else {
+					v[j] = 0;
+				}
+			}
+		} else {
+			for (unsigned int j = 0; j < m_dof; j++) { v[j] = 0.0; }
+		}
+
+		interpolators[Q]->setGoal(pos[i], v, tm[i], false);
+		do{
+			interpolators[Q]->interpolate(tm[i]);
+		}while(tm[i]>0);
+		sync();
+	}
+	return true;
+}
+
+bool seqplay::clearJointAngles()
+{
+	// setJointAngles to override curren tgoal
+	double x[m_dof], v[m_dof], a[m_dof];
+	interpolators[Q]->get(x, v, a, false);
+	interpolators[Q]->set(x, v);
+	interpolators[Q]->clear();
+	double tm = interpolators[Q]->deltaT();
+	interpolators[Q]->setGoal(x, v, tm, false);
+	do{
+		interpolators[Q]->interpolate(tm);
+	}while(tm>0);
+	sync();
+	return true;
+}
+
+bool seqplay::setJointAnglesSequenceFull(std::vector<const double*> i_pos, std::vector<const double*> i_vel, std::vector<const double*> i_torques, std::vector<const double*> i_bpos, std::vector<const double*> i_brpy, std::vector<const double*> i_bacc,  std::vector<const double*> i_zmps, std::vector<const double*> i_wrenches, std::vector<const double*> i_optionals, std::vector<double> i_tm)
+{
+	// setJointAngles to override curren tgoal
+	double x[m_dof], v[m_dof], a[m_dof];
+	interpolators[Q]->get(x, v, a, false);
+	interpolators[Q]->set(x, v);
+	interpolators[Q]->clear();
+	interpolators[Q]->push(x, v, a, true);
+	double torque[m_dof], dummy_dof[m_dof];
+	for (unsigned int j = 0; j < m_dof; j++) { dummy_dof[j] = 0.0; }
+	interpolators[TQ]->get(torque, false);
+	interpolators[TQ]->set(torque);
+	interpolators[TQ]->clear();
+	interpolators[TQ]->push(torque, dummy_dof, dummy_dof, true);
+	double bpos[3], brpy[3], bacc[3], dummy_3[3]={0,0,0};
+	interpolators[P]->get(bpos, false);
+	interpolators[P]->set(bpos);
+	interpolators[P]->clear();
+	interpolators[P]->push(bpos, dummy_3, dummy_3, true);
+	interpolators[RPY]->get(brpy, false);
+	interpolators[RPY]->set(brpy);
+	interpolators[RPY]->clear();
+	interpolators[RPY]->push(brpy, dummy_3, dummy_3, true);
+	interpolators[ACC]->get(bacc, false);
+	interpolators[ACC]->set(bacc);
+	interpolators[ACC]->clear();
+	interpolators[RPY]->push(bacc, dummy_3, dummy_3, true);
+	int fnum = interpolators[WRENCHES]->dimension()/6, optional_data_dim = interpolators[OPTIONAL_DATA]->dimension();
+	double zmp[3], wrench[6*fnum], dummy_fnum[6*fnum], optional[optional_data_dim], dummy_optional[optional_data_dim];
+	for (unsigned int j = 0; j < 6*fnum; j++) { dummy_dof[j] = 0.0; }
+	for (unsigned int j = 0; j < optional_data_dim; j++) { dummy_optional[j] = 0.0; }
+	interpolators[ZMP]->get(zmp, false);
+	interpolators[ZMP]->set(zmp);
+	interpolators[ZMP]->clear();
+	interpolators[ZMP]->push(zmp, dummy_3, dummy_3, true);
+	interpolators[WRENCHES]->get(wrench, false);
+	interpolators[WRENCHES]->set(wrench);
+	interpolators[WRENCHES]->clear();
+	interpolators[WRENCHES]->push(wrench, dummy_fnum, dummy_fnum, true);
+	interpolators[OPTIONAL_DATA]->get(optional, false);
+	interpolators[OPTIONAL_DATA]->set(optional);
+	interpolators[OPTIONAL_DATA]->clear();
+	interpolators[OPTIONAL_DATA]->push(optional, dummy_optional, dummy_optional, true);
+
+    const double *q=NULL;
+    for (unsigned int i=0; i<i_pos.size(); i++){
+		if (i_vel.size() > 0 ) {
+			for (unsigned int j = 0; j < m_dof; j++) {
+				v[j] = i_vel[i][j];
+			}
+		}else{
+			q = i_pos[i];
+			if (i < i_pos.size() - 1 ) {
+				double t0, t1;
+				if (i_tm.size() == i_pos.size()) {
+					t0 = i_tm[i]; t1 = i_tm[i+1];
+				} else {
+					t0 = t1 = i_tm[0];
+				}
+				const double *q_next = i_pos[i+1];
+				const double *q_prev = i==0?x:i_pos[i-1];
+				for (unsigned int j = 0; j < m_dof; j++) {
+					double d0, d1, v0, v1;
+					d0 = (q[j] - q_prev[j]);
+					d1 = (q_next[j] - q[j]);
+					v0 = d0/t0;
+					v1 = d1/t1;
+					if ( v0 * v1 >= 0 ) {
+						v[j] = 0.5 * (v0 + v1);
+					} else {
+						v[j] = 0;
+					}
+				}
+			} else {
+				for (unsigned int j = 0; j < m_dof; j++) { v[j] = 0.0; }
+			}
+		}
+
+		interpolators[Q]->setGoal(i_pos[i], v, i_tm[i], false);
+		interpolators[TQ]->setGoal(i_torques[i], i_tm[i], false);
+		interpolators[P]->setGoal(i_bpos[i], i_tm[i], false);
+		interpolators[RPY]->setGoal(i_brpy[i], i_tm[i], false);
+		interpolators[ACC]->setGoal(i_bacc[i], i_tm[i], false);
+		interpolators[ZMP]->setGoal(i_zmps[i], i_tm[i], false);
+		interpolators[WRENCHES]->setGoal(i_wrenches[i], i_tm[i], false);
+		interpolators[OPTIONAL_DATA]->setGoal(i_optionals[i], i_tm[i], false);
+		do{
+			double tm = i_tm[i], tm_tmp;
+			interpolators[Q]->interpolate(i_tm[i]);
+			tm_tmp = tm; interpolators[TQ]->interpolate(tm_tmp);
+			tm_tmp = tm; interpolators[P]->interpolate(tm_tmp);
+			tm_tmp = tm; interpolators[RPY]->interpolate(tm_tmp);
+			tm_tmp = tm; interpolators[ACC]->interpolate(tm_tmp);
+			tm_tmp = tm; interpolators[ZMP]->interpolate(tm_tmp);
+			tm_tmp = tm; interpolators[WRENCHES]->interpolate(tm_tmp);
+			tm_tmp = tm; interpolators[OPTIONAL_DATA]->interpolate(tm_tmp);
+		}while(i_tm[i]>0);
+		sync();
+	}
+	return true;
+}
+
+bool seqplay::setJointAnglesSequenceOfGroup(const char *gname, std::vector<const double*> pos, std::vector<double> tm, const size_t pos_size)
+{
+	char *s = (char *)gname; while(*s) {*s=toupper(*s);s++;}
+	groupInterpolator *i = groupInterpolators[gname];
+
+	if (! i){
+		std::cerr << "[setJointAnglesSequenceOfGroup] group name " << gname << " is not installed" << std::endl;
+		return false;
+	}
+	if (pos_size != i->indices.size() ) {
+		std::cerr << "[setJointAnglesSequenceOfGroup] group name " << gname << " : size of manipulater is not equal to input. " << pos_size << " /= " << i->indices.size() << std::endl;
+		return false;
+	}
+	int len = i->indices.size();
+	double x[len], v[len];
+	double q[m_dof], dq[m_dof];
+	i->inter->get(q, dq, false);
+	i->inter->set(q, dq);
+	i->extract(x, q);
+	i->extract(v, dq);
+	i->inter->clear();
+    const double *q_curr=NULL;
+    for (unsigned int j=0; j<pos.size(); j++){
+        q_curr = pos[j];
+		if ( j < pos.size() - 1 ) {
+			double t0, t1;
+			if (tm.size() == pos.size()) {
+				t0 = tm[j]; t1 = tm[j+1];
+			} else {
+				t0 = t1 = tm[0];
+			}
+			const double *q_next = pos[j+1];
+			const double *q_prev = j==0?x:pos[j-1];
+			for (unsigned int k = 0; k < len; k++) {
+				double d0, d1, v0, v1;
+				d0 = (q_curr[k] - q_prev[k]);
+				d1 = (q_next[k] - q_curr[k]);
+				v0 = d0/t0;
+				v1 = d1/t1;
+				if ( v0 * v1 >= 0 ) {
+					v[k] = 0.5 * (v0 + v1);
+				} else {
+					v[k] = 0;
+				}
+			}
+		} else {
+			for (unsigned int k = 0; k < len; k++) { v[k] = 0.0; }
+		}
+		if (i->state == groupInterpolator::created){
+			interpolators[Q]->get(q, dq, false);
+			std::map<std::string, groupInterpolator *>::iterator it;
+			for (it=groupInterpolators.begin(); it!=groupInterpolators.end(); it++){
+				groupInterpolator *gi = it->second;
+				if (gi)	gi->get(q, dq, false);
+			}
+			i->extract(x, q);
+			i->extract(v, dq);
+			i->inter->go(x,v,interpolators[Q]->deltaT());
+		}
+		i->inter->setGoal(pos[j], v, tm[j], false);
+		do{
+			i->inter->interpolate(tm[j]);
+		}while(tm[j]>0);
+		i->inter->sync();
+		i->state = groupInterpolator::working;
+	}
+	return true;
+}
+
+bool seqplay::clearJointAnglesOfGroup(const char *gname)
+{
+	char *s = (char *)gname; while(*s) {*s=toupper(*s);s++;}
+	groupInterpolator *i = groupInterpolators[gname];
+
+	if (! i){
+		std::cerr << "[clearJointAnglesOfGroup] group name " << gname << " is not installed" << std::endl;
+		return false;
+	}
+
+	if (i->state == groupInterpolator::created){
+		std::cerr << "[clearJointAnglesOfGroup] group name " << gname << " is not created" << std::endl;
+		return false;
+	}
+
+	if (i->state == groupInterpolator::removing || i->state == groupInterpolator::removed){
+		std::cerr << "[clearJointAnglesOfGroup] group name " << gname << " is removing" << std::endl;
+		return false;
+	}
+
+	int len = i->indices.size();
+	double x[len], v[len], a[len];
+	i->inter->get(x, v, a, false);
+	i->inter->set(x, v);
+	while(i->inter->remain_time() > 0){
+		i->inter->pop();
+	}
+	double tm = interpolators[Q]->deltaT();
+	i->inter->setGoal(x, v, tm, true);// true: update remian_t
+	do{
+		i->inter->interpolate(tm);
+	}while(tm>0);
+	i->inter->sync();
+
+	return true;
 }

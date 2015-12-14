@@ -2,9 +2,9 @@
  <mode name="Simulation">
   <item class="com.generalrobotix.ui.item.GrxSimulationItem" name="simulationItem">
    <property name="integrate" value="true"/>
-   <property name="timeStep" value="@CONTROLLER_TIME@"/>
+   <property name="timeStep" value="0.001"/>
    <property name="totalTime" value="2000000.0"/>
-   <property name="method" value="EULER"/>
+   <property name="method" value="RUNGE_KUTTA"/>
   </item>
   <item class="com.generalrobotix.ui.item.GrxRTSItem" name="SampleRobot" select="true">
    <property name="SampleRobot(Robot)0.period" value="@CONTROLLER_TIME@"/>
@@ -13,7 +13,7 @@
    <property name="connection" value="PDcontroller0.torque:SampleRobot(Robot)0.tauRef"/>
    <property name="connection" value="SampleRobot(Robot)0.q:PDcontroller0.angle"/>
   </item>
-  <item class="com.generalrobotix.ui.item.GrxModelItem" name="sample1" url="@OPENHRP_DIR@/share/OpenHRP-3.1/sample/model/sample1.wrl">
+  <item class="com.generalrobotix.ui.item.GrxModelItem" name="sample1" url="@OPENHRP_DIR@/share/OpenHRP-3.1/sample/model/sample1_bush.wrl">
    <property name="rtcName" value="SampleRobot(Robot)0"/>
    <property name="inport" value="tauRef:JOINT_TORQUE"/>
    <property name="outport" value="q:JOINT_VALUE"/>
@@ -24,6 +24,7 @@
    <property name="outport" value="rhsensor:rhsensor:FORCE_SENSOR"/>
    <property name="outport" value="gyrometer:gyrometer:RATE_GYRO_SENSOR"/>
    <property name="outport" value="gsensor:gsensor:ACCELERATION_SENSOR"/>
+   <property name="outport" value="WAIST:WAIST:ABS_TRANSFORM"/>
    <property name="WAIST.NumOfAABB" value="1"/>
    <property name="WAIST.translation" value="0  0  0.7235"/>
    <property name="WAIST.rotation" value="1 0 0 0"/>

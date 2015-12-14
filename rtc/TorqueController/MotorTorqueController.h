@@ -48,19 +48,26 @@ public:
   void setupController(TwoDofControllerDynamicsModel::TwoDofControllerDynamicsModelParam &_param);
   bool updateControllerParam(TwoDofControllerDynamicsModel::TwoDofControllerDynamicsModelParam &_param);
 
+  // for normal/emergency torque contorller
+  bool enable(void); // enable torque controller (normal controller is not activated but emergency toruqe control may be activated)
+  bool disable(void); // disable torque controller (emergency controller is also ignored)
+
+  // for normal torque controller
   void setupMotorControllerMinMaxDq(double _min_dq, double _max_dq); // set min/max dq for transition
   bool activate(void); // set state of torque controller to ACTIVE
   bool deactivate(void); // set state of torque controller to STOP -> INACTIVE
   bool setReferenceTorque(double _tauRef); // set reference torque (does not activate controller)
-  double execute(double _tau, double _tauMax); // determine final state and tauRef, then throw tau, tauRef and state to executeControl
 
-  motor_model_t getMotorModelType(void);
+  double execute(double _tau, double _tauMax); // determine final state and tauRef, then throw tau, tauRef and state to executeControl
   
   // accessor
+  motor_model_t getMotorModelType(void);
   std::string getJointName(void);
   controller_state_t getMotorControllerState(void);
+  bool isEnabled(void);
 
   // for debug
+  void setErrorPrefix(const std::string& _error_prefix);
   void printMotorControllerVariables(void); // debug print
   
 private:
@@ -85,8 +92,10 @@ private:
     void setupTwoDofControllerDynamicsModel(TwoDofControllerDynamicsModel::TwoDofControllerDynamicsModelParam &_param);
     bool updateTwoDofControllerDynamiccsModelParam(TwoDofControllerDynamicsModel::TwoDofControllerDynamicsModelParam &_param);
     double getMotorControllerDq(void); // get according dq according to state
+    void setErrorPrefix(const std::string& _error_prefix);
   private:
     bool updateParam(double &_param, const double &_new_value); // update param if new_value is acceptable
+    std::string error_prefix;
   };
   
   // internal functions
@@ -104,7 +113,8 @@ private:
   double m_actual_tauRef; // reference tau which is limited or overwritten by emergency (mainly for debug message)
   MotorController m_normalController; // substance of two dof controller
   MotorController m_emergencyController; // overwrite normal controller when emergency
-  
+  std::string m_error_prefix; // assumed to be instance name of rtc
+  bool m_enable_flag;
 };
 
 

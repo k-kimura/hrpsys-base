@@ -19,7 +19,7 @@
 using namespace hrp;
 
 
-robot::robot() : m_fzLimitRatio(0), m_maxZmpError(DEFAULT_MAX_ZMP_ERROR), m_calibRequested(false), m_pdgainsFilename("PDgains.sav"), wait_sem(0), m_reportedEmergency(true)
+robot::robot(double dt) : m_fzLimitRatio(0), m_maxZmpError(DEFAULT_MAX_ZMP_ERROR), m_calibRequested(false), m_pdgainsFilename("PDgains.sav"), wait_sem(0), m_reportedEmergency(true), m_dt(dt), m_accLimit(0)
 {
     m_rLegForceSensorId = m_lLegForceSensorId = -1;
 }
@@ -83,6 +83,7 @@ bool robot::init()
       std::cerr << "  accelerometer:" << numSensors(Sensor::ACCELERATION) << "(VRML), " << number_of_accelerometers() << "(IOB)"  << std::endl;
       return false;
     }
+    G << 0, 0, 9.8;
 
     if (open_iob() == FALSE) return false;
 
@@ -209,10 +210,11 @@ void robot::calibrateInertiaSensorOneStep()
             }
 
             for (int j=0; j<numSensors(Sensor::ACCELERATION); j++) {
+                hrp::Sensor* m_sensor = sensor(hrp::Sensor::ACCELERATION, j);
+                hrp::Matrix33 m_sensorR = m_sensor->link->R * m_sensor->localR;
+                hrp::Vector3 G_rotated = m_sensorR.transpose() * G;
                 for (int i=0; i<3; i++) {
-                    accel_sum[j][i] = -accel_sum[j][i]/CALIB_COUNT;
-#define	G	(9.8) // [m/s^2]
-                    if (i==2) accel_sum[j][i] += G;
+                    accel_sum[j][i] = -accel_sum[j][i]/CALIB_COUNT + G_rotated(i);
                 }
                 write_accelerometer_offset(j, accel_sum[j].data());
             }
@@ -424,6 +426,11 @@ int robot::readJointTorques(double *o_torques)
     return read_actual_torques(o_torques);
 }
 
+int robot::readJointCommandTorques(double *o_torques)
+{
+    return read_command_torques(o_torques);
+}
+
 void robot::readGyroSensor(unsigned int i_rank, double *o_rates)
 {
     read_gyro_sensor(i_rank, o_rates);
@@ -441,6 +448,14 @@ void robot::readForceSensor(unsigned int i_rank, double *o_forces)
 
 void robot::writeJointCommands(const double *i_commands)
 {
+    if (!m_commandOld.size()) {
+        m_commandOld.resize(numJoints());
+        m_velocityOld.resize(numJoints());
+    }
+    for (int i=0; i<numJoints(); i++){
+        m_velocityOld[i] = (i_commands[i] - m_commandOld[i])/m_dt;
+        m_commandOld[i] = i_commands[i];
+    }
     write_command_angles(i_commands);
 }
 
@@ -511,18 +526,32 @@ char *time_string()
 
 bool robot::checkJointCommands(const double *i_commands)
 {
+    if (!m_dt) return false;
+    if (!m_commandOld.size()) return false;
+
     int state;
     for (int i=0; i<numJoints(); i++){
         read_servo_state(i, &state);
-        if (state == ON && m_servoErrorLimit[i] != 0){
-            double angle, command=i_commands[i];
-            read_actual_angle(i, &angle);
-            if (fabs(angle-command) > m_servoErrorLimit[i]){
+        if (state == ON){
+            double command_old=m_commandOld[i], command=i_commands[i];
+            double v = (command - command_old)/m_dt;
+            if (fabs(v) > joint(i)->uvlimit){
                 std::cerr << time_string()
-                          << ": servo error limit over: joint = " 
+                          << ": joint command velocity limit over: joint = " 
 		          << joint(i)->name
-		          << ", qRef = " << command/M_PI*180 << "[deg], q = " 
-		          << angle/M_PI*180 << "[deg]" << std::endl;
+		          << ", vlimit = " << joint(i)->uvlimit/M_PI*180 
+                          << "[deg/s], v = " 
+		          << v/M_PI*180 << "[deg/s]" << std::endl;
+                return true;
+            }
+            double a = (v - m_velocityOld[i])/m_dt;
+            if (m_accLimit && fabs(a) > m_accLimit){
+                std::cerr << time_string()
+                          << ": joint command acceleration limit over: joint = " 
+		          << joint(i)->name
+		          << ", alimit = " << m_accLimit/M_PI*180 
+                          << "[deg/s^2], v = " 
+		          << a/M_PI*180 << "[deg/s^2]" << std::endl;
                 return true;
             }
         }
@@ -555,7 +584,7 @@ bool robot::checkEmergency(emg_reason &o_reason, int &o_id)
     if (m_rLegForceSensorId >= 0){
         double force[6];
         read_force_sensor(m_rLegForceSensorId, force);
-        if (force[FZ] > totalMass()*G*m_fzLimitRatio){
+        if (force[FZ] > totalMass()*G(2)*m_fzLimitRatio){
 	    std::cerr << time_string() << ": right Fz limit over: Fz = " << force[FZ] << std::endl;
             o_reason = EMG_FZ;
             o_id = m_rLegForceSensorId;
@@ -565,7 +594,7 @@ bool robot::checkEmergency(emg_reason &o_reason, int &o_id)
     if (m_lLegForceSensorId >= 0){
         double force[6];
         read_force_sensor(m_lLegForceSensorId, force);
-        if (force[FZ] > totalMass()*G*m_fzLimitRatio){
+        if (force[FZ] > totalMass()*G(2)*m_fzLimitRatio){
 	    std::cerr << time_string() << ": left Fz limit over: Fz = " << force[FZ] << std::endl;
             o_reason = EMG_FZ;
             o_id = m_lLegForceSensorId;
@@ -591,6 +620,7 @@ bool robot::checkEmergency(emg_reason &o_reason, int &o_id)
 bool robot::setServoGainPercentage(const char *i_jname, double i_percentage)
 {
     if ( i_percentage < 0 && 100 < i_percentage ) {
+        std::cerr << "[RobotHardware] Invalid percentage " <<  i_percentage << "[%] for setServoGainPercentage. Percentage should be in (0, 100)[%]." << std::endl;
         return false;
     }
     Link *l = NULL;
@@ -602,12 +632,14 @@ bool robot::setServoGainPercentage(const char *i_jname, double i_percentage)
             dgain[i] = default_dgain[i] * i_percentage/100.0;
             gain_counter[i] = 0;
         }
+        std::cerr << "[RobotHardware] setServoGainPercentage " << i_percentage << "[%] for all joints" << std::endl;
     }else if ((l = link(i_jname))){
         if (!read_pgain(l->jointId, &old_pgain[l->jointId])) old_pgain[l->jointId] = pgain[l->jointId];
         pgain[l->jointId] = default_pgain[l->jointId] * i_percentage/100.0;
         if (!read_dgain(l->jointId, &old_dgain[l->jointId])) old_dgain[l->jointId] = dgain[l->jointId];
         dgain[l->jointId] = default_dgain[l->jointId] * i_percentage/100.0;
         gain_counter[l->jointId] = 0;
+        std::cerr << "[RobotHardware] setServoGainPercentage " << i_percentage << "[%] for " << i_jname << std::endl;
     }else{
         char *s = (char *)i_jname; while(*s) {*s=toupper(*s);s++;}
         const std::vector<int> jgroup = m_jointGroups[i_jname];
@@ -619,6 +651,7 @@ bool robot::setServoGainPercentage(const char *i_jname, double i_percentage)
             dgain[jgroup[i]] = default_dgain[jgroup[i]] * i_percentage/100.0;
             gain_counter[jgroup[i]] = 0;
         }
+        std::cerr << "[RobotHardware] setServoGainPercentage " << i_percentage << "[%] for " << i_jname << std::endl;
     }
     return true;
 }
@@ -698,12 +731,20 @@ void robot::readExtraServoState(int id, int *state)
 
 bool robot::readDigitalInput(char *o_din)
 {
+#ifndef NO_DIGITAL_INPUT
     return read_digital_input(o_din);
+#else
+    return false;
+#endif
 }
 
 int robot::lengthDigitalInput()
 {
+#ifndef NO_DIGITAL_INPUT
     return length_digital_input();
+#else
+    return 0;
+#endif
 }
 
 bool robot::writeDigitalOutput(const char *i_dout)
@@ -729,10 +770,36 @@ bool robot::readDigitalOutput(char *o_dout)
 void robot::readBatteryState(unsigned int i_rank, double &voltage, 
                              double &current, double &soc)
 {
+#if defined(ROBOT_IOB_VERSION) && ROBOT_IOB_VERSION >= 2
     read_battery(i_rank, &voltage, &current, &soc);
+#else
+    voltage=0; current=0; soc=0;
+#endif
 }
 
 int robot::numBatteries()
 {
+#if defined(ROBOT_IOB_VERSION) && ROBOT_IOB_VERSION >= 2
     return number_of_batteries();
+#else
+    return 0;
+#endif
+}
+
+void robot::readThermometer(unsigned int i_rank, double &o_temp)
+{
+#if defined(ROBOT_IOB_VERSION) && ROBOT_IOB_VERSION >= 2
+    read_temperature(i_rank, &o_temp);
+#else
+    o_temp=0;
+#endif
+}
+
+int robot::numThermometers()
+{
+#if defined(ROBOT_IOB_VERSION) && ROBOT_IOB_VERSION >= 2
+    return number_of_thermometers();
+#else
+    return 0;
+#endif
 }

@@ -4,6 +4,7 @@
 #include <cstring>
 using namespace std;
 #include "interpolator.h"
+#include <coil/Guard.h>
 
 interpolator::interpolator(int dim_, double dt_, interpolation_mode imode_, double default_avg_vel_)
 {
@@ -56,36 +57,36 @@ void interpolator::clear()
 }
 
 // 1dof interpolator
-void interpolator::hoffarbib(double &remain_t,
+void interpolator::hoffarbib(double &remain_t_,
 			     double a0, double a1, double a2, 
 			     double a3, double a4, double a5, 
 			     double &xx, double &vv, double &aa)
 {
 #define EPS 1e-6
-  if (remain_t > dt+EPS){
-    remain_t -= dt;
+  if (remain_t_ > dt+EPS){
+    remain_t_ -= dt;
   }else{
-    remain_t = 0;
+    remain_t_ = 0;
   }
-  double t = target_t - remain_t;
+  double t = target_t - remain_t_;
   xx=a0+a1*t+a2*t*t+a3*t*t*t+a4*t*t*t*t+a5*t*t*t*t*t;
   vv=a1+2*a2*t+3*a3*t*t+4*a4*t*t*t+5*a5*t*t*t*t;
   aa=2*a2+6*a3*t+12*a4*t*t+20*a5*t*t*t;
 }
 
-void interpolator::linear_interpolation(double &remain_t,
+void interpolator::linear_interpolation(double &remain_t_,
 					double gx,
 					double &xx, double &vv, double &aa)
 {
-  if (remain_t > dt+EPS){
+  if (remain_t_ > dt+EPS){
     aa = 0;
-    vv = (gx-xx)/remain_t;
+    vv = (gx-xx)/remain_t_;
     xx += vv*dt;
-    remain_t -= dt;
+    remain_t_ -= dt;
   }else{
     aa = vv = 0;
     xx = gx;
-    remain_t = 0;
+    remain_t_ = 0;
   }
 }
 
@@ -97,16 +98,16 @@ void interpolator::sync()
 
 double interpolator::calc_interpolation_time(const double *newg)
 {
-  double remain_t;
+  double remain_t_;
   double max_diff = 0, diff;
   for (int i=0; i<dim; i++){
     diff = fabs(newg[i]-gx[i]);
     if (diff > max_diff) max_diff = diff;
   }
-  remain_t = max_diff/default_avg_vel;
+  remain_t_ = max_diff/default_avg_vel;
 #define MIN_INTERPOLATION_TIME	(1.0)
-  if (remain_t < MIN_INTERPOLATION_TIME) remain_t = MIN_INTERPOLATION_TIME;
-  return remain_t;
+  if (remain_t_ < MIN_INTERPOLATION_TIME) remain_t_ = MIN_INTERPOLATION_TIME;
+  return remain_t_;
 }
 
 bool interpolator::setInterpolationMode (interpolation_mode i_mode_)
@@ -117,9 +118,10 @@ bool interpolator::setInterpolationMode (interpolation_mode i_mode_)
     return true;
 };
 
-void interpolator::setGoal(const double *newg, double time)
+void interpolator::setGoal(const double *newg, double time,
+                           bool online)
 {
-    setGoal(newg, NULL, time);
+    setGoal(newg, NULL, time, online);
 }
 
 void interpolator::setGoal(const double *newg, const double *newv, double time,
@@ -168,13 +170,13 @@ void interpolator::setGoal(const double *newg, const double *newv, double time,
     if (online) remain_t = time; // interpolation will start
 }
 
-void interpolator::interpolate(double& remain_t)
+void interpolator::interpolate(double& remain_t_)
 {
-    if (remain_t <= 0) return;
+    if (remain_t_ <= 0) return;
 
     double tm;
     for (int i=0; i<dim; i++){
-        tm = remain_t;
+        tm = remain_t_;
         switch(imode){
         case LINEAR:
             linear_interpolation(tm,
@@ -191,7 +193,7 @@ void interpolator::interpolate(double& remain_t)
         }
     }
     push(x, v, a);
-    remain_t = tm;
+    remain_t_ = tm;
 }
 
 void interpolator::go(const double *newg, double time, bool immediate)
@@ -215,7 +217,7 @@ void interpolator::load(const char *fname, double time_to_start, double scale,
 {
   ifstream strm(fname);
   if (!strm.is_open()) {
-    cerr << "file not found(" << fname << ")" << endl;
+    cerr << "[interpolator " << name << "] file not found(" << fname << ")" << endl;
     return;
   }
   double *vs, ptime=-1,time, tmp;
@@ -250,14 +252,14 @@ void interpolator::load(string fname, double time_to_start, double scale,
   load(fname.c_str(), time_to_start, scale, immediate, offset1, offset2);
 }
 
-void interpolator::push(const double *x, const double *v, const double *a, bool immediate)
+void interpolator::push(const double *x_, const double *v_, const double *a_, bool immediate)
 {
   double *p = new double[dim];
   double *dp = new double[dim];
   double *ddp = new double[dim];
-  memcpy(p, x, sizeof(double)*dim);
-  memcpy(dp, v, sizeof(double)*dim);
-  memcpy(ddp, a, sizeof(double)*dim);
+  memcpy(p, x_, sizeof(double)*dim);
+  memcpy(dp, v_, sizeof(double)*dim);
+  memcpy(ddp, a_, sizeof(double)*dim);
   q.push_back(p);
   dq.push_back(dp);
   ddq.push_back(ddp);
@@ -266,6 +268,7 @@ void interpolator::push(const double *x, const double *v, const double *a, bool 
 
 void interpolator::pop()
 {
+  coil::Guard<coil::Mutex> lock(pop_mutex_);
   if (length > 0){
     length--;
     double *&vs = q.front();
@@ -282,6 +285,7 @@ void interpolator::pop()
 
 void interpolator::pop_back()
 {
+  coil::Guard<coil::Mutex> lock(pop_mutex_);
   if (length > 0){
     length--;
     double *&vs = q.back();
@@ -335,44 +339,44 @@ double *interpolator::front()
   }
 }
 
-void interpolator::get(double *x, bool popp)
+void interpolator::get(double *x_, bool popp)
 {
-  get(x, NULL, NULL, popp);
+  get(x_, NULL, NULL, popp);
 }
 
-void interpolator::get(double *x, double *v, bool popp)
+void interpolator::get(double *x_, double *v_, bool popp)
 {
-  get(x, v, NULL, popp);
+  get(x_, v_, NULL, popp);
 }
 
-void interpolator::get(double *x, double *v, double *a, bool popp)
+void interpolator::get(double *x_, double *v_, double *a_, bool popp)
 {
   interpolate(remain_t);
 
   if (length!=0){
     double *&vs = q.front();
     if (vs == NULL) {
-      cerr << "interpolator::get vs = NULL, q.size() = " << q.size() 
+      cerr << "[interpolator " << name << "] interpolator::get vs = NULL, q.size() = " << q.size() 
 	   << ", length = " << length << endl;
     }
     double *&dvs = dq.front();
     if (dvs == NULL) {
-      cerr << "interpolator::get dvs = NULL, dq.size() = " << dq.size() 
+      cerr << "[interpolator " << name << "] interpolator::get dvs = NULL, dq.size() = " << dq.size() 
 	   << ", length = " << length << endl;
     }
     double *&ddvs = ddq.front();
     if (ddvs == NULL) {
-      cerr << "interpolator::get ddvs = NULL, ddq.size() = " << ddq.size() 
+      cerr << "[interpolator " << name << "] interpolator::get ddvs = NULL, ddq.size() = " << ddq.size() 
 	   << ", length = " << length << endl;
     }
-    memcpy(x, vs, sizeof(double)*dim);
-    if ( v != NULL ) memcpy(v, dvs, sizeof(double)*dim);
-    if ( a != NULL ) memcpy(a, ddvs, sizeof(double)*dim);
+    memcpy(x_, vs, sizeof(double)*dim);
+    if ( v_ != NULL ) memcpy(v_, dvs, sizeof(double)*dim);
+    if ( a_ != NULL ) memcpy(a_, ddvs, sizeof(double)*dim);
     if (popp) pop();
   }else{
-    memcpy(x, gx, sizeof(double)*dim);
-    if ( v != NULL) memcpy(v, gv, sizeof(double)*dim);
-    if ( a != NULL) memcpy(a, ga, sizeof(double)*dim);
+    memcpy(x_, gx, sizeof(double)*dim);
+    if ( v_ != NULL) memcpy(v_, gv, sizeof(double)*dim);
+    if ( a_ != NULL) memcpy(a_, ga, sizeof(double)*dim);
   }
 }
 

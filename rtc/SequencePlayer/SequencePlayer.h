@@ -99,6 +99,9 @@ class SequencePlayer
   bool setJointAngle(short id, double angle, double tm);
   bool setJointAngles(const double *angles, double tm);
   bool setJointAngles(const double *angles, const bool *mask, double tm);
+  bool setJointAnglesSequence(const OpenHRP::dSequenceSequence angless, const OpenHRP::bSequence& mask, const OpenHRP::dSequence& times);
+  bool setJointAnglesSequenceFull(const OpenHRP::dSequenceSequence i_jvss, const OpenHRP::dSequenceSequence i_vels, const OpenHRP::dSequenceSequence i_torques, const OpenHRP::dSequenceSequence i_poss, const OpenHRP::dSequenceSequence i_rpys, const OpenHRP::dSequenceSequence i_accs, const OpenHRP::dSequenceSequence i_zmps, const OpenHRP::dSequenceSequence i_wrenches, const OpenHRP::dSequenceSequence i_optionals, const dSequence i_tms);
+  bool clearJointAngles();
   bool setBasePos(const double *pos, double tm);
   bool setBaseRpy(const double *rpy, double tm);
   bool setZmp(const double *zmp, double tm);
@@ -110,7 +113,9 @@ class SequencePlayer
   bool setInitialState(double tm=0.0);
   bool addJointGroup(const char *gname, const OpenHRP::SequencePlayerService::StrSequence& jnames);
   bool removeJointGroup(const char *gname);
-  bool setJointAnglesOfGroup(const char *gname, const double *angles, double tm);
+  bool setJointAnglesOfGroup(const char *gname, const OpenHRP::dSequence& jvs, double tm);
+  bool setJointAnglesSequenceOfGroup(const char *gname, const OpenHRP::dSequenceSequence angless, const OpenHRP::dSequence& times);
+    bool clearJointAnglesOfGroup(const char *gname);
   bool playPatternOfGroup(const char *gname, const OpenHRP::dSequenceSequence& pos, const OpenHRP::dSequence& tm);
 
   void setMaxIKError(double pos, double rot);

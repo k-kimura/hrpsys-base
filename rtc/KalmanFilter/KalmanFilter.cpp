@@ -135,6 +135,8 @@ RTC::ReturnCode_t KalmanFilter::onInitialize()
   ekf_filter.setdt(m_dt);
   kf_algorithm = OpenHRP::KalmanFilterService::RPYKalmanFilter;
   m_qCurrent.data.length(m_robot->numJoints());
+  acc_offset = hrp::Vector3::Zero();
+  sensorR_offset = hrp::Matrix33::Identity();
 
   return RTC::RTC_OK;
 }
@@ -184,6 +186,7 @@ RTC::ReturnCode_t KalmanFilter::onExecute(RTC::UniqueId ec_id)
     m_rpy.data.r = m_rate.data.avx;
     m_rpy.data.p = m_rate.data.avy;
     m_rpy.data.y = m_rate.data.avz;
+    m_rpy.tm = m_rate.tm;
     m_rpyOut.write();
     return RTC::RTC_OK;
   }
@@ -204,25 +207,29 @@ RTC::ReturnCode_t KalmanFilter::onExecute(RTC::UniqueId ec_id)
   if (m_accIn.isNew()){
     m_accIn.read();
 
-    Eigen::Vector3d acc = m_sensorR * hrp::Vector3(m_acc.data.ax-sx_ref, m_acc.data.ay-sy_ref, m_acc.data.az-sz_ref); // transform to imaginary acc data
+    Eigen::Vector3d acc = m_sensorR * hrp::Vector3(m_acc.data.ax-sx_ref+acc_offset(0), m_acc.data.ay-sy_ref+acc_offset(1), m_acc.data.az-sz_ref+acc_offset(2)); // transform to imaginary acc data
+    acc = sensorR_offset * acc;
     Eigen::Vector3d gyro = m_sensorR * hrp::Vector3(m_rate.data.avx, m_rate.data.avy, m_rate.data.avz); // transform to imaginary rate data
     if (DEBUGP) {
         std::cerr << "[" << m_profile.instance_name << "] raw data acc : " << std::endl << acc << std::endl;
         std::cerr << "[" << m_profile.instance_name << "] raw data gyro : " << std::endl << gyro << std::endl;
     }
-    hrp::Vector3 rpy, rpyRaw;
+    hrp::Vector3 rpy, rpyRaw, baseRpyCurrent;
     if (kf_algorithm == OpenHRP::KalmanFilterService::QuaternionExtendedKalmanFilter) {
         ekf_filter.main_one(rpy, rpyRaw, acc, gyro);
     } else if (kf_algorithm == OpenHRP::KalmanFilterService::RPYKalmanFilter) {
         double sl_y;
+        hrp::Matrix33 BtoS;
         m_robot->calcForwardKinematics();
         if (m_robot->numSensors(hrp::Sensor::ACCELERATION) > 0) {
             hrp::Sensor* sensor = m_robot->sensor(hrp::Sensor::ACCELERATION, 0);
             sl_y = hrp::rpyFromRot(sensor->link->R)[2];
+            BtoS = (m_robot->rootLink()->R).transpose() * (sensor->link->R * sensor->localR);
         } else {
             sl_y = 0.0;
+            BtoS = (m_robot->rootLink()->R).transpose();
         }
-        rpy_kf.main_one(rpy, rpyRaw, acc, gyro, sl_y);
+        rpy_kf.main_one(rpy, rpyRaw, baseRpyCurrent, acc, gyro, sl_y, BtoS);
     }
     m_rpyRaw.data.r = rpyRaw(0);
     m_rpyRaw.data.p = rpyRaw(1);
@@ -230,10 +237,17 @@ RTC::ReturnCode_t KalmanFilter::onExecute(RTC::UniqueId ec_id)
     m_rpy.data.r = rpy(0);
     m_rpy.data.p = rpy(1);
     m_rpy.data.y = rpy(2);
-
+    m_baseRpyCurrent.data.r = baseRpyCurrent(0);
+    m_baseRpyCurrent.data.p = baseRpyCurrent(1);
+    m_baseRpyCurrent.data.y = baseRpyCurrent(2);
+    // add time stamp
+    m_rpyRaw.tm = m_acc.tm;
+    m_rpy.tm = m_acc.tm;
+    m_baseRpyCurrent.tm = m_acc.tm;
 
     m_rpyOut.write();
     m_rpyRawOut.write();
+    m_baseRpyCurrentOut.write();
   }
   return RTC::RTC_OK;
 }
@@ -278,7 +292,17 @@ bool KalmanFilter::setKalmanFilterParam(const OpenHRP::KalmanFilterService::Kalm
     std::cerr << "[" << m_profile.instance_name << "] setKalmanFilterParam" << std::endl;
     rpy_kf.setParam(m_dt, i_param.Q_angle, i_param.Q_rate, i_param.R_angle, std::string(m_profile.instance_name));
     kf_algorithm = i_param.kf_algorithm;
+    for (size_t i = 0; i < 3; i++) {
+        acc_offset(i) = i_param.acc_offset[i];
+    }
+    hrp::Vector3 rpyoff;
+    for (size_t i = 0; i < 3; i++) {
+        rpyoff(i) = i_param.sensorRPY_offset[i];
+    }
+    sensorR_offset = hrp::rotFromRpy(rpyoff);
     std::cerr << "[" << m_profile.instance_name << "]   kf_algorithm=" << (kf_algorithm==OpenHRP::KalmanFilterService::RPYKalmanFilter?"RPYKalmanFilter":"QuaternionExtendedKalmanFilter") << std::endl;
+    std::cerr << "[" << m_profile.instance_name << "]   acc_offset = " << acc_offset.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << std::endl;
+    std::cerr << "[" << m_profile.instance_name << "]   sensorRPY_offset = " << rpyoff.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "    [", "]")) << std::endl;
     return true;
 }
 
@@ -293,6 +317,13 @@ bool KalmanFilter::getKalmanFilterParam(OpenHRP::KalmanFilterService::KalmanFilt
   i_param.Q_rate = rpy_kf.getQrate();
   i_param.R_angle = rpy_kf.getRangle();
   i_param.kf_algorithm = kf_algorithm;
+  for (size_t i = 0; i < 3; i++) {
+      i_param.acc_offset[i] = acc_offset(i);
+  }
+  hrp::Vector3 rpyoff = hrp::rpyFromRot(sensorR_offset);
+  for (size_t i = 0; i < 3; i++) {
+      i_param.sensorRPY_offset[i] = rpyoff(i);
+  }
   return true;
 }
 

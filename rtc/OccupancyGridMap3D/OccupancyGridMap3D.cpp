@@ -162,17 +162,16 @@ RTC::ReturnCode_t OccupancyGridMap3D::onActivated(RTC::UniqueId ec_id)
   Guard guard(m_mutex);
   if (m_knownMapPath != ""){
       m_knownMap = new OcTree(m_cwd+m_knownMapPath);
-      m_updateOut.write();
   }
 
   if (m_initialMap != ""){
     // Working directories of threads which calls onInitialize() and onActivate() are different on MacOS
     // Assume path of initial map is given by a relative path to working directory of the thread which calls onInitialize()
     m_map = new OcTree(m_cwd+m_initialMap);
-    m_updateOut.write();
   }else{
     m_map = new OcTree(m_resolution);
   }
+  m_updateOut.write();
 
   if(KDEBUG){
     std::cout << m_profile.instance_name << ": initial tree depth = " << m_map->getTreeDepth() << std::endl;
@@ -619,6 +618,13 @@ void OccupancyGridMap3D::save(const char *filename)
 {
     Guard guard(m_mutex);
     m_map->writeBinary(filename);
+}
+
+void OccupancyGridMap3D::clear()
+{
+    Guard guard(m_mutex);
+    m_map->clear();
+    m_updateOut.write();
 }
 
 extern "C"

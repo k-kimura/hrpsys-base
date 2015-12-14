@@ -2,12 +2,16 @@
  * @file StabilizerService.idl
  * @brief Services for the stabilizer interface
  */
+#include "AutoBalancerService.idl"
+
 module OpenHRP
 {
   interface StabilizerService
   {
     typedef double DblArray2[2];
     typedef double DblArray3[3];
+    typedef double DblArray4[4];
+    typedef sequence<boolean> BoolSequence;
 
     /**
      * @enum STAlgorithm
@@ -15,7 +19,9 @@ module OpenHRP
      */
     enum STAlgorithm {
       TPCC,
-      EEFM
+      EEFM,
+      EEFMQP,
+      EEFMQPCOP
     };
 
     /**
@@ -28,6 +34,32 @@ module OpenHRP
       MODE_ST,
       MODE_SYNC_TO_IDLE,
       MODE_SYNC_TO_AIR
+    };
+
+    /**
+     * @enum EmergencyCheckMode
+     * @brief Mode of emergency checking
+     */
+    enum EmergencyCheckMode {
+      NO_CHECK,
+      COP,
+      CP
+    };
+
+    /**
+     * @enum TwoDimensionVertex
+     * @brief 2D vertex of a support polygon [m]
+     */
+    struct TwoDimensionVertex {
+        DblArray2 pos;
+    };
+
+    /**
+     * @enum SupportPolygonVertices
+     * @brief Vertices of a support polygon at the end effector
+     */
+    struct SupportPolygonVertices {
+        sequence<TwoDimensionVertex> vertices;
     };
 
     /**
@@ -44,15 +76,15 @@ module OpenHRP
       DblArray2 k_brot_p;
       /// Time constant for body posture control [s] (roll, pitch).
       DblArray2 k_brot_tc;
-      // for RUNST
-      DblArray2 k_run_b;
-      DblArray2 d_run_b;
-      DblArray2 tdfke;
-      DblArray2 tdftc;
-      double k_run_x;
-      double k_run_y;
-      double d_run_x;
-      double d_run_y;
+      // // for RUNST
+      // DblArray2 k_run_b;
+      // DblArray2 d_run_b;
+      // DblArray2 tdfke;
+      // DblArray2 tdftc;
+      // double k_run_x;
+      // double k_run_y;
+      // double d_run_x;
+      // double d_run_y;
       // for EEFM ST
       /// Feedback gain for COG position tracking error (x,y)
       DblArray2 eefm_k1;
@@ -64,15 +96,19 @@ module OpenHRP
       DblArray2 eefm_zmp_delay_time_const;
       /// Auxiliary input for ZMP position [m] (x,y). This is used for delay model identification
       DblArray2 eefm_ref_zmp_aux;
-      /// Foot rotation damping gain [Nm/(rad/s)].
-      double eefm_rot_damping_gain;
-      /// Foot rotation damping time constant [s].
-      double eefm_rot_time_const;
-      /// Foot position damping gain [N/(m/s)].
-      DblArray3 eefm_pos_damping_gain;
-      /// Foot position damping time constant for double support phase [s].
-      double eefm_pos_time_const_support;
-      /// Foot position damping time constant for single support phase [s].
+      /// Sequence of all end-effector rotation damping gain [Nm/(rad/s)] (r,p,y).
+      sequence<sequence<double, 3> > eefm_rot_damping_gain;
+      /// Sequence of all end-effector rotation damping time constant [s] (r,p,y).
+      sequence<sequence<double, 3> > eefm_rot_time_const;
+      /// Sequence of all end-effector position damping gain [N/(m/s)] (x,y,z).
+      sequence<sequence<double, 3> > eefm_pos_damping_gain;
+      /// Sequence of all end-effector position damping time constant for double support phase [s] (x,y,z).
+      sequence<sequence<double, 3> > eefm_pos_time_const_support;
+      /// Sequence of all end-effector position compensation limit [m]
+      sequence<double> eefm_pos_compensation_limit;
+      /// Sequence of all end-effector rot compensation limit [rad]
+      sequence<double> eefm_rot_compensation_limit;
+      /// End-effector position damping time constant for single support phase [s].
       double eefm_pos_time_const_swing;
       /// Transition time for single=>double support phase gain interpolation [s].
       double eefm_pos_transition_time;
@@ -80,6 +116,8 @@ module OpenHRP
       double eefm_pos_margin_time;
       /// Inside foot margine [m]. Distance between foot end effector position and foot inside edge.
       double eefm_leg_inside_margin;
+      /// Outside foot margine [m]. Distance between foot end effector position and foot outside edge.
+      double eefm_leg_outside_margin;
       /// Front foot margine [m]. Distance between foot end effector position and foot front edge.
       double eefm_leg_front_margin;
       /// Rear foot margine [m]. Distance between foot end effector position and foot rear edge.
@@ -92,11 +130,50 @@ module OpenHRP
       double eefm_cogvel_cutoff_freq;
       /// Blending parameter [0, 1] for wrench distribution
       double eefm_wrench_alpha_blending;
+      /// Cutoff frequency of LPF in calculation of force moment distribution alpha ratio parameter [Hz]
+      double eefm_alpha_cutoff_freq;
       /// Gravitational acceleration [m/s^2] used in ST calculation
       double eefm_gravitational_acceleration;
+      /// Pos error gain
+      double eefm_ee_pos_error_p_gain;
+      /// Rot error gain
+      double eefm_ee_rot_error_p_gain;
+      /// Pos rot error cutoff freq [Hz]
+      double eefm_ee_error_cutoff_freq;
+      /// Sequence of vertices for all end effectors
+      sequence< SupportPolygonVertices > eefm_support_polygon_vertices_sequence;
+      /// Use force difference control or each limb force control. True by default.
+      boolean eefm_use_force_difference_control;
       // common
+      /// Current Stabilizer algorithm
       STAlgorithm st_algorithm;
+      /// Current ControllerMode
       ControllerMode controller_mode;
+      /// Transition time [s] for start and stop Stabilizer
+      double transition_time;
+      /// Bool sequence for all end effectors whether the end effector is used for limb IK.
+      BoolSequence is_ik_enable;
+      /// Bool sequence for all end effectors whether the end effector is used for feedback control (currently damping control).
+      BoolSequence is_feedback_control_enable;
+      /// Bool sequence for all end effectors whether the end effector is used for zmp calculation.
+      BoolSequence is_zmp_calc_enable;
+      /// COP margin [m] from edges for COP checking
+      double cop_check_margin;
+      /// CP margin [m] (front, rear, inside, outside)
+      DblArray4 cp_check_margin;
+      /// ref_CP [m] (x,y) (foot_origin relative coordinate)
+      DblArray2 ref_capture_point;
+      /// act_CP [m] (x,y) (foot_origin relative coordinate)
+      DblArray2 act_capture_point;
+      /// contact decision threshold [N]
+      double contact_decision_threshold;
+      /// Foot origin position offset
+      sequence< sequence<double, 3> > foot_origin_offset;
+      /// Emergency signal checking mode
+      EmergencyCheckMode emergency_check_mode;
+      sequence<AutoBalancerService::Footstep> end_effector_list;
+      /// whether an emergency stop is used while walking
+      boolean is_estop_while_walking;
     };
 
     /**

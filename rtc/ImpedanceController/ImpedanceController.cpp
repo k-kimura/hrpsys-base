@@ -54,7 +54,8 @@ ImpedanceController::ImpedanceController(RTC::Manager* manager)
       // </rtc-template>
       m_robot(hrp::BodyPtr()),
       m_debugLevel(0),
-      dummy(0)
+      dummy(0),
+      use_sh_base_pos_rpy(false)
 {
     m_service0.impedance(this);
 }
@@ -226,7 +227,7 @@ RTC::ReturnCode_t ImpedanceController::onInitialize()
         // 3. Check whether joint path is adequate.
         hrp::Link* target_link = m_robot->link(ee_map[ee_name].target_name);
         ImpedanceParam p;
-        p.manip = hrp::JointPathExPtr(new hrp::JointPathEx(m_robot, m_robot->link(base_name_map[ee_name]), target_link, m_dt));
+        p.manip = hrp::JointPathExPtr(new hrp::JointPathEx(m_robot, m_robot->link(base_name_map[ee_name]), target_link, m_dt, false));
         if ( ! p.manip ) {
             std::cerr << "[" << m_profile.instance_name << "]   Invalid joint path from " << base_name_map[ee_name] << " to " << target_link->name << "!! Impedance param for " << sensor_name << " cannot be added!!" << std::endl;
             continue;
@@ -237,6 +238,18 @@ RTC::ReturnCode_t ImpedanceController::onInitialize()
         m_impedance_param[ee_name] = p;
         std::cerr << "[" << m_profile.instance_name << "]   sensor = " << sensor_name << ", sensor-link = " << sensor->link->name << ", ee_name = " << ee_name << ", ee-link = " << target_link->name << std::endl;
     }
+
+    std::vector<std::pair<hrp::Link*, hrp::Link*> > interlocking_joints;
+    readInterlockingJointsParamFromProperties(interlocking_joints, m_robot, prop["interlocking_joints"], std::string(m_profile.instance_name));
+    if (interlocking_joints.size() > 0) {
+        for ( std::map<std::string, ImpedanceParam>::iterator it = m_impedance_param.begin(); it != m_impedance_param.end(); it++ ) {
+            std::cerr << "[" << m_profile.instance_name << "] Interlocking Joints for [" << it->first << "]" << std::endl;
+            it->second.manip->setInterlockingJointPairIndices(interlocking_joints, std::string(m_profile.instance_name));
+        }
+    }
+
+    otd = boost::shared_ptr<ObjectTurnaroundDetector>(new ObjectTurnaroundDetector(m_dt));
+    otd->setPrintStr(std::string(m_profile.instance_name));
 
     // allocate memory for outPorts
     m_q.data.length(dof);
@@ -278,8 +291,10 @@ RTC::ReturnCode_t ImpedanceController::onDeactivated(RTC::UniqueId ec_id)
 {
   std::cout << "ImpedanceController::onDeactivated(" << ec_id << ")" << std::endl;
   for ( std::map<std::string, ImpedanceParam>::iterator it = m_impedance_param.begin(); it != m_impedance_param.end(); it++ ) {
-      stopImpedanceControllerNoWait(it->first);
-      it->second.transition_count = 1;
+      if (it->second.is_active) {
+          stopImpedanceControllerNoWait(it->first);
+          it->second.transition_count = 1;
+      }
   }
   return RTC::RTC_OK;
 }
@@ -357,7 +372,8 @@ RTC::ReturnCode_t ImpedanceController::onExecute(RTC::UniqueId ec_id)
           m_robot->rootLink()->p = hrp::Vector3(m_basePos.data.x, m_basePos.data.y, m_basePos.data.z);
           m_robot->rootLink()->R = hrp::rotFromRpy(m_baseRpy.data.r, m_baseRpy.data.p, m_baseRpy.data.y);
           m_robot->calcForwardKinematics();
-          if (ee_map.find("rleg") != ee_map.end() && ee_map.find("lleg") != ee_map.end()) { // if legged robot
+          if ( (ee_map.find("rleg") != ee_map.end() && ee_map.find("lleg") != ee_map.end()) // if legged robot
+               && !use_sh_base_pos_rpy ) {
               // TODO
               //  Tempolarily modify root coords to fix foot pos rot
               //  This will be removed after seq outputs adequate waistRPY discussed in https://github.com/fkanehiro/hrpsys-base/issues/272
@@ -404,10 +420,7 @@ RTC::ReturnCode_t ImpedanceController::onExecute(RTC::UniqueId ec_id)
             std::string target_name = ee_map[it->first].target_name;
             param.target_p0 = m_robot->link(target_name)->p + m_robot->link(target_name)->R * ee_map[it->first].localPos;
             param.target_r0 = m_robot->link(target_name)->R * ee_map[it->first].localR;
-            if (param.transition_count == -MAX_TRANSITION_COUNT) {
-                param.target_p1 = param.target_p0;
-                param.target_r1 = param.target_r0;
-            }
+            if (param.transition_count == -MAX_TRANSITION_COUNT) param.resetPreviousTargetParam();
           }
           // back to impedance robot model (only for controlled joint)
 	  for ( std::map<std::string, ImpedanceParam>::iterator it = m_impedance_param.begin(); it != m_impedance_param.end(); it++ ) {
@@ -429,6 +442,13 @@ RTC::ReturnCode_t ImpedanceController::onExecute(RTC::UniqueId ec_id)
 	while(it != m_impedance_param.end()){
             ImpedanceParam& param = it->second;
             if (param.is_active) {
+                if (DEBUGP) {
+                  std::cerr << "[" << m_profile.instance_name << "] impedance mode " << it->first << " transition count = " << param.transition_count << ", ";
+                  std::cerr << "MDK = " << param.M_p << " " << param.D_p << " " << param.K_p << ", ";
+                  std::cerr << "MDK = " << param.M_r << " " << param.D_r << " " << param.K_r << ", ";
+                  std::cerr << "ref_force = " << param.ref_force[0] << " " << param.ref_force[1] << " " << param.ref_force[2] << ", ";
+                  std::cerr << "ref_moment = " << param.ref_moment[0] << " " << param.ref_moment[1] << " " << param.ref_moment[2] << std::endl;
+                }
                 if ( param.transition_count > 0 ) {
                     hrp::JointPathExPtr manip = param.manip;
                     for ( int j = 0; j < manip->numJoints(); j++ ) {
@@ -449,69 +469,10 @@ RTC::ReturnCode_t ImpedanceController::onExecute(RTC::UniqueId ec_id)
 
                     hrp::Link* target = m_robot->link(ee_map[it->first].target_name);
                     assert(target);
+                    param.current_p1 = target->p + target->R * ee_map[it->first].localPos;
+                    param.current_r1 = target->R * ee_map[it->first].localR;
+                    if (param.transition_count == -MAX_TRANSITION_COUNT) param.resetPreviousCurrentParam();
 
-                    param.current_p0 = target->p + target->R * ee_map[it->first].localPos;
-                    param.current_r0 = target->R * ee_map[it->first].localR;
-                    if (param.transition_count == -MAX_TRANSITION_COUNT) {
-                        param.current_p1 = param.current_p0;
-                        param.current_p2 = param.current_p1;
-                        param.current_r1 = param.current_r0;
-                        param.current_r2 = param.current_r1;
-                    }
-
-                    hrp::JointPathExPtr manip = param.manip;
-                    assert(manip);
-                    //const int n = manip->numJoints();
-
-                    hrp::Vector3 dif_pos = hrp::Vector3(0,0,0);
-                    hrp::Vector3 vel_pos0 = hrp::Vector3(0,0,0);
-                    hrp::Vector3 vel_pos1 = hrp::Vector3(0,0,0);
-                    hrp::Vector3 dif_target_pos = hrp::Vector3(0,0,0);
-                    hrp::Vector3 dif_rot = hrp::Vector3(0,0,0);
-                    hrp::Vector3 vel_rot0 = hrp::Vector3(0,0,0);
-                    hrp::Vector3 vel_rot1 = hrp::Vector3(0,0,0);
-                    hrp::Vector3 dif_target_rot = hrp::Vector3(0,0,0);
-
-                    // rats/plugins/impedancecontrol.cpp
-                    //double M = 5, D = 100, K = 200;
-                    // dif_pos  = target_p0 (target_coords0) - current_p0(move_coords)
-                    // vel_pos0 = current_p0(move_coors) - current_p1(prev_coords0)
-                    // vel_pos1 = current_p1(prev_coords0) - current_p2(prev_coords1)
-                    // dif_target  = target_p0(target_coords0) - target_p1(target_coords1)
-                    //
-                    // current_p2(prev_coords1) = current_p1(prev_coords0)
-                    // currnet_p1(prev_coords0) = current_p0(move_coords) + vel_p
-                    // target_p1(target_coords1) = target_p0(target_coords0)
-
-                    if ( DEBUGP ) {
-                        std::cerr << "[" << m_profile.instance_name << "] impedance calc [" << it->first << "]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   cur0 = " << param.current_p0.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   cur1 = " << param.current_p1.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   cur2 = " << param.current_p2.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   tgt0 = " << param.target_p0.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   tgt1 = " << param.target_p1.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                    }
-
-                    dif_pos  = param.target_p0 - param.current_p0;
-                    vel_pos0 = param.current_p0 - param.current_p1;
-                    vel_pos1 = param.current_p1 - param.current_p2;
-                    dif_target_pos = param.target_p0 - param.target_p1;
-
-                    rats::difference_rotation(dif_rot, param.current_r0, param.target_r0);
-                    rats::difference_rotation(vel_rot0, param.current_r1, param.current_r0);
-                    rats::difference_rotation(vel_rot1, param.current_r2, param.current_r1);
-                    rats::difference_rotation(dif_target_rot, param.target_r1, param.target_r0);
-
-                    if ( DEBUGP ) {
-                        std::cerr << "[" << m_profile.instance_name << "]   dif_p  = " << dif_pos.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   vel_p0 = " << vel_pos0.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   vel_p1 = " << vel_pos1.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   dif_t  = " << dif_target_pos.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   dif_r  = " << dif_rot.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[rad]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   vel_r0 = " << vel_rot0.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[rad]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   vel_r1 = " << vel_rot1.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[rad]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   dif_t  = " << dif_target_rot.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[rad]" << std::endl;
-                    }
                     hrp::Vector3 vel_p, vel_r;
                     //std::cerr << "MDK = " << param.M_p << " " << param.D_p << " " << param.K_p << std::endl;
                     //std::cerr << "MDK = " << param.M_r << " " << param.D_r << " " << param.K_r << std::endl;
@@ -520,48 +481,22 @@ RTC::ReturnCode_t ImpedanceController::onExecute(RTC::UniqueId ec_id)
 
                     // ref_force/ref_moment and force_gain/moment_gain are expressed in global coordinates. 
                     hrp::Matrix33 eeR = target->R * ee_map[it->first].localR;
-                    vel_p =  ( eeR * (param.force_gain * (eeR.transpose() * (abs_forces[it->second.sensor_name] - abs_ref_forces[it->second.sensor_name]))) * m_dt * m_dt
-                               + param.M_p * ( vel_pos1 - vel_pos0 )
-                               + param.D_p * ( dif_target_pos - vel_pos0 ) * m_dt
-                               + param.K_p * ( dif_pos * m_dt * m_dt ) ) /
-                        (param.M_p + (param.D_p * m_dt) + (param.K_p * m_dt * m_dt));
-                    vel_r =  ( eeR * (param.moment_gain * (eeR.transpose() * (abs_moments[it->second.sensor_name] - abs_ref_moments[it->second.sensor_name]))) * m_dt * m_dt
-                               + param.M_r * ( vel_rot1 - vel_rot0 )
-                               + param.D_r * ( dif_target_rot - vel_rot0 ) * m_dt
-                               + param.K_r * ( dif_rot * m_dt * m_dt  ) ) /
-                        (param.M_r + (param.D_r * m_dt) + (param.K_r * m_dt * m_dt));
-
-                    // generate smooth motion just after impedance started
-                    if ( DEBUGP ) {
-                        std::cerr << "[" << m_profile.instance_name << "]   vel_p  = " << vel_p.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[m]" << std::endl;
-                        std::cerr << "[" << m_profile.instance_name << "]   vel_r  = " << vel_r.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[rad]" << std::endl;
-                    }
-
-                    param.current_p2 = param.current_p1;
-                    param.current_r2 = param.current_r1;
-
-                    param.current_p1 = param.current_p0 + vel_p;
-                    // if ( std::fabs(vel_r.norm() - 0.0) < ::std::numeric_limits<double>::epsilon() ) {
-                    if ( vel_r.norm() != 0.0 ) {
-                        hrp::Matrix33 tmpm;
-                        Eigen::AngleAxis<double> tmpr(vel_r.norm(), vel_r.normalized());
-                        rats::rotm3times(tmpm, tmpr.toRotationMatrix(), param.current_r0);
-                        param.current_r1 = tmpm;
-                    } else {
-                        param.current_r1 = param.current_r0;
-                    }
-
-                    param.target_p1 = param.target_p0;
-                    param.target_r1 = param.target_r0;
+                    hrp::Vector3 force_diff = abs_forces[it->second.sensor_name] - abs_ref_forces[it->second.sensor_name];
+                    hrp::Vector3 moment_diff = abs_moments[it->second.sensor_name] - abs_ref_moments[it->second.sensor_name];
+                    param.calcTargetVelocity(vel_p, vel_r, eeR, force_diff, moment_diff, m_dt,
+                                             DEBUGP, std::string(m_profile.instance_name), it->first);
 
                     // Solve ik
                     //   Fix ee frame objective vel => link frame objective vel
                     hrp::Vector3 link_frame_pos;
                     hrp::Matrix33 link_frame_rot;
-                    link_frame_rot = param.current_r1 * ee_map[it->first].localR.transpose();
-                    link_frame_pos = param.current_p1 - link_frame_rot * ee_map[it->first].localPos;
+                    link_frame_rot = param.getOutputRot() * ee_map[it->first].localR.transpose();
+                    link_frame_pos = param.getOutputPos() - link_frame_rot * ee_map[it->first].localPos;
                     vel_p = link_frame_pos - target->p;
                     rats::difference_rotation(vel_r, target->R, link_frame_rot);
+                    hrp::JointPathExPtr manip = param.manip;
+                    assert(manip);
+                    //const int n = manip->numJoints();
                     manip->calcInverseKinematics2Loop(vel_p, vel_r, 1.0, param.avoid_gain, param.reference_gain, &qrefv);
 
                     if ( param.transition_count < 0 ) {
@@ -632,6 +567,7 @@ RTC::ReturnCode_t ImpedanceController::onExecute(RTC::UniqueId ec_id)
 
 void ImpedanceController::calcForceMoment ()
 {
+      std::vector<hrp::Vector3> otd_fmv;
       for (unsigned int i=0; i<m_forceIn.size(); i++){
         if ( m_force[i].data.length()==6 ) {
           std::string sensor_name = m_forceIn[i]->name();
@@ -679,6 +615,12 @@ void ImpedanceController::calcForceMoment ()
           // World frame
           abs_ref_forces[sensor_name] = ref_data_p;
           abs_ref_moments[sensor_name] = ref_data_r;
+          // tmp
+          if ( find(otd_sensor_names.begin(), otd_sensor_names.end(), sensor_name) != otd_sensor_names.end() ) {
+              otd_fmv.push_back(abs_forces[sensor_name]);
+              // if ( DEBUGP ) {
+              // }
+          }
           if ( DEBUGP ) {
             std::cerr << "[" << m_profile.instance_name << "]   abs force  = " << abs_forces[sensor_name].format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N]" << std::endl;
             std::cerr << "[" << m_profile.instance_name << "]   abs moment = " << abs_moments[sensor_name].format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[Nm]" << std::endl;
@@ -687,6 +629,7 @@ void ImpedanceController::calcForceMoment ()
           }
         }
       }
+      otd->checkDetection(otd_fmv);
 };
 
 //
@@ -782,6 +725,7 @@ bool ImpedanceController::setImpedanceControllerParam(const std::string& i_name_
             ov[i] = i_param_.ik_optional_weight_vector[i];
         }
         m_impedance_param[name].manip->setOptionalWeightVector(ov);
+        use_sh_base_pos_rpy = i_param_.use_sh_base_pos_rpy;
 
         std::cerr << "[" << m_profile.instance_name << "] set parameters" << std::endl;
         std::cerr << "[" << m_profile.instance_name << "]             name : " << name << std::endl;
@@ -793,6 +737,7 @@ bool ImpedanceController::setImpedanceControllerParam(const std::string& i_name_
         std::cerr << "[" << m_profile.instance_name << "]          sr_gain : " << m_impedance_param[name].sr_gain << std::endl;
         std::cerr << "[" << m_profile.instance_name << "]       avoid_gain : " << m_impedance_param[name].avoid_gain << std::endl;
         std::cerr << "[" << m_profile.instance_name << "]   reference_gain : " << m_impedance_param[name].reference_gain << std::endl;
+        std::cerr << "[" << m_profile.instance_name << "]   use_sh_base_pos_rpy : " << (use_sh_base_pos_rpy?"true":"false") << std::endl;
     }
     return true;
 }
@@ -839,9 +784,11 @@ bool ImpedanceController::getImpedanceControllerParam(const std::string& i_name_
         std::cerr << "[" << m_profile.instance_name << "] Could not found impedance controller param [" << i_name_ << "]" << std::endl;
         // if impedance param of i_name_ is not found, return default impedance parameter ;; default parameter is specified ImpedanceParam struct's default constructer
         copyImpedanceParam(i_param_, ImpedanceParam());
+        i_param_.use_sh_base_pos_rpy = use_sh_base_pos_rpy;
         return false;
     }
     copyImpedanceParam(i_param_, m_impedance_param[i_name_]);
+    i_param_.use_sh_base_pos_rpy = use_sh_base_pos_rpy;
     return true;
 }
 
@@ -852,6 +799,98 @@ void ImpedanceController::waitImpedanceControllerTransition(std::string i_name_)
       usleep(10);
     }
     return;
+}
+
+//
+// ObjectTurnaroundDetector
+//
+
+void ImpedanceController::startObjectTurnaroundDetection(const double i_ref_diff_wrench, const double i_max_time, const OpenHRP::ImpedanceControllerService::StrSequence& i_ee_names)
+{
+    otd->startDetection(i_ref_diff_wrench, i_max_time);
+    otd_sensor_names.clear();
+    for (size_t i = 0; i < i_ee_names.length(); i++) {
+        otd_sensor_names.push_back(m_impedance_param[std::string(i_ee_names[i])].sensor_name);
+    }
+}
+
+OpenHRP::ImpedanceControllerService::DetectorMode ImpedanceController::checkObjectTurnaroundDetection()
+{
+    OpenHRP::ImpedanceControllerService::DetectorMode tmpmode;
+    switch (otd->getMode()) {
+    case ObjectTurnaroundDetector::MODE_IDLE:
+        tmpmode = ImpedanceControllerService::MODE_DETECTOR_IDLE;
+        break;
+    case ObjectTurnaroundDetector::MODE_STARTED:
+        tmpmode = ImpedanceControllerService::MODE_STARTED;
+        break;
+    case ObjectTurnaroundDetector::MODE_DETECTED:
+        tmpmode = ImpedanceControllerService::MODE_DETECTED;
+        break;
+    case ObjectTurnaroundDetector::MODE_MAX_TIME:
+        tmpmode = ImpedanceControllerService::MODE_MAX_TIME;
+        break;
+    default:
+        tmpmode = ImpedanceControllerService::MODE_DETECTOR_IDLE;
+        break;
+    }
+    return tmpmode;
+}
+
+bool ImpedanceController::setObjectTurnaroundDetectorParam(const OpenHRP::ImpedanceControllerService::objectTurnaroundDetectorParam &i_param_)
+{
+    std::cerr << "[" << m_profile.instance_name << "] setObjectTurnaroundDetectorParam" << std::endl;
+    Guard guard(m_mutex);
+    otd->setWrenchCutoffFreq(i_param_.wrench_cutoff_freq);
+    otd->setDwrenchCutoffFreq(i_param_.dwrench_cutoff_freq);
+    otd->setDetectRatioThre(i_param_.detect_ratio_thre);
+    otd->setStartRatioThre(i_param_.start_ratio_thre);
+    otd->setDetectTimeThre(i_param_.detect_time_thre);
+    otd->setStartTimeThre(i_param_.start_time_thre);
+    hrp::Vector3 tmp;
+    for (size_t i = 0; i < 3; i++) tmp(i) = i_param_.axis[i];
+    otd->setAxis(tmp);
+    otd->printParams();
+    return true;
+};
+
+bool ImpedanceController::getObjectTurnaroundDetectorParam(OpenHRP::ImpedanceControllerService::objectTurnaroundDetectorParam& i_param_)
+{
+    std::cerr << "[" << m_profile.instance_name << "] getObjectTurnaroundDetectorParam" << std::endl;
+    i_param_.wrench_cutoff_freq = otd->getWrenchCutoffFreq();
+    i_param_.dwrench_cutoff_freq = otd->getDwrenchCutoffFreq();
+    i_param_.detect_ratio_thre = otd->getDetectRatioThre();
+    i_param_.start_ratio_thre = otd->getStartRatioThre();
+    i_param_.detect_time_thre = otd->getDetectTimeThre();
+    i_param_.start_time_thre = otd->getStartTimeThre();
+    hrp::Vector3 tmp = otd->getAxis();
+    for (size_t i = 0; i < 3; i++) i_param_.axis[i] = tmp(i);
+    return true;
+}
+
+bool ImpedanceController::getObjectForcesMoments(OpenHRP::ImpedanceControllerService::Dbl3Sequence_out o_forces, OpenHRP::ImpedanceControllerService::Dbl3Sequence_out o_moments)
+{
+    std::cerr << "[" << m_profile.instance_name << "] getObjectForcesMoments" << std::endl;
+    if (otd_sensor_names.size() == 0) return false;
+    hrp::Vector3 tmpv = otd->getAxis() * otd->getFilteredWrench();
+    std::cerr << "[" << m_profile.instance_name << "] getObjectForcesMoments" << std::endl;
+    o_forces = new OpenHRP::ImpedanceControllerService::Dbl3Sequence ();
+    o_moments = new OpenHRP::ImpedanceControllerService::Dbl3Sequence ();
+    o_forces->length(otd_sensor_names.size());
+    o_moments->length(otd_sensor_names.size());
+    std::cerr << "[" << m_profile.instance_name << "] getObjectForcesMoments" << std::endl;
+    for (size_t i = 0; i < o_forces->length(); i++) o_forces[i].length(3);
+    for (size_t i = 0; i < o_moments->length(); i++) o_moments[i].length(3);
+    std::cerr << "[" << m_profile.instance_name << "] getObjectForcesMoments" << std::endl;
+    // Temp
+    for (size_t i = 0; i < otd_sensor_names.size(); i++) {
+        o_forces[i][0] = tmpv(0)/otd_sensor_names.size();
+        o_forces[i][1] = tmpv(1)/otd_sensor_names.size();
+        o_forces[i][2] = tmpv(2)/otd_sensor_names.size();
+        o_moments[i][0] = o_moments[i][1] = o_moments[i][2] = 0.0;
+    }
+    std::cerr << "[" << m_profile.instance_name << "] getObjectForcesMoments" << std::endl;
+    return true;
 }
 
 extern "C"

@@ -99,32 +99,45 @@ class RTcomponent:
     # \brief activate this component
     # \param self this object
     # \param ec execution context used to activate this component
-    def start(self, ec=None):
+    # \param timeout maximum duration to wait for activation
+    # \return True if activated successfully, False otherwise
+    def start(self, ec=None, timeout=3.0):
         if ec == None:
             ec = self.ec
         if ec != None:
             ec.activate_component(self.ref)
-            while self.isInactive(ec):
+            tm = 0 
+            while tm < timeout:
+                if self.isActive(ec):
+                    return True
                 time.sleep(0.01)
+                tm += 0.01
+        return False
 
     ##
     # \brief deactivate this component
     # \param self this object
     # \param ec execution context used to deactivate this component
-    def stop(self, ec=None):
+    # \param timeout maximum duration to wait for deactivation
+    # \return True if deactivated successfully, False otherwise
+    def stop(self, ec=None, timeout=3.0):
         if ec == None:
             ec = self.ec
         if ec != None:
             ec.deactivate_component(self.ref)
-            while self.isActive(ec):
+            tm = 0
+            while tm < timeout:
+                if self.isInactive(ec):
+                    return True
                 time.sleep(0.01)
+                tm += 0.01
+        return False
 
     ##
     # \brief get life cycle state of the main execution context
     # \param self this object
     # \param ec execution context from which life cycle state is obtained
-    # \return one of LifeCycleState value or None if the main execution
-    # context is not set
+    # \return one of LifeCycleState value or None if the main execution context is not set
     def getLifeCycleState(self, ec=None):
         if ec == None:
             ec = self.ec
@@ -378,7 +391,10 @@ def findRTCmanager(hostname=None, rnc=None):
             mgr = None
         return mgr
 
-    import CORBA
+    try:
+        import CORBA
+    except:
+        print('import CORBA failed in findRTCmanager and neglect it for old python environment.')
     # fqdn
     mgr = None
     hostnames = [hostname, hostname.split(".")[0],
@@ -402,7 +418,10 @@ def findRTCmanager(hostname=None, rnc=None):
 def findRTC(name, rnc=None):
     try:
         obj = findObject(name, "rtc", rnc)
-        rtc = RTcomponent(obj._narrow(RTC.RTObject))
+        try:
+            rtc = RTcomponent(obj._narrow(RTC.RTObject))
+        except TypeError:
+            rtc = RTcomponent(obj._narrow(RTC.DataFlowComponent))
         cxts = rtc.ref.get_participating_contexts()
         if len(cxts) > 0:
             rtc.ec = cxts[0]
@@ -449,7 +468,7 @@ def serializeComponents(rtcs, stopEC=True):
                 print(rtc.name() + 'is already serialized')
         except Exception:
             _, e, _ = sys.exc_info()
-            print("error in serialize %s of %s %s" % (rtc,  rtcs, str(e)))
+            print("[rtm.py] \033[31m   error in serialize %s of %s %s\033[0m" % (rtc.name(),  [[r, r.name()] for r in rtcs], str(e)))
             raise e
 
 ##
@@ -480,7 +499,7 @@ def disconnectPorts(outP, inP):
         if len(ports) == 2:
             pname = ports[1].get_port_profile().name
             if pname == iname:
-                print('[rtm.py]    Disconnect %s - %s' %(iname, pname))
+                print('[rtm.py]    Disconnect %s - %s' %(op.name, iname))
                 outP.disconnect(con_prof.connector_id)
                 return True
     return False
@@ -519,13 +538,13 @@ def connectPorts(outP, inPs, subscription="flush", dataflow="Push", bufferlength
             print('[rtm.py] \033[31m   Failed to connect %s to %s(%s)\033[0m' % \
                   (outP.get_port_profile().name, inP, inPs))
             continue
-        if isConnected(outP, inP) == True:
-            print(outP.get_port_profile().name + 'and' + inP.get_port_profile().name, \
-                  'are already connected')
+        if isConnected(outP, inP) == True and False:
+            print('[rtm.py]      %s and %s are already connected' % \
+                  (outP.get_port_profile().name, inP.get_port_profile().name))
             continue
         if dataTypeOfPort(outP) != dataTypeOfPort(inP):
-            print(outP.get_port_profile().name + 'and' + inP.get_port_profile().name, \
-                  'have different data types')
+            print('[rtm.py] \033[31m     %s and %s have different data types\033[0m' % \
+                  (outP.get_port_profile().name, inP.get_port_profile().name))
             continue
         nv1 = SDOPackage.NameValue("dataport.interface_type", any.to_any("corba_cdr"))
         nv2 = SDOPackage.NameValue("dataport.dataflow_type", any.to_any(dataflow))

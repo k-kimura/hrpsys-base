@@ -290,22 +290,22 @@ public:
       ret = -1;
     }
 
-    if ( flags & 0b00000010 ) {
+    if ( flags & 0x0002 ) { // 0b00000010
       fprintf(stderr, "[ServoSerial] Failed to receive packet from servo(id:%d) Fail to process received packet\n", id);
       ret = -1;
     }
 
-    if ( flags & 0b00001000 ) {
+    if ( flags & 0x0008 ) { // 0b00001000
       fprintf(stderr, "[ServoSerial] Failed to receive packet from servo(id:%d) fail to write Flash ROM\n", id);
       ret = -1;
     }
 
-    if ( flags & 0b00100000 ) {
+    if ( flags & 0x0020 ) { // 0b00100000
       fprintf(stderr, "[ServoSerial] Failed to receive packet from servo(id:%d) temperature limit warning\n", id);
       ret = -1;
     }
 
-    if ( flags & 0b10000000 ) {
+    if ( flags & 0x0080 ) { // 0b10000000
       fprintf(stderr, "[ServoSerial] Failed to receive packet from servo(id:%d) Temperature limit error\n", id);
       ret = -1;
     }
