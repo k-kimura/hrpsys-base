@@ -176,6 +176,8 @@ class CollisionDetector
   GLbody *m_glbody;
 #endif // USE_HRPSYSUTIL
   std::vector<Vclip::Polyhedron *> m_VclipLinks;
+  std::vector<int> m_curr_collision_mask, m_init_collision_mask;
+  bool m_use_limb_collision;
   bool m_use_viewer;
   hrp::BodyPtr m_robot;
   std::map<std::string, CollisionLinkPair *> m_pair;

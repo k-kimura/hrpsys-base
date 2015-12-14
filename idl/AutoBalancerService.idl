@@ -28,10 +28,52 @@ module OpenHRP
     };
 
     /**
+     * @struct Footsteps
+     * @brief Foot step for multi legs.
+     */
+    struct Footsteps
+    {
+      sequence<Footstep> fs;
+    };
+
+    /**
+     * @struct StepParam
+     * @brief Step parameter for one step
+     */
+    struct StepParam
+    {
+      /// Step height [m]
+      double step_height;
+      /// Step time [s]
+      double step_time;
+      /// Maximum toe angle [deg] for toe-off motion
+      double toe_angle;
+      /// Maximum heel angle [deg] for heel-contact motion
+      double heel_angle;
+    };
+
+    /**
+     * @struct StepParams
+     * @brief Step parameters for multi step
+     */
+    struct StepParams
+    {
+      sequence<StepParam> sps;
+    };
+
+    /**
      * @struct FootstepSequence
      * @brief Sequence of foot step.
      */
     typedef sequence<Footstep> FootstepSequence;
+    typedef sequence<StepParam> StepParamSequence;
+
+    /**
+     * @struct FootstepsSequence
+     * @brief Sequence of foot steps.
+     */
+    typedef sequence<Footsteps> FootstepsSequence;
+    typedef sequence<StepParams> StepParamsSequence;
 
     /**
      * @enum SupportLegState
@@ -51,7 +93,10 @@ module OpenHRP
       SHUFFLING,
       CYCLOID,
       RECTANGLE,
-      STAIR
+      STAIR,
+      CYCLOIDDELAY,
+      CYCLOIDDELAYKICK,
+      CROSS
     };
 
     /**
@@ -63,6 +108,15 @@ module OpenHRP
       MODE_ABC,
       MODE_SYNC_TO_IDLE,
       MODE_SYNC_TO_ABC
+    };
+
+    /**
+     * @enum UseForceMode
+     * @brief Mode of use_force
+     */
+    enum UseForceMode {
+      MODE_NO_FORCE,
+      MODE_REF_FORCE
     };
 
     /**
@@ -105,23 +159,41 @@ module OpenHRP
       double default_step_height;
       /// Ratio of double support period. Ratio is included in (0, 1). Double support period time is default_double_support_ratio*default_step_time.
       double default_double_support_ratio;
+      /// Ratio of first double support period. Ratio is included in (0, 1). First double support period time is default_double_support_ratio_before*default_step_time.
+      double default_double_support_ratio_before;
+      /// Ratio of last double support period. Ratio is included in (0, 1). Last double support period time is default_double_support_ratio_after*default_step_time.
+      double default_double_support_ratio_after;
+      /// Ratio of double support static period in which reference ZMP does not move. Ratio is included in (0, 1). default_double_support_ratio >= default_double_support_static_ratio..
+      double default_double_support_static_ratio;
+      /// Ratio of first double support static period in which reference ZMP does not move. Ratio is included in (0, 1). default_double_support_ratio_before >= default_double_support_static_ratio_before..
+      double default_double_support_static_ratio_before;
+      /// Ratio of last double support static period in which reference ZMP does not move. Ratio is included in (0, 1). default_double_support_ratio_after >= default_double_support_static_ratio_after..
+      double default_double_support_static_ratio_after;
+      /// Ratio of double support period before swing. Ratio is included in (0, 1).
+      double default_double_support_ratio_swing_before;
+      /// Ratio of double support period after swing. Ratio is included in (0, 1).
+      double default_double_support_ratio_swing_after;
       /// Stride limitation of forward x[m], y[m], theta[deg], and backward x[m] for goPos
       sequence<double, 4> stride_parameter;
       /// Default OrbitType
       OrbitType default_orbit_type;
       /// Time offset [s] for swing trajectory by delay_hoffarbib_trajectory_generator.
       double swing_trajectory_delay_time_offset;
+      /// Weight parameter for distance of final path of delay_hoffarbib_trajectory_generator (1.0 by default).
+      double swing_trajectory_final_distance_weight;
       /// Way point offset 3D vector [m] for stair_delay_hoffarbib_trajectory_generator.
       DblArray3 stair_trajectory_way_point_offset;
+      /// Kick point offset 3D vector [m] for cycloid_delay_kick_hoffarbib_trajectory_generator.
+      DblArray3 cycloid_delay_kick_point_offset;
       /// Gravitational acceleration [m/s^2]
       double gravitational_acceleration;
-      /// Toe position offset [mm] in end-effector frame x axis
+      /// Toe position offset [m] in end-effector frame x axis
       double toe_pos_offset_x;
-      /// Heel position offset [mm] in end-effector frame x axis
+      /// Heel position offset [m] in end-effector frame x axis
       double heel_pos_offset_x;
-      /// Toe ZMP offset [mm] in end-effector frame x axis
+      /// Toe ZMP offset [m] in end-effector frame x axis
       double toe_zmp_offset_x;
-      /// Heel ZMP offset [mm] in end-effector frame x axis
+      /// Heel ZMP offset [m] in end-effector frame x axis
       double heel_zmp_offset_x;
       /// Maximum toe angle [deg] for toe-off motion
       double toe_angle;
@@ -131,6 +203,14 @@ module OpenHRP
       sequence<double> toe_heel_phase_ratio;
       /// Use toe joint or not in toe-off heel-contact motion.
       boolean use_toe_joint;
+      /// Use toe heel zmp transition. If true, zmp moves among default position, toe position (described by toe_zmp_offset_x), and heel position (described by heel_zmp_offset_x).
+      boolean use_toe_heel_transition;
+      /// ZMP weight of RLEG, LLEG, RARM and LARM
+      sequence<double, 4> zmp_weight_map;
+      /// Foot position offset[m] (rleg and lleg)
+      sequence<DblSequence3> leg_default_translate_pos;
+      /// Number of optional finalize footsteps in goPos
+      long optional_go_pos_finalize_footstep_num;
     };
 
     /**
@@ -140,14 +220,31 @@ module OpenHRP
     struct AutoBalancerParam
     {
       /// ZMP offset vectors[m] for rleg and lleg (<-please set by this order)
-      sequence<DblSequence3, 2> default_zmp_offsets;
+      sequence<DblSequence3> default_zmp_offsets;
       double move_base_gain;
       ControllerMode controller_mode;
+      UseForceMode use_force_mode;
       boolean graspless_manip_mode;
       string graspless_manip_arm;
       DblArray3 graspless_manip_p_gain;
       DblArray3 graspless_manip_reference_trans_pos;
       DblArray4 graspless_manip_reference_trans_rot;
+      /// Transition time [s] for start and stop AutoBalancer
+      double transition_time;
+      /// Transition time [s] for default_zmp_offsets
+      double zmp_transition_time;
+      /// Transition time [s] for adjust foot step
+      double adjust_footstep_transition_time;
+      StrSequence leg_names;
+      /// Flag for inverse kinematics (IK). If true, IK has failed before.
+      boolean has_ik_failed;
+      /// IK position threshold [m]
+      double pos_ik_thre;
+      /// IK rotation threshold [rad]
+      double rot_ik_thre;
+      /// Flag for fix hand while walking.
+      boolean is_hand_fix_mode;
+      sequence<Footstep> end_effector_list;
     };
 
     /**
@@ -172,11 +269,27 @@ module OpenHRP
     boolean goStop();
 
     /**
-     * @brief Set footsteps. Returns without waiting for whole steps to be executed.
-     * @param fs is sequence of FootStep structure.
+     * @brief Stop stepping immediately.
+     * @param
      * @return true if set successfully, false otherwise
      */
-    boolean setFootSteps(in FootstepSequence fs);
+    boolean emergencyStop();
+
+    /**
+     * @brief Set footsteps. Returns without waiting for whole steps to be executed.
+     * @param fss is sequence of FootStep structure.
+              overwrite_fs_idx is index to be overwritten. overwrite_fs_idx is used only in walking.
+     * @return true if set successfully, false otherwise
+     */
+    boolean setFootSteps(in FootstepsSequence fss, in long overwrite_fs_idx);
+
+    /**
+     * @brief Set footsteps. Returns without waiting for whole steps to be executed.
+     * @param fss is sequence of FootStepWithParam structure.
+              overwrite_fs_idx is index to be overwritten. overwrite_fs_idx is used only in walking.
+     * @return true if set successfully, false otherwise
+     */
+    boolean setFootStepsWithParam(in FootstepsSequence fss, in StepParamsSequence spss, in long overwrite_fs_idx);
 
     /**
      * @brief Wait for whole footsteps are executed.
@@ -184,6 +297,13 @@ module OpenHRP
      * @return true if set successfully, false otherwise
      */
     void waitFootSteps();
+
+    /**
+     * @brief Wait for whole footsteps are executed.
+     * @param tm is early time from stepping finish
+     * @return true if set successfully, false otherwise
+     */
+    void waitFootStepsEarly(in double tm);
 
     /**
      * @brief Start AutoBalancer mode in which the robot controls the COM.
@@ -233,5 +353,27 @@ module OpenHRP
      * @return true if set successfully, false otherwise
      */
     boolean getFootstepParam(out FootstepParam i_param);
+
+    /**
+     * @brief Adjust Footsteps.
+     * @param 
+     * @return true if set successfully, false otherwise
+     */
+    boolean adjustFootSteps(in Footstep rfootstep, in Footstep lfootstep);
+
+    /**
+     * @brief Get remaining footstep list.
+     * @param o_footstep is remaining footstep sequence. For example, if initial footsteps are [rfoot(0), lfoot(1), ..., rfoot(N-1)] (rfoot(0) is initial support foot and lfoot(1) is initial swing destination foot) and current support foot is lfoot(X-1), o_footstep is [rfoot(X), lfoot(X+1), ..., rfoot(N)].
+              o_current_fs_idx is current footstep index X.
+     * @return true if set successfully, false otherwise
+     */
+    boolean getRemainingFootstepSequence(out FootstepSequence o_footstep, out long o_current_fs_idx);
+
+    /**
+     * @brief Release emergency stop mode.
+     * @param
+     * @return true if set successfully, false otherwise
+     */
+    boolean releaseEmergencyStop();
   };
 };

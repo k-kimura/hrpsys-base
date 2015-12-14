@@ -86,7 +86,7 @@ bool MotorTorqueController::updateControllerParam(TwoDofControllerPDModel::TwoDo
     retval = m_emergencyController.updateTwoDofControllerPDModelParam(_param) && retval;
     return retval;
   } else {
-    std::cerr << "motor model type is not TwoDofControllerPDModel" << std::endl;
+    std::cerr << "[" << m_error_prefix << "]" << "motor model type is not TwoDofControllerPDModel" << std::endl;
     return false;
   }
 }
@@ -113,12 +113,34 @@ bool MotorTorqueController::updateControllerParam(TwoDofControllerDynamicsModel:
     retval = m_emergencyController.updateTwoDofControllerDynamiccsModelParam(_param) && retval;
     return retval;
   } else {
-    std::cerr << "motor model type is not TwoDofControllerDynamicsModel" << std::endl;
+    std::cerr << "[" << m_error_prefix << "]" << "motor model type is not TwoDofControllerDynamicsModel" << std::endl;
     return false;
   }
 }
 
 // common public functions
+bool MotorTorqueController::enable(void)
+{
+  m_enable_flag = true;
+  return true; // return result of changing mode 
+}
+
+bool MotorTorqueController::disable(void)
+{
+  bool retval;
+  if (m_normalController.state != INACTIVE) {
+    std::cerr << "[" << m_error_prefix << "]" << "Normal torque control in " << m_joint_name << " is active" << std::endl;
+    retval = false;
+  } else if (m_emergencyController.state != INACTIVE) {
+    std::cerr << "[" << m_error_prefix << "]" << "Emergency torque control in " << m_joint_name << " is active" << std::endl;
+    retval = false;
+  } else{
+    m_enable_flag = false;
+    retval = true;
+  }
+  return retval; // return result of changing mode
+}
+
 void MotorTorqueController::setupMotorControllerMinMaxDq(double _min_dq, double _max_dq)
 {
   m_normalController.min_dq = _min_dq;
@@ -157,8 +179,11 @@ bool MotorTorqueController::setReferenceTorque(double _tauRef)
 
 double MotorTorqueController::execute (double _tau, double _tauMax)
 {
-  // define controller state
   double dq, limitedTauRef;
+
+  if (!m_enable_flag) {
+    return 0.0; // dq = 0.0 when disabled
+  }
  
   // define emergency state
   if (std::abs(_tau) > std::abs(_tauMax)) {
@@ -220,9 +245,21 @@ MotorTorqueController::controller_state_t MotorTorqueController::getMotorControl
   }
 }
 
+bool MotorTorqueController::isEnabled(void)
+{
+  return m_enable_flag;
+}
+
+void MotorTorqueController::setErrorPrefix(const std::string& _error_prefix)
+{
+  m_error_prefix = _error_prefix;
+  m_emergencyController.setErrorPrefix(_error_prefix);
+  m_normalController.setErrorPrefix(_error_prefix);
+}
+
 void MotorTorqueController::printMotorControllerVariables(void)
 {
-  std::string prefix = "[MotorTorqueController]";
+  std::string prefix = "[" + m_error_prefix + "]";
   prefix += m_joint_name + ".";
   std::cerr << prefix << "normalController.state:" << m_normalController.state  << std::endl;
   std::cerr << prefix << "normalController.dq:" << m_normalController.getMotorControllerDq()  << std::endl;
@@ -250,6 +287,8 @@ void MotorTorqueController::setupControllerCommon(std::string _jname, double _dt
   resetMotorControllerVariables(m_normalController);
   m_emergencyController.state = INACTIVE;
   resetMotorControllerVariables(m_emergencyController);
+  m_error_prefix = "";
+  m_enable_flag = false;
 }
 
 void MotorTorqueController::resetMotorControllerVariables(MotorTorqueController::MotorController& _mc)
@@ -306,6 +345,7 @@ MotorTorqueController::MotorController::MotorController()
   TwoDofController::TwoDofControllerParam param;
   param.ke = 0.0; param.tc = 0.0; param.dt = 0.0;
   setupTwoDofController(param);
+  error_prefix = "";
 }
 
 MotorTorqueController::MotorController::~MotorController()
@@ -321,11 +361,11 @@ void MotorTorqueController::MotorController::setupTwoDofController(TwoDofControl
 bool MotorTorqueController::MotorController::updateTwoDofControllerParam(TwoDofController::TwoDofControllerParam &_param)
 {
   if (typeid(*controller) != typeid(TwoDofController) || boost::dynamic_pointer_cast<TwoDofController>(controller) == NULL) {
-    std::cerr << "incorrect controller type: TwoDofController" << std::endl;
+    std::cerr << "[" << error_prefix << "]" << "incorrect controller type: TwoDofController" << std::endl;
     return false;
   }  
   if (state != INACTIVE) {
-    std::cerr << "controller is not inactive" << std::endl;
+    std::cerr << "[" << error_prefix << "]" << "controller is not inactive" << std::endl;
     return false;
   }
   // update parameters which are not 0 using updateParam (parameter is not updated when _param is 0)
@@ -347,11 +387,11 @@ void MotorTorqueController::MotorController::setupTwoDofControllerPDModel(TwoDof
 bool MotorTorqueController::MotorController::updateTwoDofControllerPDModelParam(TwoDofControllerPDModel::TwoDofControllerPDModelParam &_param)
 {
   if (typeid(*controller) != typeid(TwoDofControllerPDModel) || boost::dynamic_pointer_cast<TwoDofControllerPDModel>(controller) == NULL) {
-    std::cerr << "incorrect controller type: TwoDofControllerPDModel" << std::endl;
+    std::cerr << "[" << error_prefix << "]" << "incorrect controller type: TwoDofControllerPDModel" << std::endl;
     return false;
   }  
   if (state != INACTIVE) {
-    std::cerr << "controller is not inactive" << std::endl;
+    std::cerr << "[" << error_prefix << "]" << "controller is not inactive" << std::endl;
     return false;
   }
   // update parameters which are not 0 using updateParam (parameter is not updated when _param is 0)
@@ -374,11 +414,11 @@ void MotorTorqueController::MotorController::setupTwoDofControllerDynamicsModel(
 bool MotorTorqueController::MotorController::updateTwoDofControllerDynamiccsModelParam(TwoDofControllerDynamicsModel::TwoDofControllerDynamicsModelParam &_param)
 {
   if (typeid(*controller) != typeid(TwoDofControllerDynamicsModel) || boost::dynamic_pointer_cast<TwoDofControllerDynamicsModel>(controller) == NULL) {
-    std::cerr << "incorrect controller type: TwoDofControllerDynamicsModel" << std::endl;
+    std::cerr  << "[" << error_prefix << "]" << "incorrect controller type: TwoDofControllerDynamicsModel" << std::endl;
     return false;
   }
   if (state != INACTIVE) {
-    std::cerr << "controller is not inactive" << std::endl;
+    std::cerr  << "[" << error_prefix << "]" << "controller is not inactive" << std::endl;
     return false;
   }
   TwoDofControllerDynamicsModel::TwoDofControllerDynamicsModelParam param;
@@ -399,6 +439,12 @@ bool MotorTorqueController::MotorController::updateParam(double &_param, const d
     return true;
   }
   return false;
+}
+
+void MotorTorqueController::MotorController::setErrorPrefix(const std::string& _error_prefix)
+{
+  error_prefix = _error_prefix;
+  controller->setErrorPrefix(_error_prefix);
 }
 
 double MotorTorqueController::MotorController::getMotorControllerDq(void)

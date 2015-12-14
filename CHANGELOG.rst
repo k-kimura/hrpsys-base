@@ -2,6 +2,929 @@
 Changelog for package hrpsys
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+315.8.0 (2015-11-29)
+--------------------
+
+Stable RTCs
+=============
+
+* add rtc xml (https://github.com/fkanehiro/hrpsys-base/pull/880)
+*  [rtc/SequencePlayer/interpolator.*,seqplay.cpp,rtc/AutoBalancer/AutoBalancer.cpp,rtc/AutoBalancer/GaitGenerator.h,rtc/CollisionDetector/CollisionDetector.cpp,rtc/EmergencyStopper/EmergencyStopper.cpp]
+  Add name for interpolator and set name for RTCs using interpolator (`#848 <https://github.com/fkanehiro/hrpsys-base/issues/848>`_ )
+* [README.md, sample/README.md] Add link for samples README.md
+* [lib/util/BodyRTC.cpp] Do not use servo off emulation in HighGain mode.
+* [python] Clarify arguments for setTargetPoseRelative
+* [python/hrpsys_config.py] Modify hrpsys_config.py for connection
+* [ec/hrpEC/hrpEC-common.cpp, hrpEC.h] Get RTC names when rtcs size change for https://github.com/fkanehiro/hrpsys-base/issues/806
+* [ec/hrpEC/hrpEC-common.cpp] shows instance names when time over is detected
+* [.travis.yml] Exec USE_SRC_OPENHRP3=true tests in faster orders to make debug of these tests easy.
+* [.travis.{sh,yml}] add test code for openhrp3 source
+* [.travis.yml] add slack notification  https://jsk-robotics.slack.com/messages/travis/details/
+
+* Change include file path settings in hrpsys-base.pc file
+
+  * [test/test-pkgconfig.py] fixes a include path ("io/iob.h" -> "hrpsys/io/iob.h")
+  * [hrpsys-base.pc.in] changes includedir in pc file
+
+* RobotHardware
+
+  * [rtc/RobotHardware/robot.cpp] Add a compile option to add default implementation whenever readDigitalInput and lenghtDigitalInput are not available
+  * Add a port and methods to read command torques, as well as actual torques. (They differ when the robot has torque sensing capabilities)
+  * [rtc/RobotHardware/robot.cpp] Add print message for setServoGainPercentage
+
+* SequencePlayer
+
+  * [rtc/EmergencyStopper/EmergencyStopper.cpp,rtc/SequencePlayer/SequencePlayer.cpp] fill time stamp on reference of angles
+  * Protect pop() and pop_back() operations with a mutex(`#839 <https://github.com/fkanehiro/hrpsys-base/issues/839>`_ )
+  * [rtc/SequencePlayer/interpolator.{cpp,h}] Switch to using coil::Guard instead of boost
+  * [rtc/SequencePlayer/interpolator.{cpp,h}] Include locks.hpp instead of lock_guard, for backwards compatibility
+  * [rtc/SequencePlayer/interpolator.{cpp,h}] Protect pop() and pop_back() operations with a mutex to avoid popping twice the same element
+
+
+* DataLogger
+
+  * [rtc/DataLogger/DataLogger.cpp] Add message printing to DataLogger functions
+
+* rtm.py
+
+  * [python/rtm.py] narrow to RTObject produce error on some environments (`#858  <https://github.com/fkanehiro/hrpsys-base/issues/858>`_ )
+  * [python/rtm.py] Add try&except for import CORBA failing on old python environment.
+
+* hrpsys_config.py
+
+  * [python/hrpsys_config.py] Support latest startAutoBalancer in startDefaultUnstableControllers.
+  * [python/hrpsys_config.py] Use 4limbs in startAutoBalancer when Groups has rarm and larm.
+  * [python/hrpsys_config.py, rtc/AutoBalancer/AutoBalancer.*, rtc/Stabilizer/Stabilizer.*, rtc/Stabilizer/ZMPDistributor.h] shift a support polygon when set-ref-force
+  * fix typo: tmp_contollers -> tmp_controllers
+  * [python/hrpsys_config.py, rtc/Stabilizer, rtc/AutoBalancer] add walkingStates port from abc to st
+  * [python/hrpsys_config.py] Add el log for final reference joint angles output for both Stable RTC users and Unstable RTC Users
+
+
+Unstable RTCs
+=============
+
+* Samples
+
+  * [sample/SampleSpecialJointRobot/SampleSpecialJointRobot.conf.in] Add interlocking joint setting
+  * [sample/environments/Dumbbell.wrl, sample/SampleRobot/samplerobot_carry_object.py] Update Dumbbell handle and add auto detection sample
+  * [README.md, sample/SampleRobot/README.md] Add new sample explanation to SampleRobot README and add link to top page
+  * [sample/environments/Dumbbell.wrl, sample/SampleRobot/samplerobot_carry_object.py] Update Dumbbell handle and add auto  detection sample
+  * [sample/SampleRobot/ForceSensorOffset_SampleRobot.txt, samplerobot_carry_object.py, CMakeLists.txt] Add force sensor offset for rmfo and update controller initialization in carry sample
+  * [sample/SampleRobot/*carry*, sample/environments/PushBox.wrl] Add push box and push manipulation demo
+  * [sample/SampleRobot/SampleRobot.carryobject.xml.in,samplerobot_carry_object.py] Add ABS_TRANSFORM for each object and  add walking example
+  * sample/environments/Dumbbell.wrl, sample/SampleRobot/*] Add Dumbbell model and add carry up example.
+  * [sample/SampleSpecialJointRobot/*, rtc/AutoBalancer/*] Enable toe joint example and support robots witch leg joints >= 7
+  * [launch/samplespecialjointrobot.launch, sample/SampleSpecialJointRobot/, sample/CMakeLists.txt] Add files for SampleSpecialJointRobot
+  * [sample/Sample4LegRobot] Add kinematics simulation xml and call set parameter func in demo program
+  * [sample/Sample4LegRobot/sample4legrobot_stabilizer.py] Update st params
+  * [sample/Sample4LegRobot/Sample4LegRobot.xml.in] Use non-bush model for non-torquecontrol simulation
+  * [sample/Sample*Robot/Sample*Robot.conf.in] Add optionalData setting
+  * [sample/Sample*Robot/Sample*Robot.conf.in] Add parameters for ThermoLimter and CollisionDetector and hide print messages on simulation
+  * [sample/Sample4LegRobot/sample4legrobot_stabilizer.py] Add st and abc setting
+  * [launch/sample4legrobot.launch, sample/Sample4LegRobot, sample/CMakeLists.txt] Add files for Sample4LegRobot
+  * [sample/SampleRobot/SampleRobot.conf.in, rtc/PDcontroller/PDcontroller.cpp] Enable to set gain file from bindParameter (https://github.com/fkanehiro/hrpsys-base/pull/789) and rename pdgains_sim.file_name => pdgains_sim_file_name
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] add a sample program of setFootSteps with arms
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] add a sample program of four leg auto-balancer
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] add four legs mode pose
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] apply numpy.allclose to list of list
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] set acceptable error between reference  and actual default_zmp_offsets
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] add debug message to demoAutoBalancerSetParam
+  * [sample/SampleRobot/samplerobot_stabilizer.py] Tune stabilizer eefm parameter using rubber bush and torque control mode
+  * [sample/SampleRobot/samplerobot_soft_error_limiter.py] Remove unnecessary mdlldr and fix newline
+  * [sample/SampleRobot/samplerobot_soft_error_limiter.py] Update limit table check and add error and vel limit check
+  * [launch/samplerobot.launch,sample/SampleRobot/SampleRobot.PDgain.dat,SampleRobot.torque.xml.in] Update torquecontrol to use sample1_bush
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] add assert to check success of setting default_zmp_offsets
+  * [sample/SampleRobot/samplerobot_stabilizer.py] Fix samplerobot st sample parameter
+
+* AutoBalancer (support 4 legs)
+
+  * [rtc/AutoBalancer/AutoBalancer.cpp] do not change autobalancer mode when leg_names are unchanged
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Set is_hand_fix_mode false by default same as startautobalancer in [rleg, lleg].
+  * [sample/Sample4LegRobot/sample4legrobot_stabilizer.py,sample/SampleRobot/samplerobot_auto_balancer.py,sample/SampleSpecialJointRobot/samplespecialjointrobot_auto_balancer.py]
+Update samples for startAutoBalancer update.
+  * [sample/Sample4LegRobot/sample4legrobot_auto_balancer.py] Add Rectangle and Cycloiddelay orbit 4leg walking samples.
+  * [rtc/AutoBalancer/GaitGenerator.[cpp,h]] Support rectangle and cycloiddelay for multi leg walking. Currently other orbits are not supported because we need to update a method to parameter setting and getting.
+  * [AutoBalancer/AutoBalancer.cpp] fix fixed coordinates in multiple legs : only use legs
+  * [AutoBalancer/AutoBalancer.cpp, Stabilizer/Stabilizer.cpp] do not change end-effector parameters except during MODE_IDLE
+  * [rtc/AutoBalancer/AutoBalancer.cpp] add end_effector_list to set/getAutoBalancerParam
+  * [idl/AutoBalancerService.idl] add end_effector_list to AutoBalancerParam
+  * [sample/SampleRobot] set all limbs to limbs arguments in trot walking
+  * [sample/Sample4LegRobot] add a trot walking demo program
+  * [AutoBalancer/GaitGenerator.cpp] modify toe heel angle in only biped or crawl
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Disable to change new zmp parameter and Modify for old zmp parameter
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Enable to Change zmp parameters
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Add Zmp parameter (default double support ratio before and after)
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Add Zmp Parameter(default double support static ratio before and after)
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Fix rotation of hand fix coords offset
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] Fix order of samples and update for zmp transition and fix hands
+  * [rtc/AutoBalancer/AutoBalancer.txt] Update fix hand mode according to cog vel and update documentation.
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] Add sample for hand fix walking.
+  * [idl/AutoBalancerService.idl, rtc/AutoBalancer/AutoBalancer.[cpp,h]] Add hand fix mode. By default, no fix mode.
+  * [rtc/AutoBalancer/GaitGenerator.cpp] Check difference projected on start coords to avoid problems reported in https://github.com/fkanehiro/hrpsys-base/issues/845
+  * [idl/AutoBalancerService.idl, rtc/AutoBalancer/AutoBalancer.cpp] add use_force_mode to AutoBalancerParam
+
+* AutoBalancer (support external forces)
+
+  * [idl/AutoBalancerService.idl, rtc/AutoBalancer/AutoBalancer.cpp] add use_force_mode to AutoBalancerParam
+  * add leg orbit type for cross step
+  * [rtc/Autobalancer/GaitGenerator.cpp] Modify leg coords generator for changing double support time after swing
+　* [rtc/Autobalancer/Autobalancer.cpp] Disable to change double support time for swing leg
+　* [rtc/AutoBalancer/AutoBalancer.cpp] Add double support time before and after swing to AutoBalancer
+  * [rtc/AutoBalancer/GaitGenerator.cpp] Do not reuse vector for swing foot zmp offsets.
+  * [rtc/AutoBalancer/GaitGenerator.h] Fix printing of footsteps.
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Substitute ref_forces calculated from ZMP for ref_force's outport at ABC
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Add Outport of ref_forces to AutoBalancer
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Set Contact States for ee not included in leg_names to false
+  * [rtc/AutoBalancer/AutoBalancer.*] Enable to output contact and swing support time
+  * [AutoBalancer.*] add leg_names_interpolator in order to change leg_names during MODE_ABC
+  * [AutoBalancer.cpp] add Guard at the top of setAutoBalancerParam
+  * [rtc/AutoBalancer/testGaitGenerator.cpp,GaitGenerator.cpp] Fix double support phase count and contact state change.
+  * [rtc/AutoBalancer/GaitGenerator.*] Add is_swing_phase member
+  * [rtc/AutoBalancer/testGaitGenerator.cpp] Display contact states on swing support time plotting
+  * [AutoBalancer.cpp, GaitGenerator.*] extend contactStates, controlSwingSupportTime and limbCOPOffset for arms
+  * [AutoBalancer.cpp] fix typo of index
+  * [rtc/AutoBalancer/AutoBalancer.*] Reduce debug pring for ik error
+  * [GaitGenerator.cpp] fix the order of passing arguments
+  * [AutoBalancer.cpp] use target_p0/r0 instead of target_link->p/R to calculate ref_cog in order to avoid discontinuity of ref_cog
+  * [AutoBalancer.cpp, GaitGenerator.h] add zmp_weight_interpolator
+  * [AutoBalancer.*] rename zmp_interpolator to zmp_offset_interpolator for zmp_weight_interpolator
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, AutoBalancerService_impl.cpp] set the number of default_zmp_offsets according to the number of end-effectors
+  * [AutoBalancer/AutoBalancer.cpp] fix typo : get_default_step_height -> get_toe_angle / get_heel_angle
+  * [AutoBalancer.cpp] move some code blocks in onInitialize to use end-effector information
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Fix abc ik error bug. Calculate difference from current->target and update threshold
+  * [testGaitGenerator.cpp] cannot use comparison operator between const std::vector<std::string> and boost::assign::list_of(std::string) in HRP2 inside PC
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, AutoBalancerService_impl.cpp] add zmp_weight_map to GaitGeneratorParams
+  * [AutoBalancer.cpp, GaitGenerator.*] add zmp weight map which is used in target zmp calculation
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Do not check ik error during start and stop auto balancer
+  * [idl/AutoBalancerService.idl, AutoBalancer.*, AutoBalancerService_impl.*, GaitGenerator.h] add setFootStepNodes for multiple legs
+  * [GaitGenerator.h] use weight factor in get_swing_support_mid_coords for crawl walking
+  * [GaitGenerator.h] print index of foot steps
+  * [AutoBalancer.cpp] do not print unless DEBUG mode
+  * [GaitGenerator.h] add default constructor of step_node
+  * add outport for ref-capture-point
+  * [idl/AutoBalancerService.idl, rtc/AutoBalancer/AutoBalancer.*] Enable to check ik error.
+
+* Stabilizer (capture points)
+
+  * [rtc/Stabilizer/Stabilizer.cpp] Fix bug of st compensation frame.
+  * [rtc/Stabilizer/Stabilizer.cpp] fix calculation of cp for visualization
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.*] check whether capture point is inside support polygon
+  * [rtc/Stabilizer/ZMPDistributor.h] add function to check whether point is inside support polygon
+  * [rtc/Stabilizer/ZMPDistributor.h] add function to calculate ConvexHull
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.*] disable emergency stop while walking by default
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.cpp] add end_effector_list to set/getParameter
+  * [Stabilizer/Stabilizer.cpp] add mutex guards
+  * [Stabilizer/Stabilizer.cpp] add tm info to out ports
+  * [rtc/Stabilizer/Stabilizer.cpp] fix bug about checking cp error
+  * [rtc/Stabilizer/Stabilizer.cpp] fix typo : Reduce frequency of cp error print message
+  * [Stabilizer/Stabilizer.cpp] set contact states for all the limbs
+  * [idl/AutoBalancerService.idl] Change idl's description
+  * [rtc/Stabilizer/Stabilizer.cpp, rtc/Stabilizer/ZMPDistributor.h] change detection of falling with cp
+  * [idl/StabilizerService.idl,  rtc/Stabilizer/Stabilizer.*] enable to set compensation limit
+  * [rtc/Stabilizer/Stabilizer.cpp] Enable to set emergency_check_mode always.
+  * [rtc/Stabilizer/Stabilizer.*] Reduce frequency of cp error print message
+  * [rtc/Stabilizer/Stabilizer.cpp] Use inport ref-force moment for initial values.
+  * [rtc/Stabilizer/Stabilizer.cpp] Fix wait for stop stabilizer.
+  * [rtc/Stabilizer/ZMPDistributor.h, Stabilizer.cpp] Use pinv version for multileg debug and add print messages
+  * [rtc/Stabilizer/ZMPDistributor.h] Use limb_gain for feedforward force calculation
+  * [rtc/Stabilizer/] Use limb gain for swing support transition
+  * [rtc/Stabilizer/ZMPDistributor.h] Add non inequality distribution
+  * [idl/StabilizerService.idl] convert CapturePoint from foot-origin relative to root-link relative
+  * [rtc/Stabilizer/Stabilizer.cpp] Fix st sensor name check for robots with toe joints
+  * [rtc/Stabilizer/Stabilizer.*] Enable swing->support gain transition
+  * [rtc/Stabilizer/Stabilizer.cpp, rtc/AutoBalancer/GaitGenerator.*] Print swing support time and consider swing phase for swing suport time calculation
+  * [rtc/Stabilizer/Stabilizer.*] Calc swing support gain from remain time
+  * [rtc/Stabilizer/Stabilizer.cpp, ZMPDistributor.h] Use cop distance and add d_foot_pos print message
+  * [rtc/Stabilizer/Stabilizer.cpp] Add independent limb ik
+  * [rtc/Stabilizer/Stabilizer.cpp] Reduce redundant calculation of pos_ctrl
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.cpp] Remove deprecated parameters for old st mode
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.*] Add argument to select force difference control mode
+  * [python/hrpsys_config.py, rtc/Stabilizer/Stabilizer.*] Update st debug reference and compensation port for multi legged robots
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.cpp, sample/Sample*/*_stabilizer.py] Enable to set all vertices of support polygon
+  * [rtc/Stabilizer/testZMPDistributor.cpp] Initialize ref force moment for test
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.*] Enable to set eefmqpcop algorithm
+  * [rtc/Stabilizer/ZMPDistributor.h] Update for multi leg force moment distribution
+  * [rtc/Stabilizer/Stabilizer.*] Rename ref force moment variable
+  * [rtc/Stabilizer/*] Enable to set limb ref force and moment
+  * [rtc/Stabilizer/Stabilizer.*] Fix for prev act force z
+  * [rtc/Stabilizer/Stabilizer.cpp] Use zmp calc and feedback checking
+  * [rtc/Stabilizer/ZMPDistributor.h] Fix for compile not USE_QPOASES
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.*] Add parameter for end effector feedback and zmp calc params
+  * [rtc/Stabilizer/ZMPDistributor.h, rtc/Stabilizer/testZMPDistributor.cpp] Add force moment distribution by cop distance
+  * [rtc/Stabilizer/testZMPDistributor.cpp] Fix plotting of test zmp distributor
+  * [rtc/Stabilizer/Stabilizer.*, rtc/EmergencyStopper/EmergencyStopper.cpp] Reset emergency flag when st mode is moved to idle or air.
+  * [rtc/Stabilizer/Stabilizer.cpp, rtc/AutoBalancer/AutoBalancer.cpp, rtc/ImpedanceController/ImpedanceController.cpp, JointPathEx.*] Enable interlocking joints setting for AutoBalancer, ImpedanceController, Stabilizer
+  * [idl/StabilizerService.idl] Update comments of types
+  * [rtc/Stabilizer/Stabilizer.cpp] Update print message and add setter check
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.*] Enable to set all end effector damping param.
+  * [rtc/Stabilizer/Stabilizer.*] Add d_foot_xx to st ik param
+  * [rtc/Stabilizer/Stabilizer.*] Use LPF for target ee diff p
+  * [rtc/Stabilizer/Stabilizer.*] Enable to use body attitude control for both tpcc and eefm
+  * [rtc/Stabilizer/*] Use LPF in IIRFilter.h
+  * [rtc/Stabilizer/ZMPDistributor.h] Fix argument for USE_QPOASES OFF
+  * [rtc/Stabilizer/Stabilizer.*] Remove deprecated leg variables and force sensor checking in every loop
+  * [python/hrpsys_config.py, rtc/Stabilizer/Stabilizer.*] Connect all force sensors and do not check whether leg or not in python and connection phase
+  * [rtc/Stabilizer/testZMPDistributor.cpp, Stabilizer.cpp, ZMPDistributor.h] Fix immediate value for rleg lleg index.
+  * [rtc/Stabilizer/ZMPDistributor.h] Fix const addition
+  * [rtc/Stabilizer/ZMPDistributor.h] Fix rleg and lleg usage
+  * [rtc/Stabilizer/ZMPDistributor.h,rtc/Stabilizer/testZMPDistributor.cpp] Update test moment plot range and extract calc alpha function
+
+* ImpedanceController (estimated force and external objects)
+
+  * [idl/ImpedanceControllerService.idl,rtc/ImpedanceController/ImpedanceController.cpp,rtc/ImpedanceController/ObjectTurnaroundDetector.h] Add tuning parameter for time count after object turnaround detection.
+  * [idl/StabilizerService.idl, rtc/Stabilizer/ZMPDistributor.h, rtc/Stabilizer/Stabilizer.*] change variable type of cp_check_margin
+  * [rtc/ImpedanceController/JointPathEx.cpp] Fix bug of interlocking joint. Initialize matrix by zero setting.
+  * [rtc/ImpedanceController/ImpedanceController.cpp] Print impedance control parameter when DEBUGP controlled by debugLevel.
+  * [idl/ImpedanceControllerService.idl,rtc/ImpedanceController/ImpedanceController*, ObjectTurnaroundDetector.h] Return object turnaround detector mode while checking.
+  * [idl/ImpedanceControllerService.idl, rtc/ImpedanceController/Impedance*] Add get function for estimated force and moment
+  * [idl/ImpedanceControllerService.idl, rtc/ImpedanceController/*] Add idl service functions for object turnaround detector.
+  * [rtc/ImpedanceController/ObjectTurnaroundDetector.h] Add axis and update params
+  * [rtc/ImpedanceController/ObjectTurnaroundDetector.h] Add counter and fix checking
+  * [rtc/ImpedanceController/*] Add ObjectTurnaroundDetector and tests
+  * [idl/ImpedanceControllerService.idl, rtc/ImpedanceController/Impedance*] Add get function for estimated force and moment
+  * [idl/ImpedanceControllerService.idl, rtc/ImpedanceController/*] Add idl service functions for object turnaround detector.
+  * [rtc/ImpedanceController/ObjectTurnaroundDetector.h] Add axis and update params
+  * [rtc/ImpedanceController/ObjectTurnaroundDetector.h] Add counter and fix checking
+  * [rtc/ImpedanceController/*] Add ObjectTurnaroundDetector and tests
+  * [rtc/ImpedanceController/JointPathEx.*] Add interlocking joint usage. Add interlocking joint component to jacobian and workspace velocity.
+
+* EmergencyStopper
+
+  * add test for emergency stop of wrench in samplerobot_emergency_stopper.py
+  * connect data ports of wrenches for EmergencyStopper.
+  * interpolate wrenches according to emergency_mode.
+  * connect servoState from rh to es.
+  * add input/output dataport for reference force sensors in EmergencyStopper
+
+* GaitGenerator
+
+  * [rtc/GaitGenerator.h] Add get function for cog vel and cog acc
+
+* ThermoLimitService
+
+  * [idl/ThermoLimiterService.idl, rtc/ThermoLimiter/ThermoLimiter.*, rtc/ThermoLimiter/ThermoLimiterService_impl.*] enable to set and get ThermoLimiter parameters
+  * [ThermoLimiter/ThermoLimiter.cpp] decrease debug messages
+
+* PDController
+
+  * [rtc/PDcontroller/PDcontroller.cpp] Add check for m_robot in PDcontroller (https://github.com/fkanehiro/hrpsys-base/issues/796)
+  * [rtc/PDcontroller/PDcontroller.*, sample/SampleRobot/SampleRobot.conf..in] Add torque limit ratio for PDcontroller simulation.
+  * [PDcontroller] read gain file at onActivated
+  * [rtc/PDcontroller/PDcontroller.*] Remove unused joint reading and add debugLevel and debug print
+  * [rtc/PDcontroller/PDcontroller.*] Initialize pdgain and joint angles in onExecute to use bindParameter
+  * [rtc/PDcontroller/CMakeLists.txt, PDcontroller.*] Add tlimit based on ModelLoader climit.
+  * [PDcontroller] initialize reference angle with current angle at onActevated()
+
+* GraspController
+
+  * [rtc/GraspController/GraspController.cpp] Move to idle mode when servo on/off deactivation
+
+* KalmanFilter
+
+  * [KalmanFilter] add time stamp to output of Kalmanfilter
+
+* SoftErrorLimiter
+
+  * [rtc/SoftErrorLimiter/SoftErrorLimiter.cpp] Limit joint angles in one for loop
+  * [rtc/SoftErrorLimiter/SoftErrorLimiter.cpp] Move comments for joint/link
+  * [rtc/SoftErrorLimiter/SoftErrorLimiter.cpp] Remove unused variable
+  * [rtc/SoftErrorLimiter/SoftErrorLimiter.cpp] Update limitation considering vel, pos, err at once
+  * [rtc/SoftErrorLimiter/SoftErrorLimiter.cpp] Limitation by llimit and ulimit to approach valid joint range when (llimit > m_qRef.data[i] && prev_angle[i] <= m_qRef.data[i]) or ( ulimit < m_qRef.data[i] && prev_angle[i] >= m_qRef.data[i] )
+  * [rtc/SoftErrorLimiter/SoftErrorLimiter.cpp] Store total last output as prev_angle
+
+* TorqueFilter
+
+  * [TorqueFilter/testIIRFilter.cpp] fix header file to pass qnx
+  * [rtc/TorqueFilter/CMakeLists.txt] Add cmake test for testIIRFilter
+  * [rtc/TorqueFilter/testIIRFilter.cpp] Enable test for hrp::Vector3
+  * [rtc/TorqueFilter/*IIRFilter*, rtc/TorqueFilter/Stabilizer.cpp, ZMPDistributor.h] Initialize value in constructor
+  * [rtc/TorqueFilter/testIIRFilter.cpp, CMakeLists] Add test for IIR filter
+
+* ServoController
+
+  * use 0x... format instead of binary format 0b... Fixes (`#868 <https://github.com/fkanehiro/hrpsys-base/issues/868>`_ )
+  * [rtc/ServoController/ServoSerial.h, CMakeLists.txt] Check gcc version >= 4.3 for binary format integer constant. (For forl old ubuntu `#854 <https://github.com/fkanehiro/hrpsys-base/issues/854>`_ )
+
+* Contributors: Eisoku Kuroiwa, Fumio KANEHIRO, Hervé Audren, Isaac IY Saito, Kei Okada, Shunichi Nozawa, Takasugi Noriaki, Yohei Kakiuchi, Yosuke Matsusaka, Yuta Kojio, Masaki Murooka, jenkinshrg
+
+315.7.0 (2015-08-19)
+--------------------
+
+Stable RTCs
+===========
+
+* [doc] Remove old info from downstream pkg
+* [CMakeLists.txt] Build 3rdparty directory
+* [3rdparty] Add 3rdparty directory based on https://github.com/fkanehiro/hrpsys-base/pull/683 discussion (currently for qpOASES)
+* [test/test-samplerobot-el.test] Increase rostest execution time
+* [.travis.sh] Check make test
+* [.travis] add more information on test matrix see https://github.com/fkanehiro/hrpsys-base/pull/363#issuecomment-122634139
+
+* SequencePlayer
+
+  * [sample/SampleRobot/samplerobot\_*.py] Direct printing message to stderr to visualize in rostest results.
+  * [sample/SampleRobot/samplerobot_sequence_player.py] Fix invalid length of joint angle function of groups
+  * [sample/SampleRobot/samplerobot_sequence_player.py] Direct printing message to stderr to visualize in rostest results.
+  * [rtc/SequencePlayer/seqplay.cpp] Fix typo in print message
+  * [rtc/SequencePlayer/SequencePlayer*, rtc/SequencePlayer/seqplay*] Add checking of length of argument joint angles for setJointAnglesOfGroups and setJointAnglesSequenceOfGroup and update related function arguments.
+  * [sample/SampleRobot/samplerobot_stabilizer.py, samplerobot_remove_force_offset.py, samplerobot_kalman_filter.py, samplerobot_auto_balancer.py] Check hrpsys version for unstable rtc testing
+
+* CollisionDetector
+
+  * [test/test-samplerobot-collision.py,test-samplerobot-datalogger.py] Add unittest for collision and datalogger
+  * [sample/SampleRobot/samplerobot_collision_detector.py, samplerobot_data_logger.py] Use functions in hrpsys_config.py instead of idl functions
+  * [sample/SampleRobot/samplerobot_collision_detector.py] Add assert for unittesting of collision check. (Comment out collision mask sample because it requires conf change).
+
+* SoftErrorLimitter
+
+  * [rtc/SoftErrorLimiter/SoftErrorLimiter.cpp] Fix bug of Velocity limitation in https://github.com/fkanehiro/hrpsys-base/pull/726
+  * [sample/SampleRobot/samplerobot_soft_error_limiter.py] Check hrpsys version
+  * [rtc/SoftErrorLimiter/JointLimitTable., rtc/ImpedanceController/JointPathEx*, rtc/SoftErrorLimiter/CMakeLists.txt, rtc/SoftErrorLimiter/SoftErrorLimiter.h] Move limit table codes to separated file.
+  * [sample/SampleRobot/samplerobot_soft_error_limiter.py] Add position limit testing
+  * [test/test-samplerobot-el.*, sample/SampleRobot/samplerobot_soft_error_limiter.py] Add rostest for soft error limiter
+  * do not check position/limit error when lower limit and upper limit is same
+
+
+Unstable RTCs
+=============
+
+* [python/hrpsys_config.py] Enable thermolimiter and thermoestimator (in Unstable RTC)
+* [test/test-samplerobot.test, test-samplerobot-*.py] Add rostests for unstable rtcs.
+* [test/test-samplerobot.test] Add data logger and collision detector tests to samplerobot rostest.
+* [CMakeLists.txt, rtc/[AutoBalancer, ImpedanceController, Stabilizer]/CMakeLists.txt] Add enable_testing to toplevel cmake and add add_test for impedance, autobalnacer, and stabilizer examples
+
+* AutoBalancer (Support 4/multi leg  mode)
+
+  * [GaitGenerator.cpp] fix bug: keep align the order of names and coordinates of foostep_nodes_list.front()
+  * [AutoBalancer.cpp, GaitGenerator.*] add multi_mid_coords function to calculate a midcoords of multi coordinates in fixLegToCoords, get_swing_support_mid_coords and stopWalking
+  * [AutoBalancer.cpp] use leg_names instead of "rleg" or "lleg"
+  * [GaitGenerator.*] use leg_type_map in order to convert between leg_type and name
+  * [AutoBalancer.cpp, GaitGenerator.h] move leg_type_map to gait_generator
+  * [GaitGenerator.*] rename get_support_leg_types_from_footstep_nodes to calc_counter_leg_types_from_footstep_nodes
+  * [GaitGenerator.*] move get_support_leg_types_from_footstep_nodes to gait_generator
+  * [AutoBalancer.cpp, GaitGenerator.h] fix return type of get_dst_foot_midcoords from std::vector<coordinates> to coordinates because we need the reference coordinates
+  * [GaitGenetarot.*] keep swing_legs at update_leg_steps
+  * [AutoBalancer.cpp] consider some variable life times
+  * [AutoBalancer.cpp, GaitGenerator.*, testGaitGenerator.cpp] use step_node instead of coords because we need to align the oder of names of legs and coords of legs
+  * [AutoBalancer.cpp, GaitGenerator.*, testGaitGenerator.cpp] fix variable names of legs and corresponding method names
+  * [GaitGenerator.h] add hints for the second template argument of boost::assign::list_of at a constructor initialization phase
+  * [GaitGenerator.*] use std::count_if instead of boost::count_if since HRP2 inside PC does not support boost::count_if
+  * [GaitGenerator.*] use vector class functions to get errors : http://qiita.com/ota42y/items/f2067f6b81dd15bca95a
+  * [AutoBalancer.cpp] improve startWalking for multiple legs
+  * [AutoBalancer.cpp, GaitGenerator.*, testGaitGenerator.cpp] improve go_pos_param_2_footstep_nodes_list for multiple legs
+  * [AutoBalancer.cpp, GaitGenerator.*, testGaitGenerator.cpp] remove an unused argument of go_pos_param_2_footstep_nodes_list
+  * [AutoBalancer.cpp, GaitGenerator.h] fix indent
+  * [AutoBalancer.cpp, GaitGenerator.*, testGaitGenerator.cpp] add an argument of go_pos_param_2_footstep_nodes_list to set start_ref_coords no matter which gait we choose
+  * [GaitGenerator.*] improve get_swing_legs of leg_coords_generator for multiple legs
+  * add outport for capture point
+  * [GaitGenerator.cpp/.h] extend append_go_pos_step_nodes to get an argument of multiple legs
+  * [AutoBalancer.cpp, GaitGenerator.cpp/h, testGaitGenerator.cpp] add a variable named all_limbs which stands for candidates of contact legs
+  * [GaitGenerator.cpp, .h] fix a function name to follow the naming rule
+  * [GaitGenerator.cpp] use count_if for multiple legs
+  * [GaitGenerator.cpp] use min max functions for the stride limits
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] Add attitude check to auto balancer test
+  * do not use boost::remove_erase_if() because it is too new for old systems
+  * remove undefined function
+  * I will squash this commit: Update variable names following the naming rule
+  * extend "std::vector<step_node> footstep_node_list" to "std::vector< std::vector<step_node> > footstep_node_list_list" for N leg walk
+  * replace hard-cording value "2" to leg_names.size() or leg_pos.size()
+  * fix return type
+  * [rtc/AutoBalancer/testPreviewController.cpp] Add use_gnuplot argument for testPreviewController
+  * [rtc/AutoBalancer/testGaitGenerator.cpp] Pass check results to return code
+  * [rtc/AutoBalancer/testGaitGenerator.cpp] Fix indent for testGaitGenerator
+  * [rtc/AutoBalancer/testGaitGenerator.cpp] Add value checking for testGaitGenerator. Currently zmp error and zmp diff are checked
+  * [rtc/AutoBalancer/hrpsys_AutoBalancer_GaitGenerator_memo.pptx] Update memo slide to add footstep overwriting
+  * [rtc/AutoBalancer/AutoBalancer.txt] Add url linking to AutoBalancer GaitGenerator memo slide
+  * [sample/SampleRobot/samplerobot_auto_balancer.py] Update demoGaitGeneratorOverwriteFootsteps
+  * [python/hrpsys_config.py] Add setfootsteps wrapper funcs to hrpsys_config.py
+  * [rtc/AutoBalancer/AutoBalancer.cpp, rtc/AutoBalancer/GaitGenerator.*] Enable to consider overwrite footstep index in footstep overwriting
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Remove unused variable and return current footstep index
+  * [rtc/AutoBalancer/AutoBalancer.*] Add arguments for overwrite_fs_idx
+  * [idl/AutoBalancerService.idl, rtc/AutoBalancer/AutoBalancerService_impl.*] Add overwrite footstep index to setFootSteps and getRemainingFootstepSequence
+  * [idl/AutoBalancerService.idl,rtc/AutoBalancer/GaitGenerator.h] Do not return current support leg from getRemainingFootstepSequence
+  * [rtc/AutoBalancer/hrpsys_AutoBalancer_GaitGenerator_memo.pptx] Add documentation and figures for explanation of AutoBalancer and GaitGenerator
+  * [rtc/AutoBalancer/GaitGenertor.cpp] Use overwrite_footstep_node_list
+  * [samples/SampleRobot/samplerobot_auto_balancer.py] Add sample for footstep overwriting
+  * [rtc/AutoBalancer/AutoBalancer.cpp] Enable to pass footstep overwriting from outside of Autobalancer RTC.
+  * [rtc/AutoBalancer/GaitGenerator.*] Enable to overwrite current footsteps
+  * [AutoBalancer.cpp] remove unused if else
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, GaitGenerator.h] add a parameter "leg_names" to AutoBalancerParam
+
+* Stabilizer
+
+  * [rtc/Stabilizer/CMakeLists.txt] Add subdirectory for qpoases linking
+  * [rtc/Stabilizer/CMakeLists.txt] Use qpOASES installed by 3rdparty directory.
+  * [sample/SampleRobot/samplerobot_stabilizer.py, SampleRobot.torque.xml.in] Add check for attitude to st test
+  * [idl/StabilizerService.idl, rtc/Stabilizer/Stabilizer.*] Use vector3 for eefm_pos_time_const_support
+  * [idl/StabilizerService.idl] enable to set contact decision threshold
+  * [sample/SampleRobot/samplerobot_stabilizer.py] Add assert check for stabilizer
+  * [rtc/Stabilizer/testZMPDistributor.cpp] Add use_gnuplot argument for testZMPDistributor
+
+* VoxelGridFilter
+
+  * removes an unused file
+  * adds a new component,
+  * fix name : foot_midcoords -> ref_coords
+
+* EmergencyStopper
+
+  * add mutex lock when writing is_emergency_mode variable
+  * add test-samplerobot-emergency.py and test EmergencyStopper in test-samplerobot.test
+  * add test code of EmergencyStopper function
+  * go to release_mode when deactivated in EmergencyStopper
+  * fix format specifier of size_t
+  * support multiple zmp offsets input to PreviewController
+  * use switch instead of if to judge emergency_check_mode
+  * beep on emergency mode
+
+* TorqueController
+
+  * [TorqueController] Fix typo, emergencyController -> normalController, in disable error message
+  * [TorqueController] Add enable/disable methods to MotorTorqueController
+  * [TorqueController] Add enable flag to MotorTorqueController to manage activity of both normal and emergency controller
+  * [TorqueController] Add instance name to error prefix
+  * [TwoDofController] Move error_prefix to TwoDofControllerInterface
+  * [TwoDofController] Add instnace_name to error message
+  * [TorqueFilter] Add instance name to error message of TorqueFilter
+
+* GraspContrller
+
+  * [rtc/GraspController/GraspController.cpp] Add debug message to grasp controller start/stop grasp and add instance
+    name for print message
+
+* ImpedanceController
+
+  * [sample/SampleRobot/samplerobot_impedance_controller.py] Fix typo in print message.
+  * [rtc/ImpedanceController/testImpedanceOutputGenerator.cpp] Add arguments for plotting and printing usage.
+
+* KalmanFilter
+
+  * [sample/SampleRobot/samplerobot_kalman_filter.py] Add exception if no plot is available.
+  * [sample/SampleRobot/samplerobot_kalman_filter.py] Add check and assertion for sample kalmanfilter
+
+* RemoveForcesSensorLinkOffset
+
+  * [rtc/RemoveForceSensorLinkOffset/RemoveForceSensorLinkOffset.cpp] Return false for invalid argument
+  * [sample/SampleRobot/samplerobot_remove_force_offset.py] Add value check for RMFO
+
+* DataLogger
+
+  * [sample/SampleRobot/samplerobot_data_logger.py] Add assert for unittesting of data logger.
+  * [sample/SampleRobot/samplerobot_data_logger.py, samplerobot_soft_error_limiter.py] Define examples as demo functions
+
+* Contributors: Fumio KANEHIRO, Isaac IY Saito, Kei Okada, Masaki Murooka, Shunichi Nozawa, Yuta Kojio, Eisoku Kuroiwa, Iori Kumagai
+
+315.6.0 (2015-07-10)
+--------------------
+
+Stable RTCs
+===========
+
+* SequencePlayer
+
+  * Rename arguments and local variables remain_t, x, v, and a because these are same name as member variables
+  * Add comments to interpolator
+  * [SequencePlayer/seqplay.cpp] clearJointAnglesOfGroup use online = true to clear remain_t
+  * Connect seq port to monitor seq interpolation
+
+* python/hrpsys_config.py
+
+  * Add HardEmergencyStopper RTC to stop almost all rtc motion
+  * Add check for rmfo-st connection
+  * Use rmfo off sensor values in st
+  * Remove seq data logging which can replaced by StateHolder data (reported in https://github.com/fkanehiro/hrpsys-base/issues/594)
+
+* test
+
+  * [test/test-samplerobot.test b/test/test-samplerobot.test] wrenches is available from 315.2.0
+  * [test/test-samplerobot.test b/test/test-samplerobot.test] update timelimit to 120
+
+* sample
+
+  * [sample/SampleRobot/samplerobot_sequence_player.py] check  seq rtc version for executing tests
+  * [sample/SampleRobot/samplerobot_sequence_player.py, test/test-samplerobot-sequence.py, test-test-samplerobot.test] add samplerobot_sequence_player to test case
+  * [sample/SampleRobot/samplerobot_sequence_player.py] add demoSetJointAnglesSequence() demoSetJointAnglesSequenceOfGroup()
+  * [sample/SampleRobot/samplerobot_sequence_player.py] add test code for override and clear function to demoSetJointAngles() demoSetJointAnglesOfGroup(), demoSetJointAnglesOfGroup()
+  * [sample/SampleRobot/samplerobot_sequence_player.py] add setSetJointAnglesOfGroup() and check results
+  * [sample/SampleRobot/SampleRobot.torque.xml.in] Use RUNGE_KUTTA for torque simulation
+  * [sample/SampleRobot/samplerobot_stabilizer.py] Add tpcc eefm st sample
+  * [sample/SampleRobot/SampleRobot.PDgain.dat] Fix SampleRobot PD gain
+  * Fix stabilizer sample
+  * Update sample for stepparam change
+  * Use functions defined in hrpsys_config.py
+  * Divide samples into small sample functions
+  * Add emergency stop and remain fot step sample
+
+* lib/util/Hrpsys.h
+
+  * [lib/util/Hrpsys.h] add atoi
+  * [lib/util/Hrpsys.h] add header file for QNX compile
+
+* [doc] Elaborate package overview
+
+Unstable RTCs
+=============
+
+* AutoBalancer
+
+  * add kick-test to testGaitGenerator.cpp
+  * Update AutoBalancer.cpp enable to stop with one lne
+  * check capture point to detect falling down
+  * Do not set is_stop_mode for testing
+  * Add emergency stop mode and release mode for AutoBalancer
+  * Add emergency stop port for autoBalancer to stop walking
+  * enable to step with one leg
+  * add height check to cycloid_delay_kick_hoffarbib_trajectory_generator and changed initerpolation point
+  * modify cycloid_delay_kick_trajectory_generator by adding start_rot
+  * modify orbit : enabled to modify kick_offset by function
+  * 1 control loop by default for default_retrieve_time
+  * Add retrieving after emergency stop
+  * add swing leg orbit type :CYCLOIDDELAYKICK
+  * Update single footstep support coords
+  * Add support and swing leg coords to lcg
+  * Add test13 to argument
+  * Add test for arbitrary leg switching
+  * Revert previous estop commit
+  * Fix paren and indent
+  * Update rmfo documentation. off_xx equal to xx
+  * Update footstep calculation. Push refzmp list immediately.
+  * Fix calculation of current remain time and update sample
+  * Use footstep_node_list step_time in refzmp_generator
+  * Rename leg_coords_generator _dt => dt
+  * Remove one_step_len and use foot step time in footstep_node_list
+  * Use step time from footstep node list in leg_coords_generator
+  * Use total step count from footstep_node_list
+  * Set step parameters for foot step node list
+  * Set height, toe_angle, heel_angle to 0 at initial and final foot step
+  * Add test for changing step param
+  * Add set foot steps function
+  * Add step_time for each step parameter. Currently interface are provided and step_time is not used in GaitGenerator
+  * Fix go pos 000 discontinuous last foot.
+  * Update overwrite refzmp
+  * Remove unused function is_swinging_leg
+  * Rename variables for lcg and add comments
+  * Separate gait generator type, class, functions from gait_generator class
+  * Add function to get remaining foot steps
+  * Add emergency stop interface for walking. Currently, velocity mode is supported.
+
+* Stabilizer
+
+  * add cp_check_margin to avoid hard coding
+  * Add emregency check mode for st
+  * Fix st cop check to strong constraint
+  * Use is_emerency for emergency signal checking
+  * Separate state calculation function for emergency signal
+  * Add add_subdirectory for qpOASES
+  * Fix calculation of stop queue and current seq state resetting
+  * Svn co and build qpOases. Disabled by default
+  * Add foot rot test
+  * Add jaxonred zmp sample and parse args
+  * Add test class for ZMPDistributor
+  * plot alpha in ZMPdistributor check
+  * Set outside margin
+  * Add outside margin
+  * Enable to set cop check margin
+  * Add debug message and check both cop on ground
+  * Add check cop outside
+  * Add COPInfo including total moment x, y, and total force at each end effectors
+  * Add documentation for test samples
+
+* ProjectGenerator
+
+  * add a note in read to use a new program instead of this one
+
+* EmergencyStopper
+
+  * add out port for emergency_mode
+  * Fix m_stop_posture setting to be able to change retrieve time
+  * Add EmergencyStopper Param and add getter and setter
+  * Set interpolator and add message
+  * Add emergency signal port to ES and ST and connect them (currently signal writing is comment-outed).
+  * implement EmergencyStopper and add sample script
+  * add source files of EmergencyStopper rtc
+
+* PDcontroller
+
+  * Add warning for too short pdgain
+
+* Contributors: Eisoku Kuroiwa, Isaac IY Saito, Kei Okada, Masaki Murooka, Shunichi Nozawa, Takasugi Noriaki, Yuta Kojio
+
+315.5.0 (2015-06-10)
+--------------------
+
+Stable RTCs
+===========
+
+* rtc/SequencePlayer
+
+  * [idl/SequencePlayerService.idl, SequencePlayer.{h,cpp}, SequencePlayerService_impl.{h,cpp}, seqplay.{h,cpp}] add clearJointAngles and clearJointAnglesOfGroup()
+  * [seqplay.cpp] push current data to the queue
+  * [idl/SequencePlayerService.idl, SequencePlayer.{h,cpp}, SequencePlayerService_impl{h,cpp}, seqplay.{h,cpp}] add setJointAnglesSequenceFull()
+  * [interpolator.h] add dimension() returns dim
+  * [interpolator.{cpp,h}] add setGoal(double *, double, bool = true)
+  * [python/hrpsys_config.py, SequencePlayer.{h,cpp}, SequencePlayerService_impl.cpp, seqplay.{h,cpp}] add setJointAnglesSequenceOfGroup
+  * [SequencePlayer.cpp] use setJointAnglesSequence for setJointAngles
+  * [idl/SequencePlayerService.idl, python/hrpsys_config.py, SequencePlayer.{h,cpp}, SequencePlayerService_impl.{h,cpp}, seqplay.{h,cpp}] add setJointAnglesSequence wcich takes Sequence of JointAngles and overwrite current motion
+
+* rtc/StateHolder
+
+  * [StateHolder.cpp] Reset StateHolder wrench in goActual. Currently zero is assumed.
+
+* rtc/RobotHardware
+
+  * [RobotHardware.cpp,robot.{h,cpp}] adds check of joint command acceleration
+  * [robot.{h,cpp}] use imu coordinate for reference gravity
+  * [robot.{h,cpp}] memorize the previous joint commands
+  * [RobotHardware.cpp,robot.{h,cpp}] modifies checkJointCommands() to check joint command velocities
+  * [RobotHardware.cpp,robot.{h,cpp}] Revert "changes checkJointCommands() to check joint command velocities"
+  * [RobotHardware.cpp,robot.{h,cpp}]changes checkJointCommands() to check joint command velocities
+
+* python
+
+  * [rtm.py] fixes a mistake in a debug message
+  * [hrpsys_config.py] add more features to logger
+  * [hrpsys_config.py] Add function to start and stop default unstable controllers (st, abc, ic)
+  * [hrpsys_config.py] Add kinematics_only_mode flag to hcf
+  * [rtm.py] add more error messages on activate and connnect components
+  * [rpsyspy] chekc if RobotHadwareService has joint angle (to avoid confusion such as longfloor)
+  * [hrpsys_config.py] import waitInputConfirm from waitInput.py in hrpsys_config.py to resolve function name
+
+* [package.xml] add deped to graphviz for dot program fix #629
+
+Unstable RTCs
+=============
+
+* sample
+
+  * [environments/DRCFinalStair.wrl] Add DRC final stair with sloped ground
+  * [environments/DRCTestfieldStair.wrl] Add drc testfield stair
+  * [environments/DRCTestbedTerrainJPBlock.wrl,environments/DRCTestbedTerrainUSBlock.wrl] Update location of each block of terrain models
+  * [environments/DRCTestfieldTerrain.wrl] Add testfield drc terrain vrml file
+  * [SampleRobot/samplerobot_impedance_controller.py] Add print message for impedance controller sample
+  * [SampleRobot/samplerobot_impedance_controller.py] Add tracking check sample to impedance controller sample
+  * [SampleRobot/CMakeLists.txt, ampleRobot/SampleRobot.kinematicsonly.xml.in] Add kinematics only mode Project file for sample robot
+
+* rtc/AverageFilter
+
+  * [AverageFilter.{h,cpp}] adds a configuration parameter, dilation
+
+* rtc/CameraImageLoader
+
+  * adds a new component, CameraImageLoader
+
+* rtc/UndistortImage
+
+  * [UndistortImage.cpp] fixes a bug in onExecute()
+  * [UndistortImage.cpp] checks if the calibration file exists
+  * adds a new component UndistortImage
+
+* rtc/SoftErrorLimiter
+
+  * [SoftErrorLimit.cpp] display limit violation message for 0.2  period
+  * [SoftErrorLimit.cpp] check velocity limit using limit - 0.01 deg, if we use limit = limit, then it will fail at RobotHardware
+  * [SoftErrorLimit.cpp] display error message in the first time, see #498
+
+* rtc/ImpedanceController
+
+  * [ImpedanceController.cpp] write debug message
+  * [ImpedanceController.cpp] Stop impedance controller which is active in onDeactivated
+  * [idl/ImpedanceControllerService.idl, ImpedanceControllerService_impl.{cpp,h}, ImpedanceController.h] Add start and stop impedance without waiting
+  * [ImpedanceOutputGenerator.h] Use new version impedance output generation by default which considerstarget acceleration
+  * [ImpedanceOutputGenerator.h] Add comment for ImpedanceOutputGenerator
+  * [ImpedanceOutputGenerator.h] Fix subtraction of current and target rotation
+  * [ImpedanceController/testImpedanceOutputGenerator.cpp] Add plotting of rotation
+  * [ImpedanceOutputGenerator.h] Add calcTargetVelocityNew.
+  * Separate calculation of impedance control output. This commit will not change ImpedanceController behavior
+  * [ImpedanceController.cpp,ImpedanceOutputGenerator.h] Update variables in ImpedanceOutputGenerator. Use output, target, and current
+  * [idl/ImpedanceControllerService.idl,ImpedanceController.{h,cpp},sample/SampleRobot/samplerobot_impedance_controller.py] Enable to fix ref force frame (experimental codes)
+
+* rtc/CollisionDetector
+
+  * (Code Refactoring) [rtc/CollisionDetector] enable to work both collision_mask and use_collision_limb
+  * [CollisionDetector.{h,cpp}] enable to work both collision_mask and use_collision_limb
+  * [sample/SampleRobot/samplerobot_collision_detector.py] Add example for desired collision behavior
+  * [CollisionDetector.{h,cpp}] add use_limb_collision mode (VERY EXPERIMENTAL)
+  * [sample/SampleRobot/samplerobot_collision_detector.py]Add collision mask test added in  https://github.com/fkanehiro/hrpsys-base/pull/627
+  * [CollisoinDetector.{h,cpp}] add m_collision_mask property
+
+* rtc/OccupancyGridMap3D
+
+  * [OccupancyGridMap3D.cpp] emits update signal at the end of clear()
+  * [idl/OGMap3DService.idl,OccupancyGridMap3D.{h,cpp},OGMap3DService_impl.{h,cpp}] adds clear() to OGMap3DService
+
+* rtc/KalmanFilter
+
+  * [idl/KalmanFilterService.idl, KalmanFilter.{h,cpp}] Add kalman filter offset parameters
+
+* rtc/Stabilizer
+
+  * [Stabilizer.cpp] Fix invalid st index
+  * [Stabilizer.cpp] Fix pos_ctrl frame in stabilzier
+  * [environments/DRCTestfieldStair.wrl, Stabilizer.cpp] Use sequence for foot_origin_offset and fix printing
+  * [idl/StabilizerService.idl, Stabilizer.cpp] Enable to set foot origin offset in ST
+  * [idl/StabilizerService.idl, Stabilizer.cpp] Add ee error pos and rot compensation and enable to set is_ik_enable
+  * [Stabilizer.cpp] Make slow stabilizer sync
+  * [Stabilizer.cpp] Use moment at EE instead of COP
+  * [Stabilizer.cpp] Do not use local y COP offset
+  * [ZMPDistributor.h] Update Stabilizer QP foot moment force distribution to use alpha parameter
+  * [idl/StabilizerService.idl] Add documentation for st param
+  * [idl/StabilizerService.idl, Stabilizer.{h,cpp}] Enable to change transition time of ST
+  * [ZMPDistributor.h] Do not use foot distribution coords in force moment distribution and limit alpha
+  * [idl/StabilizerService.idl, Stabilizer.{h,cpp}, ZMPDistributor.h, testZMPDistributor.cpp] Add alpha force moment distribution lpf
+  * [idl/StabilizerService.idl, Stabilizer.cpp, ZMPDistributor.h] Enable to change force moment distribution
+  * [ZMPDistributor.h] Update force moment distribution based on reference zmp alpha parameter.
+
+* rtc/AccelerationChecker
+
+  * [AccelerationChecker.cpp] add stdio.h, hope this works on qnx
+  * [AccelerationChecker.cpp] adds a configuration variable, print
+
+* rtc/AutoBalancer
+
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, GaitGenerator.{h,cpp}] Enable to set toe heel angle during setFootSteps
+  * [AutoBalancer.cpp] Fix org origin and target origin in adjust function
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp] Add adjust footstep for walking
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, GaitGenerator.{h,cpp}] Enable to set go pos finalize footsteps num
+  * [GaitGenerator.cpp] Remove unused debug message
+  * [GaitGenerator.{h,cpp}] Use swing_rot_ratio for swing rot calculation and swing_ratio to get swing phase
+  * [GaitGenerator.{h,cpp}] directly use swing_ratio
+  * [GaitGenerator.{h,cpp}] Rename rot_ratio -> foot_midcoords_ratio
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, AutoBalancerService_impl.{h,cpp}, GaitGenerator.h] Add waitFootStepsEarly
+  * [GaitGenerator.{h,cpp}] Use setGoal instead of go in gait generator interpolators
+  * [idl/AutoBalancerService.idl, AutoBalancer.{h,cpp}] Enable to set leg default offset position
+  * [testGaitGenerator.cpp] Add foot rotation testing
+  * [GaitGenerator.{h,cpp}] Use interpolator for foot rotation calculation
+  * [AutoBalancer.cpp, GaitGenerator.h, testGaitGenerator.cpp] Update toe_heel_phase_ratio enable to be set
+  * [testGaitGenerator.cpp] Update for toe heel trajectory. Display toe heel trajectory and add test for it
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, GaitGenerator.{cpp,h}, testGaitGenerator.cpp] Add swing foot trajectry by combining cycloid and delay hoff arbib
+  * [testGaitGenerator.cpp] Fix plot size of foot trajectory
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, GaitGenerator.h, testGaitGenerator.cpp] Add weighting parameter for final path of delay_hoffarbib_trajectory_generator
+  * [GaitGenerator.{h,cpp}] Fix zmp transition in second and second_last phase
+  * [GaitGenerator.h, testGaitGenerator.cpp] Fix gg param setting and plot cart zmp
+  * [testGaitGenerator.cpp] Generate graph eps file, fix test9 foot steps, and arg setting
+  * [testGaitGenerator.cpp] Add parsing of GaitGenerator params
+  * [AutoBalancer.cpp, GaitGenerator.{h,cpp}] Add print_param for GaitGenerator
+  * [testGaitGenerator.cpp] Add foot velocity trajectories in GaitGenerator test
+  * [GaitGenerator.{h,cpp}] Use calculation of default_double_support_static_ratio
+  * [testGaitGenerator.cpp] Update graph printing and add print messages
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, GaitGenerator.h] Add default_double_support_static_ratio to keep reference zmp static
+  * [idl/AutoBalancerService.idl, AutoBalancer.{h,cpp}] Enable to set zmp transition time for abc
+  * [idl/AutoBalancerService.idl, AutoBalancer.{h,cpp}] Enable to set transition time for abc
+  * [sample/SampleRObot/samplerobot_auto_balancer.py] Add test for discontinuous sync
+  * [AutoBalancer.cpp] clear interpolator before setting
+  * [AutoBalancer.cpp] Fix discontinuous when stopping auto balancer after walking
+
+* Contributors: Eisoku Kuroiwa, Fumio KANEHIRO, Kei Okada, Ryohei Ueda, Shunichi Nozawa
+
+315.4.0 (2015-05-04)
+--------------------
+
+Stable RTCs
+===========
+
+* RobotHardware (lib/io/iob.cpp) API Updated
+
+  * [rtm/RobotHardware/robot.cpp] fix for source program with ROBOT_IOB_VERSION < 2
+  * [RobotHardwareService.idl, lib/io/iob.cpp] adds a field, temperature to RobotState2
+  * [RobotHardwareService.idl] changes interface to get battery status
+  * [lib/io/iob{cpp,h},rtc/RobotHardware/{robot.cpp,robot.h,RobotHardwareService_impl.cpp,CMakeList.txt] add ROBOT_IOB_VERSION for backword compatibility
+  * [RobotHardware, iob, BodyRTC] fix to compatible with old API
+  * [lib/io/iob.cpp] adds the third argument to read_power of iob.h
+  * [idl/RobotHardwareService.idl] adds a field, battery to RobotState
+  * [RobotHrdware.cpp, robot.cpp] adds checkJointCommands() to check joint commands before setting
+
+* KalmanFilter
+
+  * [KalmanFilter.cpp] output the body frame relative to a world reference frame as baseRpyCurrent
+  * [KalmanFilter.cpp] use yaw of sensor->link->R for update of yaw instead of 0.0
+  * [python/hrpsys_config.py, KalmanFilter.cpp] connect port from rh.q to kf.qCurrent
+  * [KalmanFilter.h] use openhrp3/hrplib/hrpUtil for rotation conversion
+
+* hrpsys_config.py
+
+  * [hrpsys_config.py] add startImpedance and stopImpedance
+  * [hrpsys_config.py] add MaxLength option for setupLogger
+  * [hrpsys_config.py] `#567 <https://github.com/fkanehiro/hrpsys-base/issues/567>`_ is not correct PROJECT_DIR is
+  (OpenHRP3  installed directory)/share/OpenHRP-3.1/sample/project
+  * [hrpsys_config.py] `#567 <https://github.com/fkanehiro/hrpsys-base/issues/567>`_ is wrong, do not need to decode
+  * [hrpsys_config.py] fix code to work on python2.5
+  * [hrpsys_config.py] Import check_output near the line which check_output is used
+  * [hrpsys_config.py] add verbose option to findCOmps()
+ * [hrpsys_config.py] add max_timeout_count to findComps()
+  * [hrpsys_config.py] fix print message
+  * [hrpsys_config.py] add verbose option to getRTCInstanceList()
+
+* rtm.py
+
+  * fix typo time->tm in stop()
+  * adds timeout to start() and stop()
+
+* test
+
+  * [test-samplerobot-impedance] add test code for impedance controller API
+  * [test-drc-testbet.test] add test code for drc samplerobot
+  * [test-robot-hardware.test] add test to check robot-hardware service call
+  * [test-colcheck.test] load modelfiles
+
+* sample
+
+  * [SampleRobot/samplerobot_auto_balancer.py] Update auto balancer python sample. Add toe heel samples.
+  * [PA10/PA10.py] add from hrpsys import OpenHRP, something has changed during openhrp3 3.1.7 and 3.1.8, https://github.com/fkanehiro/openhrp3/commits/master
+  * [sample/SampleRobot] fix for new PROJECT_DIR location
+  * [sample/RampleRobot,sample/environment] install pyhton scripts under deval
+  * [samplerobot_kalman_filter.py] fix typo
+  * [samplerobot_kalman_filter.py] update kf test program for baseRpyCurrent
+  * install SampleRobot.DRCTestbed.xml under devel
+  * remove ROS examples, but enable to call Hrpsys examples directly
+
+* .travis
+
+  * [.travis.sh, .travis.yml] compile with -DROBOT_IOB_VERSION=0
+  * [.travis.sh] any diff between 315.1.9 and current is not permitted, since we use cproto without any -DROBOT_IOB_VERSION, so this should output header file compatible with stable version
+  * [.travis.sh] hot fix for https://github.com/start-jsk/rtmros_hironx/pull/358
+  * [.travis.yml, .travis.sh] enable hrpsys with 315.1.10
+  * [.travis.sh] RULE CHANGED adding new function to iob.h is ok
+  * [.travis.sh] do not install test/share/samples/src of old hrpsys, use sample/test/launch of latest hrpsys
+  * [.travis.sh] display test results when failure
+
+* [util/monitor]
+
+  * [Monitor.cpp] show velocity and acceleration (hold maxmum value for 5 sec)
+  * [Monitor.cpp] add -nogui mode
+  * [main.cpp] add --host, --port, --interval option
+  * [GLscene.cpp, Monitor.cpp, main.cpp] add many error check codes
+
+* [lib/util]
+
+  * [bodyRTC.cpp] get sensor data through getStatus
+  * [BodyRTC.cpp] fix bugs in `#200 <https://github.com/fkanehiro/hrpsys-base/issues/200>`_
+
+* [CMakeLists.txt] touch rospack_nosubdirs for not search by roslaunch, onlyfor ROS users
+* [python/hrpsyspy] rewrite hrpsyspy, now you can just call hrpsyspy to create hcf instance
+
+Unstable RTCs
+=============
+
+* OccupancyGridMap3D
+
+  * [OccupancyGridMap3D.cpp] outputs an update signal when onActivate() is called
+  * [OccupancyGridMap3D.cpp] uses mutex lock to prevent crash
+
+* ImpedanceController (API updated)
+
+  * [JointPathEx.cpp] Enable to change weight caluclation. If use_inside_joint_weight_retrieval=true (true by default),
+    inward joint weight retrievs to 1.0 (original). Otherwise, always weight is calculated from joint limit to solve
+    https://github.com/fkanehiro/hrpsys-base/issues/516
+  * Disable use_inside_joint_weight_retrieval by default in ImpedanceController, AutoBalancer, Stabilizer to reduce oscillation (https://github.com/fkanehiro/hrpsys-base/issues/516)
+  * [idl/ImpedanceControllerService.idl] Add optional weight vector for impedance control IK. Currently, this is used for toe joint supression.
+  * [ImpedanceController.cpp] Fix target_link calculation for IC. Support sensor->link is not same as ee target link (such as toe joint).
+
+* AutoBalancer (API updated)
+
+  * [GaitGenerator.cpp] Fix discontinuous autobalancer parameter using interpolator
+  * [GaitGenerator.h] Fix foot trajectory discontinuous
+  * [testGaitGenerator.cpp] Add plotting for several properties of GaitGenerator
+  * [AutoBalancer.cpp] Enable to configure toe heel zmp transition
+
+* Stabilizer (API updated)
+
+  * [ZMPDistributor.h] Fix foot vertices and update evaluation codes
+  * [Stabilizer.cpp] Update Stabilizer debug messages and calculation
+  * [rtc/Stabilizer/testZMPDistributor.cpp] add stdio for qnx
+  * [CMakeLists.txt] Add qpoases code. Disabled by default
+  * [Stabilizer.cpp] Update for sole vertices
+  * [ZMPDistributor.h] Add testing code for force distribution to use fz diff control ()
+  * [ZMPDistributor.h] Add plotting of force moment
+  * [Stabilizer.cpp] Separate ZMP distribution codes
+  * [Stabilizer.cpp, idl/Stabilizer.idl] Enable to set Stabilizer gravitational acceleration (9.8 by default)
+  * [GaitGenerator.cpp] Add comments and some functions are renamed
+  * [GaitGenerator.cpp] Use negative value for heel_pos_offset_x
+  * [idl/AutoBalancerService.idl] Fix unit system in documenatation
+  * [AutoBalancer.cpp] Enable to set toe heel zmp
+  * [GaitGenerator.cpp] Remove refzmp vel junping
+  * [GaitGenerator.cpp] Add transition ZMP among toe, heel, and ee pos. Update tests.
+  * [GaitGenerator.cpp] Rename supprot_leg_list -> swing_leg_list
+  * [GaitGenerator.cpp] Update refzmp interpolation codes
+  * [GaitGenerator.cpp] Use toe_heel_phase_counter pointer in lcg
+  * [GaitGenerator.cpp] Add toe_heel_phase_counter. This should be change behaviour.
+  * [AutoBalancer.cpp] Get default zmp offset and use ZMP offset in abc
+  * [GaitGenerator.cpp] Push swing_foot_zmp_offset to PreviewControl qdata and update sample
+  * [PreviewController.cpp] Add qdata for preview control
+  * [GaitGenerator.cpp] Enable to get swing foot zmp offset
+  * [testGaitGenerator.cpp] Update testGaitGenerator plotting
+  * [AutoBalancer.cpp] Add check for toe heel ratio summation
+  * [GaitGenerator.cpp] Use leg_type for array index
+  * [AutoBalancer.cpp] Update leg_type. RLEG = 0, LLEG = 1. Add both and use it in Abc.
+  * [/GaitGenerator.cpp] Rename WC_RLEG => RLEG, WC_LLEG => LLEG
+  * [idl/AutoBalancerService.idl] Add StepParam and enable to set step height
+  * [GaitGenerator.h, testGaitGenerator.cpp] Update testGaitGenerator sample
+  * [idl/AutoBalancerService.idl] Add argument for toe and heel zmp
+  * [idl/AutoBalancerService.idl, AutoBalancer.cpp, GaitGenerator.cpp, GaitGenerator.h] Add parameter for use toe joint or not
+  * [AutoBalancer.cpp, GaitGenerator.cpp, GaitGenerator.h] Use toe joint in heel toe contact. (Disabled by default)
+  * [GaintGenerator.cpp] Update interpolation from toe to heel
+
+* Contributors: Eisoku Kuroiwa, Fumio KANEHIRO, Kei Okada, Shunichi Nozawa, YoheiKakiuchi, Chi Wun Au, Eisoku Kuroiwa, Masaki Mmurooka
+
 315.3.2 (2015-04-13)
 --------------------
 * hrpsys_config.py

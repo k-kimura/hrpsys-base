@@ -20,6 +20,8 @@
 #include <hrpModel/Body.h>
 #include "JointPathEx.h"
 #include "RatsMatrix.h"
+#include "ImpedanceOutputGenerator.h"
+#include "ObjectTurnaroundDetector.h"
 // Service implementation headers
 // <rtc-template block="service_impl_h">
 #include "ImpedanceControllerService_impl.h"
@@ -89,10 +91,17 @@ class ImpedanceController
   // virtual RTC::ReturnCode_t onRateChanged(RTC::UniqueId ec_id);
 
   bool startImpedanceController(const std::string& i_name_);
+  bool startImpedanceControllerNoWait(const std::string& i_name_);
   bool stopImpedanceController(const std::string& i_name_);
+  bool stopImpedanceControllerNoWait(const std::string& i_name_);
   bool setImpedanceControllerParam(const std::string& i_name_, OpenHRP::ImpedanceControllerService::impedanceParam i_param_);
   bool getImpedanceControllerParam(const std::string& i_name_, OpenHRP::ImpedanceControllerService::impedanceParam& i_param_);
   void waitImpedanceControllerTransition(std::string i_name_);
+  void startObjectTurnaroundDetection(const double i_ref_diff_wrench, const double i_max_time, const OpenHRP::ImpedanceControllerService::StrSequence& i_ee_names);
+  OpenHRP::ImpedanceControllerService::DetectorMode checkObjectTurnaroundDetection();
+  bool setObjectTurnaroundDetectorParam(const OpenHRP::ImpedanceControllerService::objectTurnaroundDetectorParam &i_param_);
+  bool getObjectTurnaroundDetectorParam(OpenHRP::ImpedanceControllerService::objectTurnaroundDetectorParam& i_param_);
+  bool getObjectForcesMoments(OpenHRP::ImpedanceControllerService::Dbl3Sequence_out o_forces, OpenHRP::ImpedanceControllerService::Dbl3Sequence_out o_moments);
 
  protected:
   // Configuration variable declaration
@@ -144,14 +153,10 @@ class ImpedanceController
   // </rtc-template>
 
  private:
-  struct ImpedanceParam{
+
+  struct ImpedanceParam : public ImpedanceOutputGenerator {
     std::string sensor_name;
-    hrp::Vector3 target_p0, target_p1, current_p0, current_p1, current_p2;
-    hrp::Matrix33 target_r0, target_r1, current_r0, current_r1, current_r2;
-    double M_p, D_p, K_p;
-    double M_r, D_r, K_r;
     hrp::Vector3 ref_force, ref_moment;
-    hrp::Matrix33 force_gain, moment_gain;
     double sr_gain, avoid_gain, reference_gain, manipulability_limit;
     int transition_count; // negative value when initing and positive value when deleting
     hrp::dvector transition_joint_q;
@@ -159,9 +164,8 @@ class ImpedanceController
     bool is_active;
 
     ImpedanceParam ()
-      : M_p(10), D_p(200), K_p(400), M_r(5), D_r(100), K_r(200),
+      : ImpedanceOutputGenerator(),
         ref_force(hrp::Vector3::Zero()), ref_moment(hrp::Vector3::Zero()),
-        force_gain(hrp::Matrix33::Identity()), moment_gain(hrp::Matrix33::Identity()),
         sr_gain(1.0), avoid_gain(0.001), reference_gain(0.01), manipulability_limit(0.1), transition_count(0), is_active(false)
     {};
   };
@@ -171,8 +175,6 @@ class ImpedanceController
     hrp::Matrix33 localR;
   };
 
-  bool startImpedanceControllerNoWait(const std::string& i_name_);
-  bool stopImpedanceControllerNoWait(const std::string& i_name_);
   void copyImpedanceParam (OpenHRP::ImpedanceControllerService::impedanceParam& i_param_, const ImpedanceParam& param);
   void updateRootLinkPosRot (TimedOrientation3D tmprpy);
   void calcForceMoment();
@@ -181,6 +183,9 @@ class ImpedanceController
   std::map<std::string, ee_trans> ee_map;
   std::map<std::string, hrp::VirtualForceSensorParam> m_vfs;
   std::map<std::string, hrp::Vector3> abs_forces, abs_moments, abs_ref_forces, abs_ref_moments;
+  boost::shared_ptr<ObjectTurnaroundDetector > otd;
+  std::vector<std::string> otd_sensor_names;
+  hrp::Vector3 otd_axis;
   double m_dt;
   hrp::BodyPtr m_robot;
   coil::Mutex m_mutex;
@@ -188,6 +193,7 @@ class ImpedanceController
   unsigned int m_debugLevel;
   int dummy;
   int loop;
+  bool use_sh_base_pos_rpy;
 };
 
 

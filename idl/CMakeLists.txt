@@ -8,6 +8,7 @@ set(idl_files
   ExecutionProfileService.idl
   OGMap3DService.idl
   NullService.idl
+  EmergencyStopperService.idl
   TimeKeeperService.idl
   Img.idl
   HRPDataTypes.idl
@@ -24,6 +25,7 @@ set(idl_files
   RemoveForceSensorLinkOffsetService.idl
   ServoControllerService.idl
   TorqueControllerService.idl
+  ThermoLimiterService.idl
   TendonJointControllerService.idl
   )
 

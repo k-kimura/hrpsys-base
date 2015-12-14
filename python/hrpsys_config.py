@@ -6,6 +6,8 @@ import rtm
 from rtm import *
 from OpenHRP import *
 from hrpsys import *  # load ModelLoader
+from hrpsys import ImpedanceControllerService_idl
+from waitInput import waitInputConfirm
 
 import socket
 import time
@@ -199,6 +201,16 @@ class HrpsysConfigurator:
     abc_version = None
     st_version = None
 
+    # EmergencyStopper
+    es = None
+    es_svc = None
+    es_version = None
+
+    # EmergencyStopper (HardEmergencyStopper)
+    hes = None
+    hes_svc = None
+    hes_version = None
+
     # CollisionDetector
     co = None
     co_svc = None
@@ -253,6 +265,11 @@ class HrpsysConfigurator:
     # for setSelfGroups
     Groups = []  # [['torso', ['CHEST_JOINT0']], ['head', ['HEAD_JOINT0', 'HEAD_JOINT1']], ....]
 
+    hrpsys_version = None
+
+    # flag isKinamticsOnlyMode?
+    kinematics_only_mode = False
+
     # public method
     def connectComps(self):
         '''!@brief
@@ -262,20 +279,20 @@ class HrpsysConfigurator:
             print(self.configurator_name + "\033[31m connectComps : hrpsys requries rh, seq, sh and fk, please check rtcd.conf or rtcd arguments\033[0m")
             return
         # connection for reference joint angles
-        tmp_contollers = self.getJointAngleControllerList()
-        if len(tmp_contollers) > 0:
-            connectPorts(self.sh.port("qOut"), tmp_contollers[0].port("qRef"))
-            for i in range(len(tmp_contollers) - 1):
-                connectPorts(tmp_contollers[i].port("q"),
-                             tmp_contollers[i + 1].port("qRef"))
+        tmp_controllers = self.getJointAngleControllerList()
+        if len(tmp_controllers) > 0:
+            connectPorts(self.sh.port("qOut"), tmp_controllers[0].port("qRef"))
+            for i in range(len(tmp_controllers) - 1):
+                connectPorts(tmp_controllers[i].port("q"),
+                             tmp_controllers[i + 1].port("qRef"))
             if self.simulation_mode:
                 if self.pdc:
-                    connectPorts(tmp_contollers[-1].port("q"), self.pdc.port("angleRef"))
+                    connectPorts(tmp_controllers[-1].port("q"), self.pdc.port("angleRef"))
                 else:
-                    connectPorts(tmp_contollers[-1].port("q"), self.hgc.port("qIn"))
+                    connectPorts(tmp_controllers[-1].port("q"), self.hgc.port("qIn"))
                     connectPorts(self.hgc.port("qOut"), self.rh.port("qRef"))
             else:
-                connectPorts(tmp_contollers[-1].port("q"), self.rh.port("qRef"))
+                connectPorts(tmp_controllers[-1].port("q"), self.rh.port("qRef"))
         else:
             if self.simulation_mode:
                 if self.pdc:
@@ -288,6 +305,7 @@ class HrpsysConfigurator:
 
         # only for kinematics simulator
         if rtm.findPort(self.rh.ref, "basePoseRef"):
+            self.kinematics_only_mode = True
             if self.abc:
                 connectPorts(self.abc.port("basePoseOut"), self.rh.port("basePoseRef"))
             else:
@@ -343,8 +361,6 @@ class HrpsysConfigurator:
         # connection for st
         if rtm.findPort(self.rh.ref, "lfsensor") and rtm.findPort(
                                      self.rh.ref, "rfsensor") and self.st:
-            connectPorts(self.rh.port("lfsensor"), self.st.port("forceL"))
-            connectPorts(self.rh.port("rfsensor"), self.st.port("forceR"))
             connectPorts(self.kf.port("rpy"), self.st.port("rpy"))
             connectPorts(self.sh.port("zmpOut"), self.abc.port("zmpIn"))
             connectPorts(self.sh.port("basePosOut"), self.abc.port("basePosIn"))
@@ -357,18 +373,34 @@ class HrpsysConfigurator:
             connectPorts(self.abc.port("contactStates"), self.st.port("contactStates"))
             connectPorts(self.abc.port("controlSwingSupportTime"), self.st.port("controlSwingSupportTime"))
             connectPorts(self.rh.port("q"), self.st.port("qCurrent"))
+            connectPorts(self.seq.port("qRef"), self.st.port("qRefSeq"))
+            connectPorts(self.abc.port("walkingStates"), self.st.port("walkingStates"))
+            connectPorts(self.abc.port("sbpCogOffset"), self.st.port("sbpCogOffset"))
+            if self.es:
+                connectPorts(self.st.port("emergencySignal"), self.es.port("emergencySignal"))
+            connectPorts(self.st.port("emergencySignal"), self.abc.port("emergencySignal"))
 
         # ref force moment connection
         for sen in self.getForceSensorNames():
             if self.st:
-                connectPorts(self.sh.port(sen + "Out"),
+                connectPorts(self.abc.port(sen),
                              self.st.port(sen + "Ref"))
-            if self.ic:
+            if self.es:
                 connectPorts(self.sh.port(sen+"Out"),
-                             self.ic.port("ref_" + sen+"In"))
-            if self.abc:
-                connectPorts(self.sh.port(sen+"Out"),
-                             self.abc.port("ref_" + sen))
+                                 self.es.port(sen+"In"))
+                if self.ic:
+                    connectPorts(self.es.port(sen+"Out"),
+                                 self.ic.port("ref_" + sen+"In"))
+                if self.abc:
+                    connectPorts(self.es.port(sen+"Out"),
+                                 self.abc.port("ref_" + sen))
+            else:
+                if self.ic:
+                    connectPorts(self.sh.port(sen+"Out"),
+                                 self.ic.port("ref_" + sen+"In"))
+                if self.abc:
+                    connectPorts(self.sh.port(sen+"Out"),
+                                 self.abc.port("ref_" + sen))
             if self.abc and self.st:
                 connectPorts(self.abc.port("limbCOPOffset_"+sen),
                              self.st.port("limbCOPOffset_"+sen))
@@ -384,6 +416,9 @@ class HrpsysConfigurator:
                 if self.ic:
                     connectPorts(self.rmfo.port("off_" + sen.name),
                                  self.ic.port(sen.name))
+                if self.st:
+                    connectPorts(self.rmfo.port("off_" + sen.name),
+                                 self.st.port(sen.name))
         elif self.ic: # if the robot does not have rmfo and kf, but have ic
             for sen in filter(lambda x: x.type == "Force", self.sensors):
                 connectPorts(self.rh.port(sen.name),
@@ -456,6 +491,10 @@ class HrpsysConfigurator:
         # connection for el
         if self.el:
             connectPorts(self.rh.port("q"), self.el.port("qCurrent"))
+
+        # connection for co
+        if self.es:
+            connectPorts(self.rh.port("servoState"), self.es.port("servoStateIn"))
 
     def activateComps(self):
         '''!@brief
@@ -630,13 +669,15 @@ class HrpsysConfigurator:
             ['kf', "KalmanFilter"],
             ['vs', "VirtualForceSensor"],
             ['rmfo', "RemoveForceSensorLinkOffset"],
+            ['es', "EmergencyStopper"],
             ['ic', "ImpedanceController"],
             ['abc', "AutoBalancer"],
             ['st', "Stabilizer"],
             ['co', "CollisionDetector"],
             ['tc', "TorqueController"],
-            # ['te', "ThermoEstimator"],
-            # ['tl', "ThermoLimiter"],
+            ['te', "ThermoEstimator"],
+            ['tl', "ThermoLimiter"],
+            ['hes', "EmergencyStopper"],
             ['el', "SoftErrorLimiter"],
             ['log', "DataLogger"]
             ]
@@ -645,8 +686,8 @@ class HrpsysConfigurator:
         '''!@brief
         Get list of controller list that need to control joint angles
         '''
-        controller_list = [self.ic, self.gc, self.abc, self.st, self.co,
-                           self.tc, self.el]
+        controller_list = [self.es, self.ic, self.gc, self.abc, self.st, self.co,
+                           self.tc, self.hes, self.el]
         return filter(lambda c: c != None, controller_list)  # only return existing controllers
 
     def getRTCInstanceList(self, verbose=True):
@@ -732,13 +773,16 @@ class HrpsysConfigurator:
             connectPorts(artc.port(sen_name), self.log.port(log_name))
 
     # public method to configure default logger data ports
-    def setupLogger(self):
+    def setupLogger(self, maxLength=4000):
         '''!@brief
         Setup logging function.
+        @param maxLength : max length of data from DataLogger.h #define DEFAULT_MAX_LOG_LENGTH (200*20)
+                           if the robot running at 200hz (5msec) 4000 means 20 secs
         '''
         if self.log == None:
             print(self.configurator_name + "\033[31m  setupLogger : self.log is not defined, please check rtcd.conf or rtcd arguments\033[0m")
             return
+        self.log_svc.maxLength(maxLength);
         #
         for pn in ['q', 'dq', 'tau']:
             self.connectLoggerPort(self.rh, pn)
@@ -749,14 +793,14 @@ class HrpsysConfigurator:
         #
         if self.kf != None:
             self.connectLoggerPort(self.kf, 'rpy')
-        if self.seq != None:
-            self.connectLoggerPort(self.seq, 'qRef')
         if self.sh != None:
             self.connectLoggerPort(self.sh, 'qOut')
             self.connectLoggerPort(self.sh, 'tqOut')
             self.connectLoggerPort(self.sh, 'basePosOut')
             self.connectLoggerPort(self.sh, 'baseRpyOut')
             self.connectLoggerPort(self.sh, 'zmpOut')
+        if self.ic != None:
+            self.connectLoggerPort(self.ic, 'q')
         if self.abc != None:
             self.connectLoggerPort(self.abc, 'zmpOut')
             self.connectLoggerPort(self.abc, 'baseTformOut')
@@ -773,15 +817,15 @@ class HrpsysConfigurator:
             self.connectLoggerPort(self.st, 'originActZmp')
             self.connectLoggerPort(self.st, 'originActCog')
             self.connectLoggerPort(self.st, 'originActCogVel')
-            self.connectLoggerPort(self.st, 'refWrenchR')
-            self.connectLoggerPort(self.st, 'refWrenchL')
-            self.connectLoggerPort(self.st, 'footCompR')
-            self.connectLoggerPort(self.st, 'footCompL')
+            self.connectLoggerPort(self.st, 'allRefWrench')
+            self.connectLoggerPort(self.st, 'allEEComp')
             self.connectLoggerPort(self.st, 'q')
             self.connectLoggerPort(self.st, 'actBaseRpy')
             self.connectLoggerPort(self.st, 'currentBasePos')
             self.connectLoggerPort(self.st, 'currentBaseRpy')
             self.connectLoggerPort(self.st, 'debugData')
+        if self.el != None:
+            self.connectLoggerPort(self.el, 'q')
         if self.rh != None:
             self.connectLoggerPort(self.rh, 'emergencySignal',
                                    'emergencySignal')
@@ -789,7 +833,6 @@ class HrpsysConfigurator:
             if self.simulation_mode:
                 self.connectLoggerPort(self.rh, 'WAIST')
         for sen in filter(lambda x: x.type == "Force", self.sensors):
-            self.connectLoggerPort(self.seq, sen.name + "Ref")
             self.connectLoggerPort(self.sh, sen.name + "Out")
         if self.rmfo != None:
             for sen in filter(lambda x: x.type == "Force", self.sensors):
@@ -916,14 +959,11 @@ class HrpsysConfigurator:
         \verbatim
         NOTE-1: It's known that this method does not do anything after
                 some group operation is done.
-                TODO: at least need elaborated to warn users.
-        \endverbatim
-        \verbatim
-        NOTE-2: that while this method does not check angle value range,
-        any joints could emit position limit over error, which has not yet
-        been thrown by hrpsys so that there's no way to catch on this client
-        side. Worthwhile opening an enhancement ticket for that at
-        hironx' designated issue tracker.
+                TODO: at least need to warn users.
+        NOTE-2: While this method does not check angle value range,
+                any joints could emit position limit over error, which has not yet
+                been thrown by hrpsys so that there's no way to catch on this python client. 
+                Worthwhile opening an enhancement ticket at designated issue tracker.
         \endverbatim
 
         @param jname str: name of joint
@@ -937,12 +977,10 @@ class HrpsysConfigurator:
         '''!@brief
         Set all joint angles.
         \verbatim
-        NOTE-1: that while this method does not check angle value range,
-                any joints could emit position limit over error, which has not yet
-                been thrown by hrpsys so that there's no way to catch on this client
-                side. Worthwhile opening an enhancement ticket for that at
-                hironx' designated issue tracker.
-
+        NOTE: While this method does not check angle value range,
+              any joints could emit position limit over error, which has not yet
+              been thrown by hrpsys so that there's no way to catch on this python client. 
+              Worthwhile opening an enhancement ticket at designated issue tracker.
         \endverbatim
         @param angles list of float: In degree.
         @param tm float: Time to complete.
@@ -957,11 +995,12 @@ class HrpsysConfigurator:
         Set the joint angles to aim. By default it waits interpolation to be
         over.
 
-        Note that while this method does not check angle value range,
-        any joints could emit position limit over error, which has not yet
-        been handled in hrpsys so that there's no way to catch on this client
-        class level. Please consider opening an enhancement ticket for that
-        at hironx' designated issue tracker.
+        \verbatim
+        NOTE: While this method does not check angle value range,
+              any joints could emit position limit over error, which has not yet
+              been thrown by hrpsys so that there's no way to catch on this python client. 
+              Worthwhile opening an enhancement ticket at designated issue tracker.
+        \endverbatim
 
         @param gname str: Name of the joint group.
         @param pose list of float: list of positions and orientations
@@ -974,6 +1013,41 @@ class HrpsysConfigurator:
         if wait:
             self.waitInterpolationOfGroup(gname)
         return ret
+
+    def setJointAnglesSequence(self, angless, tms):
+        '''!@brief
+        Set all joint angles.
+        \verbatim
+        NOTE: While this method does not check angle value range,
+              any joints could emit position limit over error, which has not yet
+              been thrown by hrpsys so that there's no way to catch on this python client. 
+              Worthwhile opening an enhancement ticket at designated issue tracker.
+        \endverbatim
+        @param sequence angles list of float: In degree.
+        @param tm sequence of float: Time to complete, In Second
+        '''
+        for angles in angless:
+            for i in range(len(angles)):
+                angles[i] = angles[i] / 180.0 * math.pi
+        return self.seq_svc.setJointAnglesSequence(angless, tms)
+
+    def setJointAnglesSequenceOfGroup(self, gname, angless, tms):
+        '''!@brief
+        Set all joint angles.
+        \verbatim
+        NOTE: While this method does not check angle value range,
+              any joints could emit position limit over error, which has not yet
+              been thrown by hrpsys so that there's no way to catch on this python client. 
+              Worthwhile opening an enhancement ticket at designated issue tracker.
+        \endverbatim
+        @param gname str: Name of the joint group.
+        @param sequence angles list of float: In degree.
+        @param tm sequence of float: Time to complete, In Second
+        '''
+        for angles in angless:
+            for i in range(len(angles)):
+                angles[i] = angles[i] / 180.0 * math.pi
+        return self.seq_svc.setJointAnglesSequenceOfGroup(gname, angless, tms)
 
     def loadPattern(self, fname, tm):
         '''!@brief
@@ -1285,8 +1359,8 @@ dr=0, dp=0, dw=0, tm=10, wait=True):
         \verbatim
             robot.setTargetPoseRelative('rarm', 'RARM_JOINT5', dx=0.0001, tm=0.1)
         \endverbatim
-        @param gname str: Name of the joint group.
-        @param eename str: Name of the link.
+        @param gname str: Name of the joint group that is to be manipulated.
+        @param eename str: Name of the joint that the manipulated joint group references to.
         @param dx float: In meter.
         @param dy float: In meter.
         @param dz float: In meter.
@@ -1827,11 +1901,18 @@ dr=0, dp=0, dw=0, tm=10, wait=True):
     # #
     # # service interface for Unstable RTC component
     # #
-    def startAutoBalancer(self, limbs=["rleg", "lleg"]):
+    def startAutoBalancer(self, limbs=None):
         '''!@brief
         Start AutoBalancer mode
-        @param limbs list of end-effector name to control. rleg and lleg by default.
+        @param limbs list of end-effector name to control.
+        If Groups has rarm and larm, rleg, lleg, rarm, larm by default.
+        If Groups is not defined or Groups does not have rarm and larm, rleg and lleg by default.
         '''
+        if limbs==None:
+            if self.Groups != None and "rarm" in map (lambda x : x[0], self.Groups) and "larm" in map (lambda x : x[0], self.Groups):
+                limbs=["rleg", "lleg", "rarm", "larm"]
+            else:
+                limbs=["rleg", "lleg"]
         self.abc_svc.startAutoBalancer(limbs)
 
     def stopAutoBalancer(self):
@@ -1851,6 +1932,111 @@ dr=0, dp=0, dw=0, tm=10, wait=True):
         Stop Stabilzier mode
         '''
         self.st_svc.stopStabilizer()
+
+    def startImpedance_315_4(self, arm,
+                       M_p = 100.0,
+                       D_p = 100.0,
+                       K_p = 100.0,
+                       M_r = 100.0,
+                       D_r = 2000.0,
+                       K_r = 2000.0,
+                       force_gain = [1, 1, 1],
+                       moment_gain = [0, 0, 0],
+                       sr_gain = 1.0,
+                       avoid_gain = 0.0,
+                       reference_gain = 0.0,
+                       manipulability_limit = 0.1,
+                       controller_mode = None,
+                       ik_optional_weight_vector = None):
+        '''!@brief
+        start impedance mode
+
+        @type arm: str name of artm to be controlled, this must be initialized using setSelfGroups()
+        '''
+        r, p = self.ic_svc.getImpedanceControllerParam(arm)
+        if not r:
+            print('{}, Failt to getImpedanceControllerParam({})'.format(self.configurator_name, arm))
+            return False
+        if M_p != None: p.M_p = M_p
+        if D_p != None: p.M_p = D_p
+        if K_p != None: p.M_p = K_p
+        if M_r != None: p.M_r = M_r
+        if D_r != None: p.M_r = D_r
+        if K_r != None: p.M_r = K_r
+        if force_gain != None: p.force_gain = force_gain
+        if moment_gain != None: p.moment_gain = moment_gain
+        if sr_gain != None: p.sr_gain = sr_gain
+        if avoid_gain != None: p.avoid_gain = avoid_gain
+        if reference_gain != None: p.reference_gain = reference_gain
+        if manipulability_limit != None: p.manipulability_limit = manipulability_limit
+        if controller_mode != None: p.controller_mode = controller_mode
+        if ik_optional_weight_vector != None: p.ik_optional_weight_vector = ik_optional_weight_vector
+        self.ic_svc.setImpedanceControllerParam(arm, p)
+        return self.ic_svc.startImpedanceController(arm)
+
+    def stopImpedance_315_4(self, arm):
+        '''!@brief
+        stop impedance mode
+        '''
+        return self.ic_svc.stopImpedanceController(arm)
+
+    def startImpedance(self, arm, **kwargs):
+        if self.hrpsys_version and self.hrpsys_version < '315.2.0':
+            print(self.configurator_name + '\033[31mstartImpedance: Try to connect unsupported RTC' + str(self.hrpsys_version) + '\033[0m')
+        else:
+            self.startImpedance_315_4(arm, **kwargs)
+
+    def stopImpedance(self, arm):
+        if self.hrpsys_version and self.hrpsys_version < '315.2.0':
+            print(self.configurator_name + '\033[31mstopImpedance: Try to connect unsupported RTC' + str(self.hrpsys_version) + '\033[0m')
+        else:
+            self.stopImpedance_315_4(arm)
+
+    def startDefaultUnstableControllers (self, ic_limbs=["rarm", "larm"], abc_limbs=None):
+        '''!@brief
+        Start default unstable RTCs controller mode.
+        Currently Stabilzier, AutoBalancer, and ImpedanceController are started.
+        '''
+        self.startStabilizer()
+        for limb in ic_limbs:
+            self.ic_svc.startImpedanceControllerNoWait(limb)
+        if abc_limbs==None:
+            if self.Groups != None and "rarm" in map (lambda x : x[0], self.Groups) and "larm" in map (lambda x : x[0], self.Groups):
+                abc_limbs=["rleg", "lleg", "rarm", "larm"]
+            else:
+                abc_limbs=["rleg", "lleg"]
+        self.startAutoBalancer(abc_limbs)
+        for limb in ic_limbs:
+            self.ic_svc.waitImpedanceControllerTransition(limb)
+
+    def stopDefaultUnstableControllers (self, ic_limbs=["rarm", "larm"]):
+        '''!@brief
+        Stop default unstable RTCs controller mode.
+        Currently Stabilzier, AutoBalancer, and ImpedanceController are stopped.
+        '''
+        self.stopStabilizer()
+        for limb in ic_limbs:
+            self.ic_svc.stopImpedanceControllerNoWait(limb)
+        self.stopAutoBalancer()
+        for limb in ic_limbs:
+            self.ic_svc.waitImpedanceControllerTransition(limb)
+
+    def setFootSteps(self, footstep, overwrite_fs_idx = 0):
+        '''!@brief
+        setFootSteps
+        @param footstep : FootstepSequence.
+        @param overwrite_fs_idx : Index to be overwritten. overwrite_fs_idx is used only in walking.
+        '''
+        self.abc_svc.setFootSteps(footstep, overwrite_fs_idx)
+
+    def setFootStepsWithParam(self, footstep, stepparams, overwrite_fs_idx = 0):
+        '''!@brief
+        setFootSteps
+        @param footstep : FootstepSequence.
+        @param stepparams : StepParamSeuqnce.
+        @param overwrite_fs_idx : Index to be overwritten. overwrite_fs_idx is used only in walking.
+        '''
+        self.abc_svc.setFootStepsWithParam(footstep, stepparams, overwrite_fs_idx)
 
     # ##
     # ## initialize
@@ -1890,6 +2076,14 @@ dr=0, dp=0, dw=0, tm=10, wait=True):
         self.setSelfGroups()
 
         print(self.configurator_name + '\033[32minitialized successfully\033[0m')
+
+        # set hrpsys_version
+        try:
+            self.hrpsys_version = self.fk.ref.get_component_profile().version
+        except:
+            print(self.configurator_name + '\033[34mCould not get hrpsys_version\033[0m')
+
+            pass
 
     def __init__(self, cname="[hrpsys.py] "):
         initCORBA()

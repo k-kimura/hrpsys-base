@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.4)
 project(hrpsys)
 
+enable_testing()
 if(COMMAND cmake_policy)
   cmake_policy(SET CMP0003 NEW)
 endif(COMMAND cmake_policy)
@@ -83,7 +84,7 @@ set(CPACK_PACKAGE_NAME hrpsys-base)
 set(CPACK_PACKAGE_VENDOR "AIST")
 set(CPACK_PACKAGE_CONTACT "Fumio Kanehiro <f-kanehiro@aist.go.jp>")
 set(CPACK_PACKAGE_VERSION_MAJOR 315)
-set(CPACK_PACKAGE_VERSION_MINOR 3)
+set(CPACK_PACKAGE_VERSION_MINOR 7)
 set(CPACK_PACKAGE_VERSION_PATCH 0)
 execute_process(
   COMMAND date +%Y%m%d%H%M
@@ -152,7 +153,19 @@ install(FILES
   DESTINATION lib/pkgconfig)
 
 add_definitions(-DHRPSYS_PACKAGE_VERSION=\"\\"${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}\\"\")
-add_definitions(-DROBOT_IOB_VERSION=2)
+
+option(NO_DIGITAL_INPUT "Disable readDigitalInput and lengthDigitalInput" OFF)
+if(NO_DIGITAL_INPUT)
+  add_definitions(-DNO_DIGITAL_INPUT)
+  message(STATUS "Disablng readDigitalInput and lengthDigitalInput")
+endif()
+
+option(ROBOT_IOB_VERSION "Supported robot IOB version (lib/io/iob.h)")
+if("${ROBOT_IOB_VERSION}" STREQUAL "OFF")
+  set(ROBOT_IOB_VERSION 2)
+endif()
+add_definitions(-DROBOT_IOB_VERSION=${ROBOT_IOB_VERSION})
+message(STATUS "compile iob with -DROBOT_IOB_VERSION=${ROBOT_IOB_VERSION}")
 
 if(COMPILE_JAVA_STUFF)
   add_subdirectory(jython)
@@ -161,6 +174,9 @@ add_subdirectory(python)
 add_subdirectory(idl)
 add_subdirectory(lib)
 add_subdirectory(ec)
+# option for 3rdparty
+option(USE_QPOASES "Build qpOASES" OFF)
+add_subdirectory(3rdparty)
 add_subdirectory(rtc)
 option(ENABLE_DOXYGEN "Use Doxygen" ON)
 if(ENABLE_DOXYGEN)

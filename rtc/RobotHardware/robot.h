@@ -13,8 +13,9 @@ class robot : public hrp::Body
 public:
     /**
        \brief constructor
+       \param dt sampling time
      */
-    robot();
+    robot(double dt);
 
     /**
        \brief destructor
@@ -142,6 +143,13 @@ public:
                           double &o_current, double &o_soc);
 
     /**
+       \brief read thermometer
+       \param i_rank rank of thermometer
+       \param o_temp temperature
+     */
+    void readThermometer(unsigned int i_rank, double &o_temp);
+
+    /**
        \brief read array of all joint angles[rad]
        \param o_angles array of all joint angles
      */
@@ -159,6 +167,13 @@ public:
        \param TRUE if read successfully, FALSE otherwise
      */
     int readJointTorques(double *o_torques);
+
+    /**
+       \brief read array of all commanded joint torques[Nm]
+       \param o_torques array of all commanded joint torques
+       \param TRUE if read successfully, FALSE otherwise
+     */
+    int readJointCommandTorques(double *o_torques);
 
     /**
        \brief read gyro sensor output
@@ -260,6 +275,7 @@ public:
     std::vector<double> m_servoErrorLimit;  
     double m_fzLimitRatio;
     double m_maxZmpError;
+    double m_accLimit;
 
     bool readDigitalInput(char *o_din);
     int lengthDigitalInput();
@@ -268,7 +284,17 @@ public:
     int lengthDigitalOutput();
     bool readDigitalOutput(char *o_dout);
 
+    /**
+       \brief get the number of batteries
+       \return the number of batteries
+    */
     int numBatteries();
+
+    /**
+       \brief get the number of thermometers
+       \return the number of thermometers
+    */
+    int numThermometers();
 private:
     /**
        \brief calibrate inertia sensor for one sampling period
@@ -310,6 +336,9 @@ private:
     std::string m_pdgainsFilename;
     bool m_reportedEmergency;
     boost::interprocess::interprocess_semaphore wait_sem;
+    double m_dt;
+    std::vector<double> m_commandOld, m_velocityOld;
+    hrp::Vector3 G;
 };
 
 #endif

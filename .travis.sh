@@ -94,7 +94,7 @@ case $TEST_PACKAGE in
                 echo -e "#define pid_t int\n#define size_t int\n#include \"iob.h.315.1.9\"" | cproto -x - | sort > iob.h.stable
                 cat iob.h.current
                 cat iob.h.stable
-                diff iob.h.stable iob.h.current | tee >(cat - 1>&2)  | diffstat | grep -c deletion && exit 1
+                diff iob.h.stable iob.h.current || exit 1
 
                 travis_time_end
                 ;;
@@ -143,12 +143,22 @@ case $TEST_PACKAGE in
 
                 sudo apt-get install -qq -y ros-hydro-openhrp3
                 source /opt/ros/hydro/setup.bash
+                if [ "$USE_SRC_OPENHRP3" == true ] ; then
+                    sudo dpkg -r --force-depends ros-hydro-openhrp3
+                    mkdir -p ~/build_openhrp3
+                    cd ~/build_openhrp3
+                    git clone http://github.com/fkanehiro/openhrp3
+                    sed -i 's/COLLADA_DOM_FOUND/0/' openhrp3/sample/CMakeLists.txt
+                    cd openhrp3 && cmake . ${COMPILE_OPTION} && make && sudo make install
+                fi
                 mkdir -p ~/build
 
                 travis_time_end
                 travis_time_start  compile_hrpsys
 
-                cd ~/build && cmake ${CI_SOURCE_PATH} && make
+                cd ~/build && cmake ${CI_SOURCE_PATH} ${COMPILE_OPTION} && make
+                # Check make test by passing PATH to bin directory
+                PATH=$PATH:~/build/bin make test
 
                 travis_time_end
                 ;;
@@ -170,7 +180,8 @@ case $TEST_PACKAGE in
         pkg=$TEST_PACKAGE
         sudo apt-get install -qq -y python-wstool ros-hydro-catkin ros-hydro-mk ros-hydro-rostest ros-hydro-rtmbuild ros-hydro-roslint > /dev/null
 
-        sudo apt-get install -qq -y ros-hydro-pcl-ros ros-hydro-moveit-commander ros-hydro-rqt-robot-dashboard > /dev/null
+        # Add inputting of "N" for mongodb configuration during deb install reported in https://github.com/fkanehiro/hrpsys-base/pull/900#issuecomment-162392884
+        yes N | sudo apt-get install -qq -y ros-hydro-pcl-ros ros-hydro-moveit-commander ros-hydro-rqt-robot-dashboard > /dev/null
 
         sudo apt-get install -qq -y ros-hydro-$pkg
 
@@ -188,6 +199,10 @@ case $TEST_PACKAGE in
         find hrpsys -name CMakeLists.txt -exec sed -i "s@PCL_FOUND@0@" {} \; # disable PCL
         find hrpsys -name CMakeLists.txt -exec sed -i "s@OCTMAP_FOUND@0@" {} \; # disable OCTMAP
         find hrpsys -name CMakeLists.txt -exec sed -i "s@IRRLIGHT_FOUND@0@" {} \; # disable IRRLIGHT
+        if [ "$USE_SRC_OPENHRP3" == true ] ; then
+            git clone http://github.com/fkanehiro/openhrp3/
+            sed -i 's/COLLADA_DOM_FOUND/0/' openhrp3/sample/CMakeLists.txt
+        fi
         cd ~/catkin_ws
 
         travis_time_end
@@ -350,6 +365,9 @@ case $TEST_PACKAGE in
         fi
         travis_time_end
 
+        # Check make test
+        (cd ~/catkin_ws/build_isolated/hrpsys/install && make test)
+        # Check rostest
         sudo /etc/init.d/omniorb4-nameserver stop || echo "stop omniserver just in case..."
         export EXIT_STATUS=0;
         pkg_path=`rospack find \`echo $pkg | sed s/-/_/g\``
