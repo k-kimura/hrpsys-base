@@ -179,3 +179,8 @@ CORBA::Boolean RobotHardwareService_impl::readDigitalOutput(::OpenHRP::RobotHard
     dout->length(lengthDigitalOutput());
     return m_robot->readDigitalOutput((char *)(dout->get_buffer()));
 }
+
+void RobotHardwareService_impl::setJointControlMode(const char *jname, joint_control_mode mode)
+{
+    m_robot->setJointControlMode(jname, mode);
+}
