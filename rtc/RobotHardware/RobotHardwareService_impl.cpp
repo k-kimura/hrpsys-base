@@ -180,7 +180,18 @@ CORBA::Boolean RobotHardwareService_impl::readDigitalOutput(::OpenHRP::RobotHard
     return m_robot->readDigitalOutput((char *)(dout->get_buffer()));
 }
 
-void RobotHardwareService_impl::setJointControlMode(const char *jname, joint_control_mode mode)
+void RobotHardwareService_impl::setJointControlMode(const char *jname, OpenHRP::RobotHardwareService::JointControlMode jcm)
 {
+    joint_control_mode mode;
+    switch(jcm){
+    case OpenHRP::RobotHardwareService::POSITION:
+        mode = JCM_POSITION;
+        break;
+    case OpenHRP::RobotHardwareService::POSITION_TORQUE:
+        mode = JCM_POSITION_TORQUE;
+        break;
+    default:
+        return;
+    }
     m_robot->setJointControlMode(jname, mode);
 }
