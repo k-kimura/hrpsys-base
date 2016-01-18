@@ -86,8 +86,11 @@ Vector3 omegaFromRotEx(const Matrix33& r)
     }
 }
 
-JointPathEx::JointPathEx(BodyPtr& robot, Link* base, Link* end, double control_cycle, bool _use_inside_joint_weight_retrieval)
-    : JointPath(base, end), sr_gain(1.0), manipulability_limit(0.1), manipulability_gain(0.001), maxIKPosErrorSqr(1.0e-8), maxIKRotErrorSqr(1.0e-6), maxIKIteration(50), interlocking_joint_pair_indices(), use_inside_joint_weight_retrieval(_use_inside_joint_weight_retrieval) {
+JointPathEx::JointPathEx(BodyPtr& robot, Link* base, Link* end, double control_cycle, bool _use_inside_joint_weight_retrieval, const std::string& _debug_print_prefix)
+    : JointPath(base, end), sr_gain(1.0), manipulability_limit(0.1), manipulability_gain(0.001), maxIKPosErrorSqr(1.0e-8), maxIKRotErrorSqr(1.0e-6), maxIKIteration(50), interlocking_joint_pair_indices(), dt(control_cycle),
+      debug_print_prefix(_debug_print_prefix+",JointPathEx"), joint_limit_debug_print_counts(numJoints(), 0),
+      debug_print_freq_count(static_cast<size_t>(0.25/dt)), // once per 0.25[s]
+      use_inside_joint_weight_retrieval(_use_inside_joint_weight_retrieval) {
   for (int i = 0 ; i < numJoints(); i++ ) {
     joints.push_back(joint(i));
   }
@@ -96,7 +99,6 @@ JointPathEx::JointPathEx(BodyPtr& robot, Link* base, Link* end, double control_c
   for (int i = 0 ; i < numJoints(); i++ ) {
       optional_weight_vector[i] = 1.0;
   }
-  dt = control_cycle;
 }
 
 void JointPathEx::setMaxIKError(double epos, double erot) {
@@ -374,7 +376,7 @@ bool JointPathEx::calcInverseKinematics2Loop(const Vector3& dp, const Vector3& o
       }
     }
     if ( ! solve_linear_equation ) {
-      std::cerr << "ERROR nan/inf is found" << std::endl;
+      std::cerr << "[" << debug_print_prefix << "] ERROR nan/inf is found" << std::endl;
       return false;
     }
 
@@ -393,15 +395,29 @@ bool JointPathEx::calcInverseKinematics2Loop(const Vector3& dp, const Vector3& o
 
     // upper/lower limit check
     for(int j=0; j < n; ++j){
+      bool is_limit_over = false;
       if ( joints[j]->q > joints[j]->ulimit) {
-        std::cerr << "Upper joint limit error " << joints[j]->name << std::endl;
+        is_limit_over = true;
+        if (joint_limit_debug_print_counts[j] % debug_print_freq_count == 0) {
+            std::cerr << "[" << debug_print_prefix << "] Upper joint limit over " << joints[j]->name
+                      << " (ja=" << joints[j]->q << "[rad], limit=" << joints[j]->ulimit << "[rad], count=" << joint_limit_debug_print_counts[j] << ", debug_print_freq_count=" << debug_print_freq_count << ")" << std::endl;
+        }
         joints[j]->q = joints[j]->ulimit;
       }
       if ( joints[j]->q < joints[j]->llimit) {
-        std::cerr << "Lower joint limit error " << joints[j]->name << std::endl;
+        is_limit_over = true;
+        if (joint_limit_debug_print_counts[j] % debug_print_freq_count == 0) {
+            std::cerr << "[" << debug_print_prefix << "] Lower joint limit over " << joints[j]->name
+                      << " (ja=" << joints[j]->q << "[rad], limit=" << joints[j]->llimit << "[rad], count=" << joint_limit_debug_print_counts[j] << ", debug_print_freq_count=" << debug_print_freq_count << ")" << std::endl;
+        }
         joints[j]->q = joints[j]->llimit;
       }
       joints[j]->q = std::max(joints[j]->q, joints[j]->llimit);
+      if (is_limit_over) {
+          joint_limit_debug_print_counts[j]++;
+      } else {
+          joint_limit_debug_print_counts[j] = 0; // resetting
+      }
     }
 
     calcForwardKinematics();
@@ -409,6 +425,47 @@ bool JointPathEx::calcInverseKinematics2Loop(const Vector3& dp, const Vector3& o
     return true;
 }
 
+// TODO : matrix_logEx should be omegaFromRotEx after checking on real robot testing.
+hrp::Vector3 matrix_logEx(const hrp::Matrix33& m) {
+    hrp::Vector3 mlog;
+    double q0, th;
+    hrp::Vector3 q;
+    double norm;
+  
+    Eigen::Quaternion<double> eiq(m);
+    q0 = eiq.w();
+    q = eiq.vec();
+    norm = q.norm();
+    if (norm > 0) {
+        if ((q0 > 1.0e-10) || (q0 < -1.0e-10)) {
+            th = 2 * std::atan(norm / q0);
+        } else if (q0 > 0) {
+            th = M_PI / 2;
+        } else {
+            th = -M_PI / 2;
+        }
+        mlog = (th / norm) * q ;
+    } else {
+        mlog = hrp::Vector3::Zero();
+    }
+    return mlog;
+}
+
+bool JointPathEx::calcInverseKinematics2Loop(const Vector3& end_effector_p, const Matrix33& end_effector_R,
+                                             const double LAMBDA, const double avoid_gain, const double reference_gain, const hrp::dvector* reference_q,
+                                             const double vel_gain,
+                                             const hrp::Vector3& localPos, const hrp::Matrix33& localR)
+{
+    hrp::Matrix33 target_link_R(end_effector_R * localR.transpose());
+    hrp::Vector3 target_link_p(end_effector_p - target_link_R * localPos);
+    hrp::Vector3 vel_p(target_link_p - endLink()->p);
+    // TODO : matrix_logEx should be omegaFromRotEx after checking on real robot testing.
+    //hrp::Vector3 vel_r(endLink()->R * omegaFromRotEx(endLink()->R.transpose() * target_link_R));
+    hrp::Vector3 vel_r(endLink()->R * matrix_logEx(endLink()->R.transpose() * target_link_R));
+    vel_p *= vel_gain;
+    vel_r *= vel_gain;
+    return calcInverseKinematics2Loop(vel_p, vel_r, LAMBDA, avoid_gain, reference_gain, reference_q);
+}
 
 bool JointPathEx::calcInverseKinematics2(const Vector3& end_p, const Matrix33& end_R,
                                          const double avoid_gain, const double reference_gain, const hrp::dvector* reference_q)
