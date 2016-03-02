@@ -1,0 +1,12 @@
+/**
+ * @file PushRecoverService.idl
+ * @brief Services for tendon joint controlling interface
+ */
+module OpenHRP
+{
+  interface PushRecoverService
+  {
+      typedef sequence<string> sSequence;
+      boolean dummy(in double a);
+  };
+};
