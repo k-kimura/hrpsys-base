@@ -621,7 +621,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                   /* TODO */
                   m_contactStates.data[contact_states_index_map["rleg"]] = (abs(sf_footr_p[2])<0.001)?true:false;
                   m_contactStates.data[contact_states_index_map["lleg"]] = (abs(sf_footl_p[2])<0.001)?true:false;
-                  std::cout << "contact_state=[" << ((m_contactStates.data[contact_states_index_map["lleg"]])?"true ":"false") << "," << ((m_contactStates.data[contact_states_index_map["rleg"]])?"true ":"false") << "]" << std::endl;
+                  //std::cout << "contact_state=[" << ((m_contactStates.data[contact_states_index_map["lleg"]])?"true ":"false") << "," << ((m_contactStates.data[contact_states_index_map["rleg"]])?"true ":"false") << "]" << std::endl;
                   m_walkingStates.data = true;
                   /* controlSwingSupportTime is not used while double support period, 1.0 is neglected */
                   //m_controlSwingSupportTime.data[contact_states_index_map["rleg"]] = 1.0;
@@ -633,14 +633,23 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                   current_control_state = PR_READY;
               }
 
-              if(loop%500==0){
+              if(loop==0 || loop==1 || loop== 4500){
+                  //if(loop%500==0){
                   std::cout << "[" << m_profile.instance_name << "] pref=" << sf_pref << "  @" << rate_matcher.getCurrentFrame() << "frame" << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] sf_body_p=" << sf_body_p << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] body_p=" << body_p << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] body_p_@_start=" << body_p_at_start << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] rootLink_p=" << m_robot->rootLink()->p << std::endl;
-                  //std::cout << "[" << m_profile.instance_name << "] footl_p=" << sf_footl_p << std::endl;
-                  //std::cout << "[" << m_profile.instance_name << "] footr_p=" << sf_footr_p << std::endl;
+                  std::cout << "[" << m_profile.instance_name << "] footl_p=" << sf_footl_p << std::endl;
+                  std::cout << "[" << m_profile.instance_name << "] footr_p=" << sf_footr_p << std::endl;
+                  std::cout << "[" << m_profile.instance_name << "]=qref[";
+                  for(int i=0;i< 12;i++){
+                      printf("%+3.2lf, ",rad2deg(m_robot->joint(i)->q));
+                  }
+                  std::cout << "[" << m_profile.instance_name << "]=q[";
+                  for(int i=0;i< 12;i++){
+                      printf("%+3.2lf, ",rad2deg(m_qCurrent.data[i]));
+                  }
               }
           }else{
               std::cout << "[" << m_profile.instance_name << "] There is no tragectory" << std::endl;
