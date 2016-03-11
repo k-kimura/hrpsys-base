@@ -229,6 +229,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       ref_q[i]=0.0;
   }
 
+  std::cout << "[" << m_profile.instance_name << "] calcik start" << std::endl;
   /* Initialize Default joint angle on PR_READY state */
   {
       _MM_ALIGN16 float target_joint_angle[12];
@@ -247,7 +248,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
           ready_joint_angle[i] = target_joint_angle[i];
       }
   }
-
+  std::cout << "[" << m_profile.instance_name << "] calcik end" << std::endl;
 
   /* Initialize transition interpolator to interpolate from idle state to push recover ready state */
   {

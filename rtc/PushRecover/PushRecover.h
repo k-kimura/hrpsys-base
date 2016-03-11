@@ -233,7 +233,6 @@ private:
     IIKMethod* m_pIKMethod;
     hrp::Vector3 body_p_at_start;
     FrameRateMatcher rate_matcher;
-    float ready_joint_angle[12];
 
     StepForward stpf;
 
