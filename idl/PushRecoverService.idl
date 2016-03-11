@@ -8,5 +8,26 @@ module OpenHRP
   {
       typedef sequence<string> sSequence;
       boolean dummy(in double a);
+
+      /**
+       * @brief Shift to PushRecoveryReady mode.
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean startPushRecovery();
+
+      /**
+       * @brief Shift to PassThrough mode.
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean stopPushRecovery();
+
+      /**
+       * @brief Stop stepping immediately.
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean emergencyStop();
   };
 };
