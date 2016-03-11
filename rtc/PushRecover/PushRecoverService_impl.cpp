@@ -14,4 +14,25 @@ PushRecoverService_impl::~PushRecoverService_impl()
 CORBA::Boolean PushRecoverService_impl::dummy(const double a)
 {
 	return 1;
-}
+};
+
+CORBA::Boolean PushRecoverService_impl::emergencyStop()
+{
+	//return m_autobalancer->emergencyStop();
+	m_pushrecover->assertEmergencyStop();
+	return 1;
+};
+
+CORBA::Boolean PushRecoverService_impl::startPushRecovery()
+{
+	return m_pushrecover->startPushRecovery();
+};
+
+CORBA::Boolean PushRecoverService_impl::stopPushRecovery()
+{
+	return m_pushrecover->stopPushRecovery();
+};
+
+void PushRecoverService_impl::pushrecover(PushRecover *i_pushrecover){
+	m_pushrecover = i_pushrecover;
+};
