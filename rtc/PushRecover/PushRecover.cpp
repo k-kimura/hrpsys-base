@@ -634,7 +634,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               }
 
               const unsigned int cf = rate_matcher.getCurrentFrame();
-              if(cf==0 || cf==1 || cf== 2000){
+              if(cf==1 || cf==2 || cf== 2000){
                   //if(loop%500==0){
                   std::cout << "[" << m_profile.instance_name << "] pref=" << sf_pref << "  @" << rate_matcher.getCurrentFrame() << "frame" << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] sf_body_p=" << sf_body_p << std::endl;
@@ -647,10 +647,12 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                   for(int i=0;i< 12;i++){
                       printf("%+3.2lf, ",rad2deg(m_robot->joint(i)->q));
                   }
+                  printf("]\n");
                   std::cout << "[" << m_profile.instance_name << "]=q[";
                   for(int i=0;i< 12;i++){
                       printf("%+3.2lf, ",rad2deg(m_qCurrent.data[i]));
                   }
+                  printf("]\n");
               }
           }else{
               std::cout << "[" << m_profile.instance_name << "] There is no tragectory" << std::endl;
