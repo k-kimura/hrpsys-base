@@ -229,6 +229,27 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       ref_q[i]=0.0;
   }
 
+  std::cout << "[" << m_profile.instance_name << "] calcik start" << std::endl;
+  /* Initialize Default joint angle on PR_READY state */
+  {
+      _MM_ALIGN16 float target_joint_angle[12];
+      _MM_ALIGN16 float pre_joint_angle[12];
+      _MM_ALIGN16 Mat3 body_R = Mat3::identity();
+      const float foot_l_pitch = 0.0f;
+      const float foot_r_pitch = 0.0f;
+      _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
+                                                    Vec3(0.0f,0.0f,0.0f),
+                                                    InitialLfoot_p,
+                                                    InitialRfoot_p,
+                                                    foot_l_pitch,
+                                                    foot_r_pitch,
+                                                    target_joint_angle );
+      for(int i=0;i<12;i++){
+          ready_joint_angle[i] = target_joint_angle[i];
+      }
+  }
+  std::cout << "[" << m_profile.instance_name << "] calcik end" << std::endl;
+
   /* Initialize transition interpolator to interpolate from idle state to push recover ready state */
   {
       const int interpolator_dimension = 1;
@@ -373,7 +394,7 @@ void PushRecover::setReferenceDataWithInterpolation(void){
             current_control_state = PR_READY;
             /* Transition to state PR_READY needs to set default values */
             for ( int i = 0; i < m_robot->numJoints(); i++ ) {
-                m_robot->joint(i)->q = deg2rad(default_joint_angle[i]);
+                m_robot->joint(i)->q = ready_joint_angle[i];
             }
             m_robot->rootLink()->p = hrp::Vector3(0.0, 0.0, Zc);
         }else if(current_control_state == PR_TRANSITION_TO_IDLE){
@@ -393,12 +414,10 @@ void PushRecover::setReferenceDataWithInterpolation(void){
             /* expecting the joint angle under PR_READY state equals default_joint_angle */
             switch (current_control_state){
             case PR_TRANSITION_TO_IDLE:
-                ref_q[i] = (1-transition_interpolator_ratio) * m_qRef.data[i] + transition_interpolator_ratio * deg2rad(default_joint_angle[i]);
-                //m_robot->joint(i)->q = (1-transition_interpolator_ratio) * m_qRef.data[i] + transition_interpolator_ratio * deg2rad(default_joint_angle[i]);
+                ref_q[i] = (1-transition_interpolator_ratio) * m_qRef.data[i] + transition_interpolator_ratio * ready_joint_angle[i];
                 break;
             case PR_TRANSITION_TO_READY:
-                ref_q[i] = (1-transition_interpolator_ratio) * m_qRef.data[i] + transition_interpolator_ratio * deg2rad(default_joint_angle[i]);
-                //m_robot->joint(i)->q = (1-transition_interpolator_ratio) * m_qRef.data[i] + transition_interpolator_ratio * deg2rad(default_joint_angle[i]);
+                ref_q[i] = (1-transition_interpolator_ratio) * m_qRef.data[i] + transition_interpolator_ratio * ready_joint_angle[i];
                 break;
             default:
                 break;
