@@ -94,19 +94,23 @@ void* StepForward::func(void* arg){
 #ifdef DEBUG_STEP_FORWARD
             std::cerr << "[StepForward] Foot Colide" << std::endl;
 #endif
+#if 1
+        }
+#else
         }else{
             self->is_ready = 1;
         }
+#endif
         //std::cout << "[StepForward] L_first=[" << rwg_lfirst.eval_value << "], R_first=[" << rwg_rfirst.eval_value << "]" << std::endl;
 
         for( int i = 0; i < 5; i++ ){
-            self->is_ready = i + 1;
             /* template<bool dump> void iterateOnce( const int offset, const int calc_len, const double feedback_gain ) */
             if( rwg_lfirst.eval_value < rwg_rfirst.eval_value ){
                 rwg_lfirst.iterateOnce<false>( 0, 1500+i*100, 1.0 );
             }else{
                 rwg_rfirst.iterateOnce<false>( 0, 1500+i*100, 1.0 );
             }
+            self->is_ready = i + 1;
         }
 #ifdef DOWHILE_EN
     } /* End of while(true) */

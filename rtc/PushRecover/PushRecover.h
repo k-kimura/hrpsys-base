@@ -23,12 +23,19 @@
 #include <hrpUtil/EigenTypes.h>
 
 #include "../ImpedanceController/RatsMatrix.h"
+#include "../TorqueFilter/IIRFilter.h"
 
 #include "QzMatrix.h"
 #include "step_forward.h"
 #include "BodyIKMethod.h"
 #include "interpolator.h"  /* from hrpsys/rtc/SequencePlayer */
 #include "FrameRateMatcher.h"
+#include "SimpleLogger.h"
+#include <algorithm>
+
+/* for gettimeofday */
+#include <sys/time.h>
+#include <time.h>
 
 // Service implementation headers
 // <rtc-template block="service_impl_h">
@@ -182,6 +189,7 @@ protected:
     RTC::OutPort<RTC::TimedOrientation3D> m_baseRpyOut;
     RTC::OutPort<RTC::TimedPose3D> m_basePoseOut;
 
+    std::vector<RTC::OutPort<TimedDoubleSeq> *> m_ref_forceOut;
     RTC::OutPort<RTC::TimedAcceleration3D> m_accRefOut;
     RTC::OutPort<RTC::TimedBooleanSeq> m_contactStatesOut;
     RTC::OutPort<RTC::TimedDoubleSeq> m_controlSwingSupportTimeOut;
@@ -218,27 +226,75 @@ private:
     hrp::Vector3 input_zmp, input_basePos;
     hrp::Matrix33 input_baseRot;
 
+    /* Actual Data calced from input data */
+    boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > act_cogvel_filter;
+    hrp::Vector3  act_zmp,       prev_act_zmp;
+    hrp::Vector3  rel_act_zmp,   prev_rel_act_zmp;
+    hrp::Vector3  act_root_pos,  prev_act_root_pos;
+    hrp::Vector3  act_world_root_pos;
+    hrp::Vector3  act_cog,       prev_act_cog;
+    hrp::Vector3  act_cogvel,    prev_act_cogvel;
+    hrp::Vector3  act_base_rpy;
+    hrp::Matrix33 prev_act_foot_origin_rot;
+    double        prev_act_force_z[2]; /* previous force z used in calcZMP */
+
+    /* Estimated state data */
+    hrp::Vector3 est_cogvel;
+
     /* Reference Data buffer */
-    double*       ref_q;
+    double        *ref_q,   *prev_ref_q;
     hrp::Vector3  rel_ref_zmp; // ref zmp in base frame
-    hrp::Vector3  ref_zmp, ref_basePos;
+    hrp::Vector3  ref_zmp, ref_basePos, prev_ref_basePos;
     hrp::Matrix33 ref_baseRot;
     hrp::Vector3  prev_imu_sensor_pos, prev_imu_sensor_vel;
+    hrp::Vector3  ref_cog;
+    hrp::Vector3  ref_force[2];
 
     interpolator *transition_interpolator;
     double transition_interpolator_ratio;
     PushRecoveryState current_control_state;
-    std::map<std::string, size_t> contact_states_index_map;
+
+    /* indexed robot model parts names */
+    struct EElinkParam {
+        std::string   fsensor_name;
+        std::string   ee_name;
+        std::string   ee_target;
+        std::string   ee_base;
+        hrp::Vector3  ee_localp;
+        hrp::Matrix33 ee_localR;
+        bool          act_contact_state;
+    };
+    enum PR_CONTACT_STATE {BOTH_FOOTS, RFOOT, LFOOT, ON_AIR};
+    PR_CONTACT_STATE foots_contact_states, prev_foots_contact_states;
+    std::map<std::string, size_t> ee_index_map;
+    std::vector<EElinkParam> ee_params;
+    hrp::Vector3 world_sensor_ps[2];
+    hrp::Vector3 world_force_ps[2];
+    hrp::Vector3 world_force_ms[2];
 
     IIKMethod* m_pIKMethod;
-    hrp::Vector3 body_p_at_start;
+    hrp::Vector3 body_p_at_start, body_p_diff_at_start;
     FrameRateMatcher rate_matcher;
 
     StepForward stpf;
 
     void updateInputData(const bool shw_msg_flag = false);
-    void setReferenceDataWithInterpolation(void);
-    void setOutputData(void);
+    void updateEstimatedInputData(void);
+    void updateEstimatedOutputData(void);
+    void setTargetDataWithInterpolation(void);
+    void setOutputData(const bool shw_msg_flag = false);
+
+    bool calcWorldForceVector(void);
+    void calcFootOriginCoords (hrp::Vector3& foot_origin_pos,
+                               hrp::Matrix33& foot_origin_rot);
+    bool calcZMP(hrp::Vector3& ret_zmp, const double zmp_z);
+    bool calcActCoGVel(const hrp::Vector3 act_foot_origin_pos,
+                       const hrp::Matrix33 act_foot_origin_rot);
+    bool calcActRootPos(const hrp::Vector3 act_foot_origin_pos,
+                       const hrp::Matrix33 act_foot_origin_rot);
+    bool updateToCurrentRobotPose(void);
+    bool checkJointVelocity(void);
+    bool checkBodyPosMergin(const double threshould2, const int loop);
     /* ============================================== */
     /* checkEmergencyFlag()                           */
     /* out:                                           */
@@ -247,6 +303,11 @@ private:
     /*     EmergencyStopReqFlagはfalseになおす。       */
     /* ============================================== */
     bool checkEmergencyFlag(void);
+
+    SimpleLogger *slogger;
+    SimpleLogger::DataLog  dlog;
+    bool                   dlog_save_flag;
+    struct timeval         stv; /* time of OnInitialized */
 };
 
 
