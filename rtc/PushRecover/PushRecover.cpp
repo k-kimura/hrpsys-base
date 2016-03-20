@@ -65,11 +65,11 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_accRefOut("accRefOut", m_accRef),
       m_contactStatesOut("contactStatesOut", m_contactStates),
       m_controlSwingSupportTimeOut("controlSwingSupportTimeOut", m_controlSwingSupportTime),
-    m_walkingStatesOut("walkingStatesOut", m_walkingStates),
-    m_sbpCogOffsetOut("sbpCogOffsetOut", m_sbpCogOffset),
-
-    m_PushRecoverServicePort("PushRecoverService"),
-    rate_matcher(500,1000),
+      m_walkingStatesOut("walkingStatesOut", m_walkingStates),
+      m_sbpCogOffsetOut("sbpCogOffsetOut", m_sbpCogOffset),
+      m_PushRecoverServicePort("PushRecoverService"),
+      rate_matcher(500,1000),
+      ee_params(2), /* Default number of End Effector is 2 */
 // </rtc-template>
     m_debugLevel(0)
 {
@@ -77,15 +77,17 @@ PushRecover::PushRecover(RTC::Manager* manager)
     emergencyStopReqFlag = false;
 
     BOOST_STATIC_ASSERT( __alignof__(BodyIKMethod) == 16 );
-    m_pIKMethod = new BodyIKMethod( 0.0f, Zc );
-    body_p_at_start = hrp::Vector3(0.0, 0.0, 0.0);
+    m_pIKMethod          = new BodyIKMethod( 0.0f, Zc );
+    body_p_at_start      = hrp::Vector3(0.0, 0.0, 0.0);
+    body_p_diff_at_start = hrp::Vector3(0.0, 0.0, 0.0);
+    slogger              = new SimpleLogger();
 }
 
 
 
 PushRecover::~PushRecover()
 {
-    delete m_pIKMethod;
+    std::cout << "[pr] Destructor" << std::endl;
 }
 
 
@@ -172,12 +174,14 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   for (unsigned int i=0; i<npforce; i++){
       fsensor_names.push_back(m_robot->sensor(hrp::Sensor::FORCE, i)->name);
   }
+
   //   add ports for all force sensors
   int nforce  = npforce;
   m_force.resize(nforce);
   m_forceIn.resize(nforce);
   m_ref_force.resize(nforce);
   m_ref_forceIn.resize(nforce);
+  m_ref_forceOut.resize(nforce);
   std::cerr << "[" << m_profile.instance_name << "] force sensor ports" << std::endl;
   for (unsigned int i=0; i<nforce; i++){
       // actual inport
@@ -189,6 +193,12 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       for (unsigned int j=0; j<6; j++) m_ref_force[i].data[j] = 0.0;
       m_ref_forceIn[i] = new RTC::InPort<TimedDoubleSeq>(std::string("ref_"+fsensor_names[i]+"In").c_str(), m_ref_force[i]);
       registerInPort(std::string("ref_"+fsensor_names[i]+"In").c_str(), *m_ref_forceIn[i]);
+
+      // ref outport
+      //m_ref_forceOut[i] = new OutPort<TimedDoubleSeq>(std::string(sensor_names[i]).c_str(), m_force[i]);
+      m_ref_forceOut[i] = new OutPort<TimedDoubleSeq>(std::string("ref_" + fsensor_names[i]+"Out").c_str(), m_ref_force[i]);
+      registerOutPort(std::string("ref_"+fsensor_names[i]+"Out").c_str(), *m_ref_forceOut[i]);
+
       std::cerr << "[" << m_profile.instance_name << "]   name = " << fsensor_names[i] << std::endl;
   }
   for (unsigned int i=0; i<m_forceIn.size(); i++){
@@ -203,13 +213,61 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   const size_t prop_num = 10;
   if (end_effectors_str.size() > 0) {
       const size_t num = end_effectors_str.size()/prop_num;
+      /* Resize ee_params vector */
+      if(ee_params.size() < num){
+          ee_params.resize(num);
+      }
+
       for (size_t i = 0; i < num; i++) {
           std::string ee_name, ee_target, ee_base;
           coil::stringTo(ee_name, end_effectors_str[i*prop_num].c_str());
           coil::stringTo(ee_target, end_effectors_str[i*prop_num+1].c_str());
           coil::stringTo(ee_base, end_effectors_str[i*prop_num+2].c_str());
+          hrp::Vector3 ee_localp;
+          for (size_t j = 0; j < 3; j++) {
+              coil::stringTo(ee_localp(i), end_effectors_str[i*prop_num+3+j].c_str());
+          }
+          double tmp_q[4];
+          for (int j = 0; j < 4; j++ ) {
+              coil::stringTo(tmp_q[j], end_effectors_str[i*prop_num+6+j].c_str());
+          }
+          hrp::Matrix33 ee_localR = Eigen::AngleAxis<double>(tmp_q[3], hrp::Vector3(tmp_q[0], tmp_q[1], tmp_q[2])).toRotationMatrix(); // rotation in VRM
           /* link endeffector name and index */
-          contact_states_index_map.insert(std::pair<std::string, size_t>(ee_name, i));
+          ee_index_map.insert(std::pair<std::string, size_t>(ee_name, i));
+          /* Save End Effector name indexed */
+          {
+              vector<std::string>::iterator it;
+              std::string serching_fsensor_name;
+              if(ee_name=="lleg"){
+                  serching_fsensor_name = "lfsensor";
+              }else if(ee_name=="rleg"){
+                  serching_fsensor_name = "rfsensor";
+              }else if(ee_name=="larm"){
+                  serching_fsensor_name = "lasensor";
+              }else if(ee_name=="rarm"){
+                  serching_fsensor_name = "rasensor";
+              }else{
+                  serching_fsensor_name = "none";
+              }
+              /* serch for if expected sensor is exists */
+              if(serching_fsensor_name!="none"){
+                  it = find(fsensor_names.begin(),fsensor_names.end(), "lfsensor");
+                  if(it==fsensor_names.end()){
+                      std::cout << "[" << m_profile.instance_name << "] Error lfsensor not found" << std::endl;
+                      return RTC::RTC_ERROR;
+                  }else{
+                      ee_params[ee_index_map[ee_name]].fsensor_name = *it;
+                  }
+              }else{
+                  ee_params[ee_index_map[ee_name]].fsensor_name = "none";
+              }
+              ee_params[ee_index_map[ee_name]].ee_name   = ee_name;
+              ee_params[ee_index_map[ee_name]].ee_target = ee_target;
+              ee_params[ee_index_map[ee_name]].ee_base   = ee_base;
+              ee_params[ee_index_map[ee_name]].ee_localp = ee_localp;
+              ee_params[ee_index_map[ee_name]].ee_localR = ee_localR;
+              ee_params[ee_index_map[ee_name]].act_contact_state = false;
+          }
       }
   }
   /* Finish Setting EndEffector from config file */
@@ -225,8 +283,9 @@ RTC::ReturnCode_t PushRecover::onInitialize()
 
   /* Initialize Reference Joint Angle Array */
   ref_q = new double[m_robot->numJoints()];
+  prev_ref_q = new double[m_robot->numJoints()];
   for(int i=0;i<m_robot->numJoints();i++){
-      ref_q[i]=0.0;
+      prev_ref_q[i] = ref_q[i] = 0.0;
   }
 
   std::cout << "[" << m_profile.instance_name << "] calcik start" << std::endl;
@@ -238,7 +297,8 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       const float foot_l_pitch = 0.0f;
       const float foot_r_pitch = 0.0f;
       _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
-                                                    Vec3(0.0f,0.0f,0.0f),
+                                                    //Vec3(0.0f,0.0f,0.0f),
+                                                    Vec3(traj_body_init[0],traj_body_init[1],0.0f),
                                                     InitialLfoot_p,
                                                     InitialRfoot_p,
                                                     foot_l_pitch,
@@ -259,7 +319,33 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       transition_interpolator_ratio = 1.0;
   } /* Finish initializing transition interpolator */
 
+  /* Initialize CoG velocity IIR filter */
+  act_cogvel_filter = boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> >(new FirstOrderLowPassFilter<hrp::Vector3>(4.0, m_dt, hrp::Vector3::Zero())); // [Hz]
+
+  act_world_root_pos = hrp::Vector3(traj_body_init[0],
+                                    traj_body_init[1],
+                                    traj_body_init[2]);
+
+  dlog_save_flag = false;
+  gettimeofday(&stv,NULL); /* save the time of initialized */
+
+  prev_act_zmp      = hrp::Vector3::Zero();
+  prev_rel_act_zmp  = hrp::Vector3::Zero();
+  prev_act_root_pos = hrp::Vector3::Zero();
+  prev_act_cog      = hrp::Vector3::Zero();
+  prev_act_cogvel   = hrp::Vector3::Zero();
+  act_base_rpy      = hrp::Vector3::Zero();
+  ref_zmp           = hrp::Vector3::Zero();
+  rel_ref_zmp       = hrp::Vector3::Zero();
+  ref_basePos       = hrp::Vector3::Zero();
+
+  prev_act_foot_origin_rot = hrp::Matrix33::Identity();
+  input_baseRot            = hrp::Matrix33::Identity();
+  ref_baseRot              = hrp::Matrix33::Identity();
+  prev_ref_basePos = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
+
   if(m_robot->numJoints()!=12){
+      std::cout << "[" << m_profile.instance_name << "] number of joint is expected 12." << std::endl;
       return RTC::RTC_ERROR;
   }else{
       return RTC::RTC_OK;
@@ -269,8 +355,12 @@ RTC::ReturnCode_t PushRecover::onInitialize()
 
 RTC::ReturnCode_t PushRecover::onFinalize()
 {
+    std::cout << "[pr] onFinalize" << std::endl;
     delete ref_q;
+    delete prev_ref_q;
     delete transition_interpolator;
+    delete m_pIKMethod;
+    delete slogger;
     return RTC::RTC_OK;
 }
 
@@ -313,6 +403,11 @@ RTC::ReturnCode_t PushRecover::onDeactivated(RTC::UniqueId ec_id)
 void PushRecover::updateInputData(const bool shw_msg_flag){
 #define DEBUG_INPUT_PRINT(x)  {if(shw_msg_flag) std::cout << "[pr] " << #x << "=" << x << std::endl;}
 #define DEBUG_INPUT_PRINT_I(x,i)  {if(shw_msg_flag) std::cout << "[pr] " << #x << "[" << i << "]=" << x##[i] << std::endl;}
+
+    if(shw_msg_flag){
+        std::cout << "[pr] "  << __func__ << std::endl;
+    }
+
     for (unsigned int i=0; i<m_forceIn.size(); i++){
         if ( m_forceIn[i]->isNew() ) {
             m_forceIn[i]->read();
@@ -339,6 +434,9 @@ void PushRecover::updateInputData(const bool shw_msg_flag){
     if (m_baseRpyIn.isNew()) {
         m_baseRpyIn.read();
         input_baseRot = hrp::rotFromRpy(m_baseRpy.data.r, m_baseRpy.data.p, m_baseRpy.data.y);
+        DEBUG_INPUT_PRINT(m_baseRpy.data.r);
+        DEBUG_INPUT_PRINT(m_baseRpy.data.p);
+        DEBUG_INPUT_PRINT(m_baseRpy.data.y);
     }
     if (m_zmpIn.isNew()) {
         m_zmpIn.read();
@@ -351,6 +449,9 @@ void PushRecover::updateInputData(const bool shw_msg_flag){
     }
     if (m_rpyIn.isNew()) {
         m_rpyIn.read();
+        DEBUG_INPUT_PRINT(m_rpy.data.r);
+        DEBUG_INPUT_PRINT(m_rpy.data.p);
+        DEBUG_INPUT_PRINT(m_rpy.data.y);
     }
     if (m_qCurrentIn.isNew()) {
         m_qCurrentIn.read();
@@ -378,11 +479,38 @@ void PushRecover::updateInputData(const bool shw_msg_flag){
         m_sbpCogOffsetIn.read();
     }
 
+    {
+        if(shw_msg_flag){
+            std::cout << "[pr] accRef=";
+            printf("%lf, %lf, %lf\n", m_accRef.data.ax, m_accRef.data.ay, m_accRef.data.az);
+            std::cout << "[pr] controlSwingSupportTime=";
+            printf("%lf, %lf\n",m_controlSwingSupportTime.data[0],m_controlSwingSupportTime.data[1]);
+            if(m_walkingStates.data){
+                std::cout << "[pr] walkingstates=true" << std::endl;
+            }else{
+                std::cout << "[pr] walkingstates=false" << std::endl;
+            }
+            std::cout << "[pr] sbpCogOffsetIn=";
+            printf("%lf, %lf, %lf\n",m_sbpCogOffset.data.x,m_sbpCogOffset.data.y,m_sbpCogOffset.data.z);
+        }
+    }
+
+    if(shw_msg_flag){
+        std::cout <<std::endl;
+    }
 #undef DEBUG_INPUT_PRINT
 #undef DEBUG_INPUT_PRINT_I
-}
+};
 
-void PushRecover::setReferenceDataWithInterpolation(void){
+void PushRecover::updateEstimatedInputData(void){
+    //com_dph = hrp::Vector3(Zc * m_rpy.data.p, Zc * m_rpy.data.r, 0.0) + com_dph_base;
+    est_cogvel = hrp::Vector3(Zc * m_rpy.data.p, Zc * m_rpy.data.r, 0.0);
+};
+
+void PushRecover::updateEstimatedOutputData(void){
+};
+
+void PushRecover::setTargetDataWithInterpolation(void){
     bool is_transition_interpolator_empty = transition_interpolator->isEmpty();
     if (!is_transition_interpolator_empty) {
         /* Interpolation is currently working */
@@ -426,10 +554,27 @@ void PushRecover::setReferenceDataWithInterpolation(void){
         /* Set Base Frame Reference Position */
         switch (current_control_state){
         case PR_TRANSITION_TO_IDLE:
-            ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * m_robot->rootLink()->p;
+            //ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * m_robot->rootLink()->p;
+            ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * prev_ref_basePos;
             break;
         case PR_TRANSITION_TO_READY:
-            ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * hrp::Vector3(0.0, 0.0, Zc);
+            //ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * hrp::Vector3(0.0, 0.0, Zc);
+            ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0],
+                                              traj_body_init[1],
+                                              traj_body_init[2]+InitialLfoot_p[2]);
+            break;
+        default:
+            break;
+        }
+        /* Set World Frame Reference Position */
+        switch (current_control_state){
+        case PR_TRANSITION_TO_IDLE:
+            act_world_root_pos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * m_robot->rootLink()->p;
+            break;
+        case PR_TRANSITION_TO_READY:
+            act_world_root_pos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0],
+                                                     traj_body_init[1],
+                                                     traj_body_init[2]);
             break;
         default:
             break;
@@ -451,21 +596,66 @@ void PushRecover::setReferenceDataWithInterpolation(void){
             rel_ref_zmp = input_zmp; /* pass through */
         }else if(current_control_state==PR_READY || current_control_state==PR_BUSY){
             /* Set Base Frame Reference Position */
-            ref_basePos = m_robot->rootLink()->p;
+            ref_basePos      = m_robot->rootLink()->p;
             /* Set Base Frame Reference Rotation */
             ref_baseRot = m_robot->rootLink()->R;
             /* set relative Reference ZMP */
             rel_ref_zmp = rel_ref_zmp; /* pass through */
         }
     }/* End of Interpolation */
-}
 
-void PushRecover::setOutputData(void){
+    // reference acceleration
+    hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
+    if (sen != NULL) {
+        hrp::Vector3 imu_sensor_pos = sen->link->p + sen->link->R * sen->localPos;
+        hrp::Vector3 imu_sensor_vel = (imu_sensor_pos - prev_imu_sensor_pos)/m_dt;
+        // convert to imu sensor local acceleration
+        hrp::Vector3 acc = (sen->link->R * sen->localR).transpose() * (imu_sensor_vel - prev_imu_sensor_vel)/m_dt;
+        m_accRef.data.ax = acc(0); m_accRef.data.ay = acc(1); m_accRef.data.az = acc(2);
+        m_accRef.tm = m_qRef.tm;
+        prev_imu_sensor_pos = imu_sensor_pos;
+        prev_imu_sensor_vel = imu_sensor_vel;
+    }
+
+
+
+
+    /* set reference force */
+    {
+        const std::string legs_ee_name[2]={"lleg","rleg"};
+        for (size_t i = 0; i < 2; i++) {
+            const int eei = ee_index_map[legs_ee_name[i]];
+            m_ref_force[eei].tm = m_qRef.tm;
+            m_ref_force[eei].data[0] = ref_force[eei](0);
+            m_ref_force[eei].data[1] = 0.0;
+            m_ref_force[eei].data[2] = 0.0;
+#if 0
+            m_ref_force[eei].data[3] = 0.0;
+            m_ref_force[eei].data[4] = 0.0;
+            m_ref_force[eei].data[5] = 0.0;
+#endif
+        }
+    }
+
+
+
+}; /* end of setTargetDataWithInterpolation */
+
+void PushRecover::setOutputData(const bool shw_msg_flag){
+#define DEBUG_PRINT(x)  {if(shw_msg_flag) std::cout << "[pr] " << #x << "=" << x << std::endl;}
+#define DEBUG_PRINT_I(x,i)  {if(shw_msg_flag) std::cout << "[pr] " << #x << "[" << i << "]=" << x##[i] << std::endl;}
+
+
+    if(shw_msg_flag){
+        std::cout << "[pr] "  << __func__ << std::endl;
+    }
+
     /*==================================================*/
     /* Set Target Angle Vector and publish from outport */
     /*==================================================*/
     for ( int i = 0; i < m_robot->numJoints(); i++ ){
         m_qRef.data[i] = ref_q[i];
+        prev_ref_q[i] = ref_q[i];
         //m_qRef.data[i] = m_robot->joint(i)->q;
     }
 
@@ -474,12 +664,15 @@ void PushRecover::setOutputData(void){
     m_basePos.data.y = ref_basePos(1);
     m_basePos.data.z = ref_basePos(2);
     m_basePos.tm = m_qRef.tm;
+    DEBUG_PRINT(ref_basePos);
     // baseRpy
     hrp::Vector3 baseRpy = hrp::rpyFromRot(ref_baseRot);
     m_baseRpy.data.r = baseRpy(0);
     m_baseRpy.data.p = baseRpy(1);
     m_baseRpy.data.y = baseRpy(2);
     m_baseRpy.tm = m_qRef.tm;
+    DEBUG_PRINT(baseRpy);
+
     // basePose
     m_basePose.data.position.x = m_basePos.data.x;
     m_basePose.data.position.y = m_basePos.data.y;
@@ -493,6 +686,7 @@ void PushRecover::setOutputData(void){
     m_zmp.data.y = rel_ref_zmp(1);
     m_zmp.data.z = rel_ref_zmp(2);
     m_zmp.tm = m_qRef.tm;
+    DEBUG_PRINT(rel_ref_zmp);
 
     /* Write to OutPort */
     m_basePosOut.write();
@@ -503,12 +697,45 @@ void PushRecover::setOutputData(void){
 
     // control parameters
     /* TODO */
+    for (unsigned int i=0; i<m_ref_forceOut.size(); i++){
+        m_ref_forceOut[i]->write();
+    }
     m_accRefOut.write();
     m_contactStatesOut.write();
     m_controlSwingSupportTimeOut.write();
     m_walkingStatesOut.write();
     m_sbpCogOffsetOut.write();
-}
+    {
+        if(shw_msg_flag){
+            if(m_walkingStates.data){
+                std::cout << "[pr] walkingstates=true" << std::endl;
+            }else{
+                std::cout << "[pr] walkingstates=false" << std::endl;
+            }
+            std::cout << "[pr] controlSwingSupportTime=";
+            printf("%lf, %lf\n",m_controlSwingSupportTime.data[0],m_controlSwingSupportTime.data[1]);
+            std::cout << "[pr] accRef=";
+            printf("%lf, %lf, %lf\n", m_accRef.data.ax, m_accRef.data.ay, m_accRef.data.az);
+            std::cout << "[pr] ref_force[0](right)=";
+            printf("%lf, %lf, %lf\n",
+                   m_ref_force[0].data[0],
+                   m_ref_force[0].data[1],
+                   m_ref_force[0].data[2]);
+            std::cout << "[pr] ref_force[1](left) =";
+            printf("%lf, %lf, %lf\n",
+                   m_ref_force[1].data[0],
+                   m_ref_force[1].data[1],
+                   m_ref_force[1].data[2]);
+        }
+    }
+
+    if(shw_msg_flag){
+        std::cout <<std::endl;
+    }
+
+#undef DEBUG_PRINT
+#undef DEBUG_PRINT_I
+};
 
 bool PushRecover::checkEmergencyFlag(void){
     if(emergencyStopReqFlag==true){
@@ -517,13 +744,256 @@ bool PushRecover::checkEmergencyFlag(void){
         return true;
     }
     return false;
+};
+
+bool PushRecover::calcWorldForceVector(void){
+    const std::string legs_ee_name[2]={"lleg","rleg"};
+    const double contact_decision_threshold_foot = 50.0; // [N]
+
+    for (size_t i = 0; i < 2; i++) {
+        const int eei = ee_index_map[legs_ee_name[i]];
+        hrp::ForceSensor* sensor = m_robot->sensor<hrp::ForceSensor>(ee_params[eei].fsensor_name);
+        hrp::Vector3 fsp = sensor->link->p + sensor->link->R * sensor->localPos;
+        hrp::Matrix33 tmpR;
+        rats::rotm3times(tmpR, sensor->link->R, sensor->localR);
+        hrp::Vector3 nf = tmpR * hrp::Vector3(m_force[eei].data[0], m_force[eei].data[1], m_force[eei].data[2]);
+        hrp::Vector3 nm = tmpR * hrp::Vector3(m_force[eei].data[3], m_force[eei].data[4], m_force[eei].data[5]);
+
+        /* save force on each foot by sensor coords */
+        world_sensor_ps[eei] = fsp;
+        world_force_ps[eei]  = nf;
+        world_force_ms[eei]  = nm;
+
+        // calc ee-local COP
+        hrp::Link* target = m_robot->link(ee_params[eei].ee_target);
+        const hrp::Matrix33 eeR = target->R * ee_params[eei].ee_localR;
+        const hrp::Vector3 ee_fsp = eeR.transpose() * (fsp - (target->p + target->R * ee_params[eei].ee_localp)); // ee-local force sensor pos EndEffector座標に変換
+        nf = eeR.transpose() * nf;
+        nm = eeR.transpose() * nm;
+        // ee-local total moment and total force at ee position
+        /* センサ値をワールド座標からEndEffector座標に変換*/
+
+        prev_act_force_z[eei] = 0.85 * prev_act_force_z[eei] + 0.15 * nf(2); // filter, cut off 5[Hz]
+
+        /* Determin contact state on each foot */
+        if (prev_act_force_z[eei] < contact_decision_threshold_foot) {
+            ee_params[eei].act_contact_state = false; /* in the air */
+        }else{
+            ee_params[eei].act_contact_state = true; /* on ground */
+        }
+    }
+}; /* end of PushRecover::calcWorldForceVector */
+
+/* Copied from Stabilizer.  */
+void PushRecover::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matrix33& foot_origin_rot){
+  rats::coordinates leg_c[2], tmpc;
+  hrp::Vector3 ez = hrp::Vector3::UnitZ();
+  hrp::Vector3 ex = hrp::Vector3::UnitX();
+  const std::string legs_ee_name[2]={"lleg","rleg"};
+  for (size_t i = 0; i < 2; i++) {
+      const int eei = ee_index_map[legs_ee_name[i]];
+      hrp::Link* target = m_robot->link(ee_params[eei].ee_target);
+      leg_c[eei].pos = target->p;
+      hrp::Vector3 xv1(target->R * ex);
+      xv1(2)=0.0;
+      xv1.normalize();
+      hrp::Vector3 yv1(ez.cross(xv1));
+      leg_c[eei].rot(0,0) = xv1(0); leg_c[eei].rot(1,0) = xv1(1); leg_c[eei].rot(2,0) = xv1(2);
+      leg_c[eei].rot(0,1) = yv1(0); leg_c[eei].rot(1,1) = yv1(1); leg_c[eei].rot(2,1) = yv1(2);
+      leg_c[eei].rot(0,2) = ez(0); leg_c[eei].rot(1,2) = ez(1); leg_c[eei].rot(2,2) = ez(2);
+  }
+  if (ee_params[ee_index_map["rleg"]].act_contact_state &&
+      ee_params[ee_index_map["lleg"]].act_contact_state) {
+      /* Both foots are on ground */
+      rats::mid_coords(tmpc, 0.5, leg_c[0], leg_c[1]);
+      foot_origin_pos = tmpc.pos;
+      foot_origin_rot = tmpc.rot;
+      foots_contact_states = BOTH_FOOTS;
+  } else if (ee_params[ee_index_map["rleg"]].act_contact_state) {
+      /* Right foot is on ground */
+      foot_origin_pos = leg_c[ee_index_map["rleg"]].pos;
+      foot_origin_rot = leg_c[ee_index_map["rleg"]].rot;
+      foots_contact_states = RFOOT;
+  } else if (ee_params[ee_index_map["lleg"]].act_contact_state){
+      foot_origin_pos = leg_c[ee_index_map["lleg"]].pos;
+      foot_origin_rot = leg_c[ee_index_map["lleg"]].rot;
+      foots_contact_states = LFOOT;
+  } else {
+      /* Both foots are on the air */
+      rats::mid_coords(tmpc, 0.5, leg_c[0], leg_c[1]);
+      foot_origin_pos = tmpc.pos;
+      foot_origin_rot = tmpc.rot;
+      foots_contact_states = ON_AIR;
+  }
+};
+
+/* Copied from Stabilizer */
+/* ret_zmp is in world coords based on contacting foots */
+bool PushRecover::calcZMP(hrp::Vector3& ret_zmp, const double zmp_z)
+{
+    const double contact_decision_threshold = 50.0; // [N]
+    double tmpzmpx = 0.0;
+    double tmpzmpy = 0.0;
+    double tmpfz = 0.0, tmpfz2 = 0.0;
+
+    const std::string legs_ee_name[2]={"lleg","rleg"};
+
+    for (size_t i = 0; i < 2; i++) {
+        const int eei = ee_index_map[legs_ee_name[i]];
+        hrp::Vector3 fsp = world_sensor_ps[eei];
+        hrp::Vector3 nf  = world_force_ps[eei];
+        hrp::Vector3 nm  = world_force_ms[eei];
+
+        tmpzmpx += nf(2) * fsp(0) - (fsp(2) - zmp_z) * nf(0) - nm(1);
+        tmpzmpy += nf(2) * fsp(1) - (fsp(2) - zmp_z) * nf(1) + nm(0);
+        tmpfz += nf(2); /* calc sum of force z */
+
+        tmpfz2 += prev_act_force_z[eei]; /* calc sum of filtered force z in EE coordinates */
+    }
+
+    if (tmpfz2 < contact_decision_threshold) {
+        ret_zmp = act_zmp;
+        return false; // in the air
+    } else {
+        ret_zmp = hrp::Vector3(tmpzmpx / tmpfz, tmpzmpy / tmpfz, zmp_z);
+        return true; // on ground
+    }
+};
+
+bool PushRecover::calcActCoGVel(const hrp::Vector3 act_foot_origin_pos, const hrp::Matrix33 act_foot_origin_rot){
+    // convert absolute (in st) -> root-link relative
+    rel_act_zmp = m_robot->rootLink()->R.transpose() * (act_zmp - m_robot->rootLink()->p);
+
+    // Actual foot_origin frame => ルートリンク基準座標から足先基準座標に変換
+    act_zmp = act_foot_origin_rot.transpose() * (act_zmp - act_foot_origin_pos);
+    act_cog = act_foot_origin_rot.transpose() * (act_cog - act_foot_origin_pos);
+
+    //act_cogvel = foot_origin_rot.transpose() * act_cogvel;
+    if (foots_contact_states != prev_foots_contact_states) {
+        act_cogvel = (act_foot_origin_rot.transpose() * prev_act_foot_origin_rot) * act_cogvel;
+    } else {
+        act_cogvel = (act_cog - prev_act_cog)/m_dt;
+    }
+
+    act_cogvel = act_cogvel_filter->passFilter(act_cogvel);
+};
+
+bool PushRecover::calcActRootPos(const hrp::Vector3 act_foot_origin_pos, const hrp::Matrix33 act_foot_origin_rot){
+    act_root_pos = act_foot_origin_rot.transpose() * (-act_foot_origin_pos);
+    return true;
 }
+
+bool PushRecover::updateToCurrentRobotPose(void){
+    // update by current joint angles
+    for ( int i = 0; i < m_robot->numJoints(); i++ ){
+        m_robot->joint(i)->q = m_qCurrent.data[i];
+    }
+    // tempolary set root link origin.
+    m_robot->rootLink()->p = hrp::Vector3::Zero();
+
+    /* calc current robot root Posture */
+    hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
+    hrp::Matrix33 senR = sen->link->R * sen->localR;
+    hrp::Matrix33 act_Rs(hrp::rotFromRpy(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y));
+    m_robot->rootLink()->R = act_Rs * (senR.transpose() * m_robot->rootLink()->R);
+    m_robot->calcForwardKinematics(); /* FK on actual joint angle */
+    act_base_rpy = hrp::rpyFromRot(m_robot->rootLink()->R);
+
+    // world_force_ps, world_force_ms
+    calcWorldForceVector();
+
+    // foot base pos
+    hrp::Vector3 act_foot_origin_pos;
+    hrp::Matrix33 act_foot_origin_rot;
+    calcFootOriginCoords(act_foot_origin_pos, act_foot_origin_rot);
+
+    {
+        dlog.act_foot_origin_pos = CONV_HRPVEC3(act_foot_origin_pos);
+    }
+
+    // cog
+    act_cog = m_robot->calcCM();
+    // zmp
+    bool on_ground = calcZMP(act_zmp, act_foot_origin_pos(2));
+    // cogvel
+    calcActCoGVel(act_foot_origin_pos, act_foot_origin_rot);
+    // act_root_pos
+    calcActRootPos(act_foot_origin_pos, act_foot_origin_rot);
+
+    /* save current values for next cycle */
+    prev_act_foot_origin_rot  = act_foot_origin_rot;
+    prev_act_cog              = act_cog;
+    prev_act_cogvel           = act_cogvel;
+    prev_foots_contact_states = foots_contact_states;
+    prev_act_root_pos         = act_root_pos;
+
+    return on_ground;
+};
+
+
+bool PushRecover::checkJointVelocity(void){
+    bool ret = true;
+#if 1
+    for(int i=0; i<m_robot->numJoints(); i++){
+        const double maxq  = m_robot->joint(i)->ulimit;
+        const double minq  = m_robot->joint(i)->llimit;
+        const double maxdq = m_robot->joint(i)->uvlimit;
+        const double mindq = m_robot->joint(i)->lvlimit;
+        if(m_robot->joint(i)->q > maxq){
+            m_robot->joint(i)->q = maxq;
+            ret = false;
+        }
+        if(m_robot->joint(i)->q < minq){
+            m_robot->joint(i)->q = minq;
+            ret = false;
+        }
+        double dq = (m_robot->joint(i)->q - prev_ref_q[i])/m_dt;
+        if(dq > maxdq){
+            dq = maxdq;
+            m_robot->joint(i)->q = m_qCurrent.data[i] + dq*m_dt;
+            ret = false;
+        }
+        if(dq < mindq){
+            dq = mindq;
+            m_robot->joint(i)->q = prev_ref_q[i] + dq*m_dt;
+            ret = false;
+        }
+        m_robot->joint(i)->dq = dq;
+    }
+#endif
+    return ret;
+};
+
+bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop){
+    double diff2;
+    /* mm単位での実root_posとref_root_pos誤差の自乗和で判定 */
+    diff2  = (act_root_pos(0) - prev_ref_basePos(0))*(act_root_pos(0) - prev_ref_basePos(0))*(1000.0*1000.0);
+    diff2 += (act_root_pos(1) - prev_ref_basePos(1))*(act_root_pos(1) - prev_ref_basePos(1))*(1000.0*1000.0);
+
+    if(loop%500==0){
+        const float diff_x = act_root_pos(0) - prev_ref_basePos(0);
+        const float diff_y = act_root_pos(1) - prev_ref_basePos(1);
+        const float diff_z = act_root_pos(2) - (Zc - InitialLfoot_p[2]);
+        const double diff  = sqrt(diff2);
+        std::cout << "[pr] diff=" << diff << "[mm]" << std::endl;
+        std::cout << "[pr] diffv=[" << diff_x << ", " << diff_y << ", " << diff_z << "]" << std::endl;
+    }
+
+    if(diff2>threshould2 && loop%250==0){
+        std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+    }
+
+    return (diff2>threshould2)?true:false;
+};
 
 #define DEBUGP ((m_debugLevel==1 && loop%200==0) || m_debugLevel > 1 )
 RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 {
   bool start_RWG_flag;
   static int loop = 1;
+  struct timeval tv;
+  gettimeofday(&tv,NULL);
+
   if (loop%10000==0){
       std::cout << "[" << m_profile.instance_name<< "] onExecute(" << ec_id << ")" << std::endl;
       //std::cout << "[" << m_profile.instance_name<< "] m_dt=(" << m_dt << ")" << std::endl;
@@ -552,10 +1022,14 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       }
   }
 
+  /* zero clear dlog */
+  memset(&dlog,0,sizeof(SimpleLogger::DataLog));
+
   /* check dataport input */
   {
       bool shw_msg_flag = loop%500==0?true:false;
       //updateInputData(shw_msg_flag);
+      //updateInputData(true);
       updateInputData(false);
   }
   /* End of checking dataport input */
@@ -565,27 +1039,78 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   /* Check if Emergency Stop Flag is active */
   start_RWG_flag = checkEmergencyFlag();
 
+  /* calculate actual zmp, cog, cogvel, poture from joint_angle, force, rpy */
+  bool on_ground = updateToCurrentRobotPose();
+
+  /* calculate estimated cogvel from imu rate */
+  updateEstimatedInputData();
+
+
+  {
+      dlog.act_zmp      = CONV_HRPVEC3(act_zmp);
+      dlog.rel_act_zmp  = CONV_HRPVEC3(rel_act_zmp);
+      dlog.act_cog      = CONV_HRPVEC3(act_cog);
+      dlog.act_root_pos = CONV_HRPVEC3(act_root_pos);
+      dlog.act_contact_state[0] = (float)((uint32_t)ee_params[ee_index_map["lleg"]].act_contact_state);
+      dlog.act_contact_state[0] = (float)((uint32_t)ee_params[ee_index_map["rleg"]].act_contact_state);
+  }
+
   if(current_control_state==PR_READY || current_control_state==PR_BUSY){
-      const float dcomr = 0.1f; /* max 0.4 kurai? */
-      const float dcomx = dcomr * cosf(((float)(loop%360))*3.14159265358939323826433f/180.0f);
-      const float dcomy = dcomr * sinf(((float)(loop%360))*3.14159265358939323826433f/180.0f);
-      const float diff_z = input_basePos(2) - Zc; /* TODO 効果の検証 */
+
+      const double threshould  = 40;
+      const double threshould2 = (threshould*threshould);
+
+      /* check the state */
+      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop);
+
+      const float diff_x = act_root_pos(0) - prev_ref_basePos(0);
+      const float diff_y = act_root_pos(1) - prev_ref_basePos(1);
+      const float diff_z = act_root_pos(2) - (Zc - InitialLfoot_p[2]); /* TODO 効果の検証 */
       const Vec3 x0[] = {
+#if 1
           Vec3( 0.0f,    0.0f, 0.0f ),
+#else
+          Vec3( traj_body_init[0], traj_body_init[1], 0.0f),
+#endif
+#if 1
+          //Vec3( diff_x, diff_y, diff_z ),
           Vec3( 0.0f,    0.0f, diff_z ),
-          Vec3( dcomx,    dcomy, 0.0f )
+#else
+          Vec3( traj_body_init[0],  traj_body_init[1], diff_z),
+#endif
+#if 1
+          Vec3( diff_x * 1.0, diff_y * 1.0, 0.0f)
+#else
+          //Vec3( dcomx,    dcomy, 0.0f )
+          Vec3( 0.0f, 0.0f, 0.0f )
+#endif
       };
 
-      if(start_RWG_flag){
-          std::cout << "[" << m_profile.instance_name << "] Calling StepForward start" << std::endl;
+      /* TODO set rootLink position default value */
+      //m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]);
+      m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
+      /* save current reference rootlink position for checkBodyPosMergin */
+      prev_ref_basePos = m_robot->rootLink()->p;
+
+      //m_robot->rootLink()->p = act_root_pos;にはならない．ここは理想的なposを入れる
+      /* set body_p to m_robot loot link Rotation */
+      //m_robot->rootLink()->R = input_baseRot; /* TODO */
+      m_robot->rootLink()->R = hrp::Matrix33::Identity(); /* TODO */
+
+      if((start_RWG_flag || checkBodyPosflag) && !m_walkingStates.data && current_control_state != PR_BUSY){
+          std::cout << "[" << m_profile.instance_name << "] " << MAKE_CHAR_COLOR_RED << "Calling StepForward start" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
           /* Save Current base position */
-          body_p_at_start = hrp::Vector3(m_robot->rootLink()->p(0),
-                                         m_robot->rootLink()->p(1),
-                                         m_robot->rootLink()->p(2)
-                                         );
+#if 1
+          body_p_at_start = act_world_root_pos;
+          body_p_diff_at_start = hrp::Vector3( diff_x, diff_y, diff_z );
+#else
+          body_p_at_start = act_root_pos;
+#endif
           stpf.start(x0);
           rate_matcher.setCurrentFrame(0);
           current_control_state = PR_BUSY;
+
+          dlog_save_flag = true;
       }
 
       if(current_control_state == PR_BUSY){   /* controller main */
@@ -610,24 +1135,36 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               const float foot_r_pitch = 0.0f;
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                             sf_body_p,
-                                                            InitialLfoot_p + sf_footl_p,
-                                                            InitialRfoot_p + sf_footr_p,
+                                                            InitialLfoot_p + sf_footl_p - default_zmp_offset_l,
+                                                            InitialRfoot_p + sf_footr_p - default_zmp_offset_r,
                                                             foot_l_pitch,
                                                             foot_r_pitch,
                                                             target_joint_angle );
+
+#if 0
               if(rate_matcher.getCurrentFrame()==1){
                   body_p_at_start[2] = body_p[2];
               }
+#endif
 
               for(int i=0;i < 12; i++){
                   m_robot->joint(i)->q = target_joint_angle[i];  /* rad to rad */
               }
 
               /* set body_p to m_robot loot link position */
-              m_robot->rootLink()->p = hrp::Vector3(body_p_at_start(0) + sf_body_p[0],
-                                                    body_p_at_start(1) + sf_body_p[1],
-                                                    body_p_at_start(2));
-                                                    //input_basePos(2));
+#if 1
+              // sf_body_p -= Vec3(body_p_diff_at_start(0),
+              //                   body_p_diff_at_start(1),
+              //                   body_p_diff_at_start(2)
+              //                   );
+              act_world_root_pos = hrp::Vector3(sf_body_p[0] + body_p_at_start(0),
+                                                sf_body_p[1] + body_p_at_start(1),
+                                                sf_body_p[2] + body_p_at_start(2));
+              m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0] + sf_body_p[0],
+                                                    traj_body_init[1] + sf_body_p[1],
+                                                    traj_body_init[2] + InitialLfoot_p[2] + sf_body_p[2]);
+              //m_robot->rootLink()->p = act_world_root_pos;
+#endif
               /* set body_p to m_robot loot link Rotation */
               m_robot->rootLink()->R = input_baseRot; /* TODO */
               /* set Reference ZMP */
@@ -635,26 +1172,42 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               /* calc Reference ZMP relative to base_frame(Loot link)  */
               rel_ref_zmp = m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p);
 
+              { /* set reference force */
+                  const hrp::Vector3 footl_p_ee =
+                      hrp::Vector3(sf_footl_p[0]+InitialLfoot_p[0],
+                                   sf_footl_p[1]+InitialLfoot_p[1],
+                                   sf_footl_p[2]);
+                  const hrp::Vector3 footr_p_ee =
+                      hrp::Vector3(sf_footr_p[0]+InitialRfoot_p[0],
+                                   sf_footr_p[1]+InitialRfoot_p[1],
+                                   sf_footr_p[2]);
+                  double alpha = (ref_zmp - footr_p_ee).norm() / (footr_p_ee - footl_p_ee).norm();
+                  if (alpha>1.0) alpha = 1.0;
+                  if (alpha<0.0) alpha = 0.0;
+                  const double mg = m_robot->totalMass() * 9.80;
+                  ref_force[0](0) = alpha * mg;     /*ref_force right*/
+                  ref_force[1](0) = (1-alpha) * mg; /*ref_force left*/
+              }
               /* set current walking status */
               {
                   /* TODO */
-                  m_contactStates.data[contact_states_index_map["rleg"]] = (abs(sf_footr_p[2])<0.001)?true:false;
-                  m_contactStates.data[contact_states_index_map["lleg"]] = (abs(sf_footl_p[2])<0.001)?true:false;
-                  //std::cout << "contact_state=[" << ((m_contactStates.data[contact_states_index_map["lleg"]])?"true ":"false") << "," << ((m_contactStates.data[contact_states_index_map["rleg"]])?"true ":"false") << "]" << std::endl;
+                  m_contactStates.data[ee_index_map["rleg"]] = (abs(sf_footr_p[2])<0.001)?true:false;
+                  m_contactStates.data[ee_index_map["lleg"]] = (abs(sf_footl_p[2])<0.001)?true:false;
+                  //std::cout << "contact_state=[" << ((m_contactStates.data[ee_index_map["lleg"]])?"true ":"false") << "," << ((m_contactStates.data[ee_index_map["rleg"]])?"true ":"false") << "]" << std::endl;
                   m_walkingStates.data = true;
                   /* controlSwingSupportTime is not used while double support period, 1.0 is neglected */
-                  //m_controlSwingSupportTime.data[contact_states_index_map["rleg"]] = 1.0;
-                  //m_controlSwingSupportTime.data[contact_states_index_map["lleg"]] = 1.0;
+                  //m_controlSwingSupportTime.data[ee_index_map["rleg"]] = 1.0;
+                  //m_controlSwingSupportTime.data[ee_index_map["lleg"]] = 1.0;
               }
 
               const int rwg_len_out = 5000; /* TODO */
               if(rate_matcher.getConvertedFrame()>rwg_len_out){
                   current_control_state = PR_READY;
+                  dlog_save_flag = false;
               }
 
               const unsigned int cf = rate_matcher.getCurrentFrame();
-              if(cf==1 || cf==2 || cf== 2000){
-                  //if(loop%500==0){
+              if(cf==1){
                   std::cout << "[" << m_profile.instance_name << "] pref=" << sf_pref << "  @" << rate_matcher.getCurrentFrame() << "frame" << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] sf_body_p=" << sf_body_p << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] body_p=" << body_p << std::endl;
@@ -662,63 +1215,214 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                   std::cout << "[" << m_profile.instance_name << "] rootLink_p=" << m_robot->rootLink()->p << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] footl_p=" << sf_footl_p << std::endl;
                   std::cout << "[" << m_profile.instance_name << "] footr_p=" << sf_footr_p << std::endl;
-                  std::cout << "[" << m_profile.instance_name << "]=qref[";
-                  for(int i=0;i< 12;i++){
-                      printf("%+3.2lf, ",rad2deg(m_robot->joint(i)->q));
-                  }
-                  printf("]\n");
-                  std::cout << "[" << m_profile.instance_name << "]=q[";
-                  for(int i=0;i< 12;i++){
-                      printf("%+3.2lf, ",rad2deg(m_qCurrent.data[i]));
-                  }
-                  printf("]\n");
               }
           }else{
               std::cout << "[" << m_profile.instance_name << "] There is no tragectory" << std::endl;
           }
+
+          /* Save log */
+          {
+              dlog.sf_pref    = CONV_VEC3(sf_pref);
+              dlog.sf_body_p  = CONV_VEC3(sf_body_p);
+              dlog.sf_footl_p = CONV_VEC3(sf_footl_p);
+              dlog.sf_footr_p = CONV_VEC3(sf_footr_p);
+          }
+
       }else if(current_control_state == PR_READY){
           /* set current walking status */
-          m_contactStates.data[contact_states_index_map["rleg"]] = true;
-          m_contactStates.data[contact_states_index_map["lleg"]] = true;
+          m_contactStates.data[ee_index_map["rleg"]] = true;
+          m_contactStates.data[ee_index_map["lleg"]] = true;
           m_walkingStates.data = false;
           /* controlSwingSupportTime is not used while double support period, 1.0 is neglected */
-          m_controlSwingSupportTime.data[contact_states_index_map["rleg"]] = 1.0;
-          m_controlSwingSupportTime.data[contact_states_index_map["lleg"]] = 1.0;
+          m_controlSwingSupportTime.data[ee_index_map["rleg"]] = 1.0;
+          m_controlSwingSupportTime.data[ee_index_map["lleg"]] = 1.0;
+
+          /* calc Reference ZMP relative to base_frame(Loot link)  */
+          const hrp::Vector3 default_zmp_offset(default_zmp_offset_l[0],default_zmp_offset_l[1],default_zmp_offset_l[2]);
+          rel_ref_zmp = (m_robot->rootLink()->R.transpose() * ((-1.0) * m_robot->rootLink()->p)) - default_zmp_offset;
+
+          for(int i=0;i<m_robot->numJoints(); i++){
+              double diff = ready_joint_angle[i] - prev_ref_q[i];
+              const double maxdiff = 0.05;
+              if(diff>deg2rad( maxdiff)) diff = deg2rad( maxdiff);
+              if(diff<deg2rad(-maxdiff)) diff = deg2rad(-maxdiff);
+              m_robot->joint(i)->q = diff + prev_ref_q[i];
+          }
+
+          const double mg2 = m_robot->totalMass() * (9.80 * 0.5);
+          ref_force[ee_index_map["rleg"]](0) = mg2; /*ref_force right*/
+          ref_force[ee_index_map["lleg"]](0) = mg2; /*ref_force left*/
           //m_sbpCogOffsetOut.write();
       }
+
+      /* Finally set rootlink pos to world */
+      m_robot->rootLink()->p = act_world_root_pos;
+
   }else if(current_control_state == PR_IDLE){
       for ( int i = 0; i < m_robot->numJoints(); i++ ) {
           m_robot->joint(i)->q = m_qRef.data[i]; /* pass through qRefIn joint angle */
       }
       m_robot->rootLink()->p = input_basePos;
       m_robot->rootLink()->R = input_baseRot;
+
+      ref_force[0](0) = m_ref_force[0].data[0]; /*ref_force right*/
+      ref_force[1](0) = m_ref_force[1].data[0]; /*ref_force left*/
+  }else { /* Transition state */
+      for ( int i = 0; i < m_robot->numJoints(); i++ ) {
+          m_robot->joint(i)->q = m_qCurrent.data[i];
+      }
+      m_robot->rootLink()->p = input_basePos;
+      m_robot->rootLink()->R = input_baseRot;
   }
 
+  m_robot->calcForwardKinematics(); /* FK on target joint angle */
+  ref_cog = m_robot->calcCM();
 
-  m_robot->calcForwardKinematics();
+#if 0
+  if(loop%12000==250) std::cout << CLEAR_CONSOLE << std::endl;
+  if(loop%300==1){
+      //std::cout << CLEAR_CONSOLE << MOVE_CURSOL << std::endl;
+      std::cout << MOVE_CURSOL << std::endl;
+      std::cout << "[pr] " << MAKE_CHAR_COLOR_GREEN << "SHOW STATE"<< MAKE_CHAR_COLOR_DEFAULT << std::endl;
+      std::cout << "[" << m_profile.instance_name << "] rootLink_p=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_robot->rootLink()->p(0), m_robot->rootLink()->p(1), m_robot->rootLink()->p(2));
+      std::cout << "[" << m_profile.instance_name << "] act_zmp=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", act_zmp(0), act_zmp(1), act_zmp(2));
+      std::cout << "[" << m_profile.instance_name << "] rel_act_zmp=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", rel_act_zmp(0), rel_act_zmp(1), rel_act_zmp(2));
+      std::cout << "[" << m_profile.instance_name << "] rel_ref_zmp=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", rel_ref_zmp(0), rel_ref_zmp(1), rel_ref_zmp(2));
+      std::cout << "[" << m_profile.instance_name << "] ref_fource[0]=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", ref_force[0](0), ref_force[0](1), ref_force[0](2));
+      std::cout << "[" << m_profile.instance_name << "] ref_fource[1]=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", ref_force[1](0), ref_force[1](1), ref_force[1](2));
+      std::cout << "[" << m_profile.instance_name << "] act_rtp=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", act_root_pos(0), act_root_pos(1), act_root_pos(2));
+      std::cout << "[" << m_profile.instance_name << "] act_cog=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", act_cog(0), act_cog(1), act_cog(2));
+     std::cout << "[" << m_profile.instance_name << "] ref_cog=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", ref_cog(0), ref_cog(1), ref_cog(2));
+      std::cout << "[" << m_profile.instance_name << "] act_cogvel=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", act_cogvel(0), act_cogvel(1), act_cogvel(2));
+      std::cout << "[" << m_profile.instance_name << "] est_cogvel=[";
+      printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", est_cogvel(0), est_cogvel(1), est_cogvel(2));
 
-
-  // reference acceleration
-  hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
-  if (sen != NULL) {
-      hrp::Vector3 imu_sensor_pos = sen->link->p + sen->link->R * sen->localPos;
-      hrp::Vector3 imu_sensor_vel = (imu_sensor_pos - prev_imu_sensor_pos)/m_dt;
-      // convert to imu sensor local acceleration
-      hrp::Vector3 acc = (sen->link->R * sen->localR).transpose() * (imu_sensor_vel - prev_imu_sensor_vel)/m_dt;
-      m_accRef.data.ax = acc(0); m_accRef.data.ay = acc(1); m_accRef.data.az = acc(2);
-      prev_imu_sensor_pos = imu_sensor_pos;
-      prev_imu_sensor_vel = imu_sensor_vel;
+      printf("[pr] contact_st=[");
+      if(m_contactStates.data[ee_index_map["lleg"]]){
+          printf("true , ");
+      }else{
+          printf("false, ");
+      }
+      if(m_contactStates.data[ee_index_map["rleg"]]){
+          printf("true ]\n");
+      }else{
+          printf("false]\n");
+      }
+      printf("[pr] waling_st=[");
+      if(m_walkingStates.data){
+          printf("true ]\n");
+      }else{
+          printf("false]\n");
+      }
+      printf("[pr] swing_tim=[");
+      printf("%+1.1lf, %+1.1lf]\n",
+             m_controlSwingSupportTime.data[ee_index_map["rleg"]],
+             m_controlSwingSupportTime.data[ee_index_map["lleg"]]);
+      printf("[pr] sbpCogoft=[");
+      printf("%+3.4lf, %+3.4lf, %+3.4lf]\n",m_sbpCogOffset.data.x,m_sbpCogOffset.data.y,m_sbpCogOffset.data.z);
+      printf("\n");
+      printf("[pr] target_q=[");
+      for(int i=0;i< 12;i++){
+          printf("%+3.2lf, ",rad2deg(m_robot->joint(i)->q));
+      }
+      printf("]\n");
+      printf("[pr] prev_rfq=[");
+      for(int i=0;i< 12;i++){
+          printf("%+3.2lf, ",rad2deg(prev_ref_q[i]));
+      }
+      printf("]\n");
+      printf("[pr] curren_q=[");
+      for(int i=0;i< 12;i++){
+          printf("%+3.2lf, ",rad2deg(m_qCurrent.data[i]));
+      }
+      printf("]\n");
+      printf("[pr] prev_target_dq=[");
+      for(int i=0;i< 12;i++){
+          printf("%+3.2lf, ",rad2deg(m_robot->joint(i)->dq));
+      }
+      printf("]\n");
   }
+#endif
+#if 0
+  if(!checkJointVelocity()){
+      std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "ERROR Joint Velocity "<< MAKE_CHAR_COLOR_DEFAULT << std::endl;
+      printf("[pr] target_q=[");
+      for(int i=0;i< 12;i++){
+          printf("%+3.2lf, ",rad2deg(m_robot->joint(i)->q));
+      }
+      printf("]\n");
+      printf("[pr] prev_rfq=[");
+      for(int i=0;i< 12;i++){
+          printf("%+3.2lf, ",rad2deg(prev_ref_q[i]));
+      }
+      printf("[pr] curren_q=[");
+      for(int i=0;i< 12;i++){
+          printf("%+3.2lf, ",rad2deg(m_qCurrent.data[i]));
+      }
+      printf("]\n");
+      printf("[pr] target_dq=[");
+      for(int i=0;i< 12;i++){
+          printf("%+3.2lf, ",rad2deg(m_robot->joint(i)->dq));
+      }
+      printf("]\n");
+  }
+#endif
 
   /*==================================================*/
   /* Interpolate Target angle and qRefIn angle        */
   /*==================================================*/
-  setReferenceDataWithInterpolation();
+  setTargetDataWithInterpolation();
+
+  /* Save log */
+  //if(dlog_save_flag || m_walkingStates.data){
+  if(current_control_state==PR_READY || current_control_state==PR_BUSY){
+  //if(true){
+      dlog.frame      = (float)rate_matcher.getCurrentFrame();
+      dlog.loop       = (float)loop;
+      dlog.sectime   = ((float)(tv.tv_sec-stv.tv_sec)) + ((float)(tv.tv_usec - stv.tv_usec)/1000000.0f);
+      for(int i=0;i<12;i++){
+          dlog.act_q[i]  = (float)rad2deg(m_qCurrent.data[i]);
+          dlog.ref_q[i]  = (float)rad2deg(m_robot->joint(i)->q);
+          dlog.ref_dq[i] = (float)rad2deg(m_robot->joint(i)->dq);
+      };
+      dlog.ref_zmp       = CONV_HRPVEC3(ref_zmp);
+      dlog.rel_ref_zmp   = CONV_HRPVEC3(rel_ref_zmp);
+      dlog.ref_base_pos  = CONV_HRPVEC3(m_robot->rootLink()->p);
+      dlog.ref_cog       = CONV_HRPVEC3(ref_cog);
+      for(int i=0;i<6;i++){
+          dlog.act_force_l[i] = (float)m_force[ee_index_map["lleg"]].data[i];
+          dlog.act_force_r[i] = (float)m_force[ee_index_map["rleg"]].data[i];
+          dlog.ref_force_l[i] = (float)m_ref_force[ee_index_map["lleg"]].data[i];
+          dlog.ref_force_r[i] = (float)m_ref_force[ee_index_map["rleg"]].data[i];
+      }
+      dlog.contact_state[0] = (float)((int)m_contactStates.data[ee_index_map["lleg"]]);
+      dlog.contact_state[1] = (float)((int)m_contactStates.data[ee_index_map["rleg"]]);
+      dlog.walking_state    = (float)((int)m_walkingStates.data);
+      dlog.controlSwingSupportTime[0] = (float)m_controlSwingSupportTime.data[ee_index_map["lleg"]];
+      dlog.controlSwingSupportTime[0] = (float)m_controlSwingSupportTime.data[ee_index_map["rleg"]];
+      dlog.sbpCogOffset[0] = m_sbpCogOffset.data.x;
+      dlog.sbpCogOffset[1] = m_sbpCogOffset.data.y;
+      dlog.sbpCogOffset[2] = m_sbpCogOffset.data.z;
+      //slogger->push(dlog);
+      slogger->dump(&dlog);
+  }
 
   /*==================================================*/
   /* Set Target Angle Vector and publish from outport */
   /*==================================================*/
-  setOutputData();
+  const bool shw_debug_msg_outputdata = loop%500==0?true:false;;
+  //setOutputData(shw_debug_msg_outputdata);
+  setOutputData(false);
 
   loop ++;
   return RTC::RTC_OK;
