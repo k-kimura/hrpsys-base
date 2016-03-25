@@ -563,21 +563,10 @@ void PushRecover::setTargetDataWithInterpolation(void){
         default:
             break;
         }
-        /* Set World Frame Reference Position */
-#if 0
-        switch (current_control_state){
-        case PR_TRANSITION_TO_IDLE:
-            act_world_root_pos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * act_world_root_pos;
-            break;
-        case PR_TRANSITION_TO_READY:
-            act_world_root_pos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
-            break;
-        default:
-            break;
-        }
-#endif
+
         /* Set Base Frame Reference Rotation */
         rats::mid_rot(ref_baseRot, transition_interpolator_ratio, input_baseRot, m_robot->rootLink()->R);
+
         /* set relative Reference ZMP */
         rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * rel_ref_zmp;
     }else{
@@ -614,9 +603,6 @@ void PushRecover::setTargetDataWithInterpolation(void){
         prev_imu_sensor_vel = imu_sensor_vel;
     }
 
-
-
-
     /* set reference force */
     {
         const std::string legs_ee_name[2]={"lleg","rleg"};
@@ -633,15 +619,10 @@ void PushRecover::setTargetDataWithInterpolation(void){
 #endif
         }
     }
-
-
-
 }; /* end of setTargetDataWithInterpolation */
 
 void PushRecover::setOutputData(const bool shw_msg_flag){
 #define DEBUG_PRINT(x)  {if(shw_msg_flag) std::cout << "[pr] " << #x << "=" << x << std::endl;}
-#define DEBUG_PRINT_I(x,i)  {if(shw_msg_flag) std::cout << "[pr] " << #x << "[" << i << "]=" << x##[i] << std::endl;}
-
 
     if(shw_msg_flag){
         std::cout << "[pr] "  << __func__ << std::endl;
@@ -652,8 +633,7 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     /*==================================================*/
     for ( int i = 0; i < m_robot->numJoints(); i++ ){
         m_qRef.data[i] = ref_q[i];
-        prev_ref_q[i] = ref_q[i];
-        //m_qRef.data[i] = m_robot->joint(i)->q;
+        prev_ref_q[i]  = ref_q[i];
     }
 
     // basePos
@@ -661,14 +641,14 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     m_basePos.data.y = ref_basePos(1);
     m_basePos.data.z = ref_basePos(2);
     m_basePos.tm = m_qRef.tm;
-    DEBUG_PRINT(ref_basePos);
+    PRINTVEC3(ref_basePos, shw_msg_flag);
     // baseRpy
     hrp::Vector3 baseRpy = hrp::rpyFromRot(ref_baseRot);
     m_baseRpy.data.r = baseRpy(0);
     m_baseRpy.data.p = baseRpy(1);
     m_baseRpy.data.y = baseRpy(2);
     m_baseRpy.tm = m_qRef.tm;
-    DEBUG_PRINT(baseRpy);
+    PRINTVEC3(baseRpy, shw_msg_flag);
 
     // basePose
     m_basePose.data.position.x = m_basePos.data.x;
@@ -684,7 +664,7 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     m_zmp.data.z = rel_ref_zmp(2);
     m_zmp.tm = m_qRef.tm;
     prev_rel_ref_zmp = rel_ref_zmp;
-    DEBUG_PRINT(rel_ref_zmp);
+    PRINTVEC3(rel_ref_zmp, shw_msg_flag);
 
     /* Write to OutPort */
     m_basePosOut.write();
@@ -727,12 +707,9 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
         }
     }
 
-    if(shw_msg_flag){
-        std::cout <<std::endl;
-    }
+    if(shw_msg_flag) printf("\n");
 
 #undef DEBUG_PRINT
-#undef DEBUG_PRINT_I
 };
 
 bool PushRecover::checkEmergencyFlag(void){
@@ -1500,8 +1477,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   /* Set Target Angle Vector and publish from outport */
   /*==================================================*/
   const bool shw_debug_msg_outputdata = loop%500==0?true:false;;
-  //setOutputData(shw_debug_msg_outputdata);
-  setOutputData(false);
+  setOutputData(shw_debug_msg_outputdata);
+  //setOutputData(false);
 
   loop ++;
   return RTC::RTC_OK;
