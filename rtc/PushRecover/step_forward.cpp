@@ -69,7 +69,7 @@ void* StepForward::func(void* arg){
         Vec3 x0_lfirst[3];
         std::copy(self->m_x0, self->m_x0+3, x0_lfirst );
         x0_lfirst[0][1] -= ystep;
-        RWG rwg_lfirst( &environment_lfirst, &params_lfirst, x0_lfirst, 8 ); /* constructor内で評価 */
+        RWG rwg_lfirst( &environment_lfirst, &params_lfirst, x0_lfirst, 8 ); /* constructor内で評価 */ /* 8はiteration num of DIRECT */
 
         Vec3 x0_rfirst[3];
         std::copy(self->m_x0, self->m_x0+3, x0_rfirst );

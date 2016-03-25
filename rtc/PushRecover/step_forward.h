@@ -82,6 +82,11 @@ public:
         m_waitcond.signal( false );
     }
 
+    void reset(void){
+        is_ready = false;
+        gen = NULL;
+    }
+
     ITrajectoryGenerator* getReady(){
         if( is_ready > 0 ){
             _mm_mfence();

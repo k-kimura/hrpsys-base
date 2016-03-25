@@ -16,9 +16,6 @@ const static float Zc = 0.578752;
 static float ready_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.5952, -32.9614, 0.027092,
                                        5.686155e-06,  -0.026751, -39.6337, 72.5952, -32.9614, 0.026727
 };
-/* const float default_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.5952, -32.9614, 0.027092, */
-/*                                        5.686155e-06,  -0.026751, -39.6337, 72.5952, -32.9614, 0.026727 */
-/* }; */
 #else
 /* default joint angle for Zc = 0.620 */
 const static float Zc = 0.620;
@@ -26,16 +23,13 @@ const static float Zc = 0.620;
 static float ready_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.5952, -32.9614, 0.027092,
                                        5.686155e-06,  -0.026751, -39.6337, 72.5952, -32.9614, 0.026727
 };
-/* const float default_joint_angle[12] = {0.0,  -4.968613e-06,  -29.0694,  61.4722,  -32.4028,  4.968613e-06, */
-/*                                        0.0,  -4.140511e-06,  -29.0694,  61.4722,  -32.4028,  4.140511e-06}; */
 #endif
 
+/* traj_body_init のZは足首高さを基準とした倒立振子モデル用の初期値なのでロボットのrootlink初期値として使うときには + foot heightする */
 //const static Vec3 traj_body_init( -0.0586f, 0.0f, Zc - InitialLfoot_p[2]);
-const static Vec3 traj_body_init( -0.02f, 0.0f, Zc - InitialLfoot_p[2]);
+const static Vec3 traj_body_init( -0.04f, 0.0f, Zc - InitialLfoot_p[2]);
 const static Vec3 default_zmp_offset_l(traj_body_init[0],0.0f,0.0f);
 const static Vec3 default_zmp_offset_r(traj_body_init[0],0.0f,0.0f);
-//const static Vec3 traj_body_init( -0.0586f, 0.0f, Zc);
-//const static Vec3 traj_body_init( 0.0f, 0.0f, 0.578752f );
 
 
 inline float rad2deg(const float a){
