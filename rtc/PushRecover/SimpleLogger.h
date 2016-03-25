@@ -72,51 +72,59 @@ public:
     float   walking_state;
     float   controlSwingSupportTime[2];
     float   sbpCogOffset[3];
+    V3      act_cogvel;
+    V3      ref_zmp_modif;
+    V3      ref_basePos_modif;
+    V3      act_world_root_pos;
+    V3      ref_traj_dp;
+    V3      ref_traj_body_dp;
   }PACKING;
 private:
   boost::circular_buffer<DataLog> buf;
   FILE *fp;
   bool logger_en;
+  char filename[256];
 public:
-  SimpleLogger() : buf(5000+200), logger_en(true) {
-    /* Open DataLog file */
-    //char* homedir = getenv("HOME");
-    char* homedir = "/home/leus";
-    char filename[256];
-    sprintf(filename, "%s/%s/%s",homedir,"log","datalog.dat");
-    std::cout << "Opening " << filename << std::endl;
-
-    if((fp=fopen(filename,"w"))==NULL){
-      std::cerr << "Error Cannot Open " << filename << std::endl;
-      logger_en = false;
-    }else{
-      fprintf(fp,"#PushRecover.cpp dataLog\n");
-    }
+  SimpleLogger() : buf(5000+200), logger_en(false) {
   };
   ~SimpleLogger(){
-    DataLog *d = buf.linearize();
+      stopLogging();
+  };
+  bool startLogging(bool time_append){
+      if(!logger_en){
+          /* Open DataLog file */
+          char* homedir = "/home/leus";
+          char timevar[] = "";
+          time_t now = time(NULL);
+          struct tm *pnow = localtime(&now);
+          sprintf(timevar,"%04d%02d%02d%02d%02d%02d",pnow->tm_year+1900, pnow->tm_mon+1, pnow->tm_mday, pnow->tm_hour, pnow->tm_min, pnow->tm_sec);
 
-    if(logger_en){
-      for(int i=0; i<buf.size(); i++,d++){
-        float* pd = (float*)d;
-        for(int j=0; j<(sizeof(DataLog)/sizeof(float)); j++,pd++){
-          fprintf(fp,"%+05.5f",*pd);
-          if(j != (sizeof(DataLog)/sizeof(float))-1){
-            fprintf(fp,", ");
+          if(time_append){
+              sprintf(filename, "%s/%s/%s_%s.dat",homedir,"log","datalog",timevar);
           }else{
-            fprintf(fp,"\n");
+              sprintf(filename, "%s/%s/%s.dat",homedir,"log","datalog");
           }
-        }
-        if(i%100==0){
-          printf(".");
-        }
-      }
-      std::cout << MAKE_CHAR_COLOR_GREEN << "Save DataLog Succeeded" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
-    }else{
-      std::cout << MAKE_CHAR_COLOR_RED << "Cannot Save DataLog" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
-    }
+          std::cout << "Opening " << filename << std::endl;
 
-    fclose(fp);
+          if((fp=fopen(filename,"w"))==NULL){
+              std::cerr << "Error Cannot Open " << filename << std::endl;
+              logger_en = false;
+          }else{
+              fprintf(fp,"#PushRecover.cpp dataLog\n");
+              logger_en = true;
+          }
+      }
+      return logger_en;
+  };
+  bool stopLogging(void){
+      if(logger_en){
+          std::cout << MAKE_CHAR_COLOR_GREEN << "Closing Log file" << MAKE_CHAR_COLOR_DEFAULT << filename << std::endl;
+          fclose(fp);
+      }
+      return true;
+  };
+  bool isRunning(void){
+      return logger_en;
   };
   bool push(const DataLog &din){
     buf.push_back(din);
@@ -125,13 +133,15 @@ public:
   /* DataLogがfloatだけで構成されていてpackされていることを仮定 */
   bool dump(const DataLog *din){
     float* pd = (float*)din;
-    for(int j=0; j<(sizeof(DataLog)/sizeof(float)); j++,pd++){
-      fprintf(fp,"%+05.5f",*pd);
-      if(j != (sizeof(DataLog)/sizeof(float))-1){
-        fprintf(fp,", ");
-      }else{
-        fprintf(fp,"\n");
-      }
+    if(logger_en){
+        for(int j=0; j<(sizeof(DataLog)/sizeof(float)); j++,pd++){
+            fprintf(fp,"%+05.5f",*pd);
+            if(j != (sizeof(DataLog)/sizeof(float))-1){
+                fprintf(fp,", ");
+            }else{
+                fprintf(fp,"\n");
+            }
+        }
     }
   };
 private:

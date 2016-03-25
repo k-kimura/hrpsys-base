@@ -32,6 +32,7 @@
 #include "FrameRateMatcher.h"
 #include "SimpleLogger.h"
 #include <algorithm>
+#include <boost/shared_ptr.hpp>
 
 /* for gettimeofday */
 #include <sys/time.h>
@@ -40,6 +41,8 @@
 // Service implementation headers
 // <rtc-template block="service_impl_h">
 #include "PushRecoverService_impl.h"
+
+#include "Vec3e.h"
 
 // </rtc-template>
 
@@ -135,7 +138,40 @@ public:
     /* Stop push recovery mode */
     bool stopPushRecovery(void);
 
-    QzVec3 test_vec;
+    /* Start push recovery logger */
+    bool startLogging(void);
+
+    /* Stop push recovery logger */
+    bool stopLogging(void);
+
+    template<class T>
+    struct TrajectoryElement {
+        T p;
+        T body_p;
+        T footl_p;
+        T footr_p;
+        T dp;
+        T body_dp;
+        TrajectoryElement(){};
+        template<class U>
+        TrajectoryElement<T>& operator=(const TrajectoryElement<U>& lhs){
+            this->p       = lhs.p;
+            this->body_p  = lhs.body_p;
+            this->footl_p = lhs.footl_p;
+            this->footr_p = lhs.footr_p;
+            this->dp      = lhs.dp;
+            this->body_dp = lhs.body_dp;
+            return *this;
+        };
+        void clear(void){
+            p       = T(0.0,0.0,0.0);
+            body_p  = T(0.0,0.0,0.0);
+            footl_p = T(0.0,0.0,0.0);
+            footr_p = T(0.0,0.0,0.0);
+            dp      = T(0.0,0.0,0.0);
+            body_dp = T(0.0,0.0,0.0);
+        };
+    };
 
 protected:
     // Configuration variable declaration
@@ -216,6 +252,7 @@ protected:
 
 private:
     double m_dt;
+    double m_dt_i;
     coil::Mutex m_mutex;
     std::map<std::string, hrp::Vector3> abs_forces, abs_moments, abs_ref_forces, abs_ref_moments;
     hrp::BodyPtr m_robot;
@@ -243,12 +280,15 @@ private:
 
     /* Reference Data buffer */
     double        *ref_q,   *prev_ref_q;
-    hrp::Vector3  rel_ref_zmp; // ref zmp in base frame
-    hrp::Vector3  ref_zmp, ref_basePos, prev_ref_basePos;
-    hrp::Matrix33 ref_baseRot;
-    hrp::Vector3  prev_imu_sensor_pos, prev_imu_sensor_vel;
-    hrp::Vector3  ref_cog;
-    hrp::Vector3  ref_force[2];
+    hrp::Vector3  rel_ref_zmp, prev_rel_ref_zmp; // ref zmp in base frame
+    boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > ref_zmp_modif_filter;
+    boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > ref_basePos_modif_filter;
+    hrp::Vector3  ref_zmp, ref_basePos, prev_ref_zmp, prev_ref_basePos, ref_zmp_modif, ref_basePos_modif;
+    hrp::Matrix33     ref_baseRot;
+    hrp::Vector3      prev_imu_sensor_pos, prev_imu_sensor_vel;
+    hrp::Vector3      ref_cog;
+    hrp::Vector3      ref_force[2];
+    TrajectoryElement<hrp::Vector3e>  prev_ref_traj;
 
     interpolator *transition_interpolator;
     double transition_interpolator_ratio;
@@ -294,7 +334,9 @@ private:
                        const hrp::Matrix33 act_foot_origin_rot);
     bool updateToCurrentRobotPose(void);
     bool checkJointVelocity(void);
-    bool checkBodyPosMergin(const double threshould2, const int loop);
+    bool checkBodyPosMergin(const double threshould2, const int loop, const bool mask = false);
+    bool controlBodyCompliance(void);
+    void trajectoryReset(void);
     /* ============================================== */
     /* checkEmergencyFlag()                           */
     /* out:                                           */
@@ -304,16 +346,27 @@ private:
     /* ============================================== */
     bool checkEmergencyFlag(void);
 
+
+    //boost::shared_ptr<SimpleLogger> slogger;
     SimpleLogger *slogger;
     SimpleLogger::DataLog  dlog;
     bool                   dlog_save_flag;
     struct timeval         stv; /* time of OnInitialized */
 };
 
-
 extern "C"
 {
     void PushRecoverInit(RTC::Manager* manager);
 };
 
+#define PRINTVEC3(v,f) if( f ){                \
+    printf("%s=[", #v );       \
+    for(int i=0;i<3;i++){\
+        printf("%+3.3lf",(double) v##[i]);         \
+        if(i!=2){printf(", ");}                 \
+        else{printf("]\n");}                    \
+    }                                           \
+        }
+//#undef PRINTVEC3
+//#define PRINTVEC3(v,f) printf("%s", #v )
 #endif // PUSHRECOVER_H

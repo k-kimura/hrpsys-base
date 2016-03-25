@@ -33,6 +33,16 @@ CORBA::Boolean PushRecoverService_impl::stopPushRecovery()
 	return m_pushrecover->stopPushRecovery();
 };
 
+CORBA::Boolean PushRecoverService_impl::startLogging()
+{
+	return m_pushrecover->startLogging();
+};
+
+CORBA::Boolean PushRecoverService_impl::stopLogging()
+{
+	return m_pushrecover->stopLogging();
+};
+
 void PushRecoverService_impl::pushrecover(PushRecover *i_pushrecover){
 	m_pushrecover = i_pushrecover;
 };

@@ -20,6 +20,8 @@ public:
     CORBA::Boolean emergencyStop();
     CORBA::Boolean startPushRecovery();
     CORBA::Boolean stopPushRecovery();
+    CORBA::Boolean startLogging();
+    CORBA::Boolean stopLogging();
     //
     void pushrecover(PushRecover *i_pushrecover);
 private:
