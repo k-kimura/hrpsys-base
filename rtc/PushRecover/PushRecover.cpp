@@ -1001,15 +1001,15 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
     diff2  = (act_root_pos(0) - prev_ref_basePos(0))*(act_root_pos(0) - prev_ref_basePos(0))*(1000.0*1000.0);
     diff2 += (act_root_pos(1) - prev_ref_basePos(1))*(act_root_pos(1) - prev_ref_basePos(1))*(1000.0*1000.0);
 #else /* 動いていないとき、act_root_posはdefault_zmp_offsetだけ動いているはずで、rel_ref_zmpは0,0を示すはずだからact_root_posを使うのではなく,act_zmpを使うのが正しい? */
-    diff2  = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*(act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)));
-    diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)));
+    diff2  = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*(act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0))) * (1000.0*1000.0);
+    diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1))) * (1000.0*1000.0);
 #endif
 
     if(loop%1000==0){
     //if(0){
-        const float diff_x = act_root_pos(0) - prev_rel_ref_zmp(0);
-        const float diff_y = act_root_pos(1) - prev_rel_ref_zmp(1);
-        const float diff_z = act_root_pos(2) - Zc;
+        const float diff_x = (act_root_pos(0) - prev_rel_ref_zmp(0))*1000.0;
+        const float diff_y = (act_root_pos(1) - prev_rel_ref_zmp(1))*1000.0;
+        const float diff_z = (act_root_pos(2) - Zc) * 1000.0;
         const double diff  = sqrt(diff2);
         std::cout << "[pr] diff=" << diff << "[mm]" << std::endl;
         std::cout << "[pr] diffv=[" << diff_x << ", " << diff_y << ", " << diff_z << "]" << std::endl;
@@ -1132,7 +1132,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   controlBodyCompliance();
 
   if(current_control_state==PR_READY || current_control_state==PR_BUSY){
-      const double threshould  = 30;
+      const double threshould  = 20;
       const double threshould2 = (threshould*threshould);
 
       /* check the state */
