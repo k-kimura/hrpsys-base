@@ -583,10 +583,10 @@ void PushRecover::setTargetDataWithInterpolation(void){
         /* set relative Reference ZMP */
         switch (current_control_state){
         case PR_TRANSITION_TO_IDLE:
-            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0], 0.0f, -Zc);
+            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(0.0f, 0.0f, -Zc);
             break;
         case PR_TRANSITION_TO_READY:
-            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0], 0.0f, -Zc);
+            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(0.0f, 0.0f, -Zc);
             break;
         default:
             break;
@@ -985,8 +985,8 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
     diff2  = (act_root_pos(0) - prev_ref_basePos(0))*(act_root_pos(0) - prev_ref_basePos(0))*(1000.0*1000.0);
     diff2 += (act_root_pos(1) - prev_ref_basePos(1))*(act_root_pos(1) - prev_ref_basePos(1))*(1000.0*1000.0);
 #else /* 動いていないとき、act_root_posはdefault_zmp_offsetだけ動いているはずで、rel_ref_zmpは0,0を示すはずだからact_root_posを使うのではなく,act_zmpを使うのが正しい? */
-    diff2  = (act_root_pos(0) - prev_rel_ref_zmp(0))*(act_root_pos(0) - prev_rel_ref_zmp(0))*(1000.0*1000.0);
-    diff2 += (act_root_pos(1) - prev_rel_ref_zmp(1))*(act_root_pos(1) - prev_rel_ref_zmp(1))*(1000.0*1000.0);
+    diff2  = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*(act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)));
+    diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)));
 #endif
 
     //if(loop%500==0){
