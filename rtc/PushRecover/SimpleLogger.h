@@ -86,40 +86,41 @@ private:
   char filename[256];
 public:
   SimpleLogger() : buf(5000+200), logger_en(false) {
+      /* Open DataLog file */
+      const bool time_append = true;
+      char* homedir = "/home/leus";
+      char timevar[] = "";
+      time_t now = time(NULL);
+      struct tm *pnow = localtime(&now);
+      sprintf(timevar,"%04d%02d%02d%02d%02d%02d",pnow->tm_year+1900, pnow->tm_mon+1, pnow->tm_mday, pnow->tm_hour, pnow->tm_min, pnow->tm_sec);
+
+      if(time_append){
+          sprintf(filename, "%s/%s/%s_%s.dat",homedir,"log","datalog",timevar);
+      }else{
+          sprintf(filename, "%s/%s/%s.dat",homedir,"log","datalog");
+      }
+      std::cout << "Opening " << filename << std::endl;
+
+      if((fp=fopen(filename,"w"))==NULL){
+          std::cerr << "Error Cannot Open " << filename << std::endl;
+      }else{
+          fprintf(fp,"#PushRecover.cpp dataLog\n");
+      }
   };
   ~SimpleLogger(){
       stopLogging();
   };
   bool startLogging(bool time_append){
       if(!logger_en){
-          /* Open DataLog file */
-          char* homedir = "/home/leus";
-          char timevar[] = "";
-          time_t now = time(NULL);
-          struct tm *pnow = localtime(&now);
-          sprintf(timevar,"%04d%02d%02d%02d%02d%02d",pnow->tm_year+1900, pnow->tm_mon+1, pnow->tm_mday, pnow->tm_hour, pnow->tm_min, pnow->tm_sec);
-
-          if(time_append){
-              sprintf(filename, "%s/%s/%s_%s.dat",homedir,"log","datalog",timevar);
-          }else{
-              sprintf(filename, "%s/%s/%s.dat",homedir,"log","datalog");
-          }
-          std::cout << "Opening " << filename << std::endl;
-
-          if((fp=fopen(filename,"w"))==NULL){
-              std::cerr << "Error Cannot Open " << filename << std::endl;
-              logger_en = false;
-          }else{
-              fprintf(fp,"#PushRecover.cpp dataLog\n");
-              logger_en = true;
-          }
+          logger_en = true;
       }
       return logger_en;
   };
   bool stopLogging(void){
       if(logger_en){
-          std::cout << MAKE_CHAR_COLOR_GREEN << "Closing Log file" << MAKE_CHAR_COLOR_DEFAULT << filename << std::endl;
-          fclose(fp);
+          //std::cout << MAKE_CHAR_COLOR_GREEN << "Closing Log file" << MAKE_CHAR_COLOR_DEFAULT << filename << std::endl;
+          //fclose(fp);
+          logger_en = false;
       }
       return true;
   };

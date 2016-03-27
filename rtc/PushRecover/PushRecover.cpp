@@ -732,6 +732,9 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
                    m_ref_force[1].data[0],
                    m_ref_force[1].data[1],
                    m_ref_force[1].data[2]);
+            printf("[pr] sbpCogoft=[");
+            printf("%+3.4lf, %+3.4lf, %+3.4lf]\n",m_sbpCogOffset.data.x,m_sbpCogOffset.data.y,m_sbpCogOffset.data.z);
+            printf("\n");
         }
     }
 
@@ -1539,7 +1542,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   /* Set Target Angle Vector and publish from outport */
   /*==================================================*/
   //const bool shw_debug_msg_outputdata = loop%500==0?true:false;;
-  const bool shw_debug_msg_outputdata = ((loop%2000==0) || ((loop%20==0) && (current_control_state == PR_TRANSITION_TO_READY || current_control_state == PR_TRANSITION_TO_IDLE)));
+  const bool shw_debug_msg_outputdata = ((loop%1000==0) || ((loop%20==0) && (current_control_state == PR_TRANSITION_TO_READY || current_control_state == PR_TRANSITION_TO_IDLE)));
   setOutputData(shw_debug_msg_outputdata);
   //setOutputData(false);
 
