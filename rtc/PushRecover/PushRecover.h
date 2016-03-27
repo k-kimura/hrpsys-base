@@ -258,6 +258,7 @@ private:
     hrp::BodyPtr m_robot;
     unsigned int m_debugLevel;
     bool emergencyStopReqFlag;
+    int loop;
 
     /* Input data buffer */
     hrp::Vector3 input_zmp, input_basePos;

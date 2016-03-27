@@ -208,6 +208,15 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   // rleg,TARGET_LINK,BASE_LINK
   coil::vstring end_effectors_str = coil::split(prop["end_effectors"], ",");
   const size_t prop_num = 10;
+
+#if 0
+  std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << std::endl;
+  for(int k=0; k<end_effectors_str.size(); k++){
+      std::cout << "[pr] eeprop[" << k << "]" << end_effectors_str[k] << std::endl;
+  }
+  std::cout << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+#endif
+
   if (end_effectors_str.size() > 0) {
       const size_t num = end_effectors_str.size()/prop_num;
       /* Resize ee_params vector */
@@ -217,13 +226,16 @@ RTC::ReturnCode_t PushRecover::onInitialize()
 
       for (size_t i = 0; i < num; i++) {
           std::string ee_name, ee_target, ee_base;
-          coil::stringTo(ee_name, end_effectors_str[i*prop_num].c_str());
+          coil::stringTo(ee_name,   end_effectors_str[i*prop_num].c_str());
           coil::stringTo(ee_target, end_effectors_str[i*prop_num+1].c_str());
-          coil::stringTo(ee_base, end_effectors_str[i*prop_num+2].c_str());
+          coil::stringTo(ee_base,   end_effectors_str[i*prop_num+2].c_str());
           hrp::Vector3 ee_localp;
           for (size_t j = 0; j < 3; j++) {
-              coil::stringTo(ee_localp(i), end_effectors_str[i*prop_num+3+j].c_str());
+              coil::stringTo(ee_localp(j), end_effectors_str[i*prop_num+3+j].c_str());
           }
+          printf("[pr] oninitialize ee_localp:\n");
+          std::cout << "[pr] " << ee_name << ": " << ee_target << ": " << std::endl;
+          PRINTVEC3(ee_localp,true);
           double tmp_q[4];
           for (int j = 0; j < 4; j++ ) {
               coil::stringTo(tmp_q[j], end_effectors_str[i*prop_num+6+j].c_str());
@@ -334,8 +346,6 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   act_base_rpy      = hrp::Vector3::Zero();
   ref_zmp           = hrp::Vector3::Zero();
   prev_ref_zmp      = hrp::Vector3::Zero();
-  rel_ref_zmp       = hrp::Vector3::Zero();
-  prev_rel_ref_zmp  = hrp::Vector3::Zero();
   ref_basePos       = hrp::Vector3::Zero();
   ref_zmp_modif     = hrp::Vector3::Zero();
   ref_basePos_modif = hrp::Vector3::Zero();
@@ -343,6 +353,8 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   prev_act_foot_origin_rot = hrp::Matrix33::Identity();
   input_baseRot            = hrp::Matrix33::Identity();
   ref_baseRot              = hrp::Matrix33::Identity();
+
+  loop = 1;
 
   if(m_robot->numJoints()!=12){
       std::cout << "[" << m_profile.instance_name << "] number of joint is expected 12." << std::endl;
@@ -515,6 +527,7 @@ void PushRecover::setTargetDataWithInterpolation(void){
     if (!is_transition_interpolator_empty) {
         /* Interpolation is currently working */
         transition_interpolator->get(&transition_interpolator_ratio, true);
+        //std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "transition_ratio=" << transition_interpolator_ratio << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     } else {
         /* Interpolation is not currently working */
         transition_interpolator_ratio = 1.0; /* use controller output */
@@ -568,7 +581,16 @@ void PushRecover::setTargetDataWithInterpolation(void){
         rats::mid_rot(ref_baseRot, transition_interpolator_ratio, input_baseRot, m_robot->rootLink()->R);
 
         /* set relative Reference ZMP */
-        rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * rel_ref_zmp;
+        switch (current_control_state){
+        case PR_TRANSITION_TO_IDLE:
+            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0], 0.0f, -Zc);
+            break;
+        case PR_TRANSITION_TO_READY:
+            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0], 0.0f, -Zc);
+            break;
+        default:
+            break;
+        }
     }else{
         for ( int i = 0; i < m_robot->numJoints(); i++ ) {
             ref_q[i] = m_robot->joint(i)->q;
@@ -631,9 +653,15 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     /*==================================================*/
     /* Set Target Angle Vector and publish from outport */
     /*==================================================*/
+    if(shw_msg_flag) printf("[pr] q=[");
     for ( int i = 0; i < m_robot->numJoints(); i++ ){
         m_qRef.data[i] = ref_q[i];
         prev_ref_q[i]  = ref_q[i];
+        if(shw_msg_flag) printf("%+3.1lf",rad2deg(ref_q[i]));
+        if(shw_msg_flag && (i==m_robot->numJoints()-1)){ printf("]\n");
+        }else{
+            if(shw_msg_flag) printf(", ");
+        }
     }
 
     // basePos
@@ -766,9 +794,20 @@ void PushRecover::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matr
   hrp::Vector3 ex = hrp::Vector3::UnitX();
   const std::string legs_ee_name[2]={"lleg","rleg"};
   for (size_t i = 0; i < 2; i++) {
-      const int eei = ee_index_map[legs_ee_name[i]];
-      hrp::Link* target = m_robot->link(ee_params[eei].ee_target);
-      leg_c[eei].pos = target->p;
+      /* EndEffector pos (足平中心位置) 具体的には (ROBOT).confを参照 */
+      const int           eei = ee_index_map[legs_ee_name[i]];
+      hrp::Link*       target = m_robot->link(ee_params[eei].ee_target);
+      const hrp::Vector3  eep = target->p + target->R * ee_params[eei].ee_localp;
+#if 0
+      if(loop%1500==0){
+          PRINTVEC3(target->p, true);
+          PRINTVEC3(ee_params[eei].ee_localp,true);
+          PRINTVEC3(eep, true);
+          std::cout << "[pr] tartget->R=" << std::endl << target->R << std::endl;
+      };
+#endif
+
+      leg_c[eei].pos = eep;
       hrp::Vector3 xv1(target->R * ex);
       xv1(2)=0.0;
       xv1.normalize();
@@ -942,16 +981,25 @@ bool PushRecover::checkJointVelocity(void){
 bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, const bool mask){
     double diff2;
     /* mm単位での実root_posとref_root_pos誤差の自乗和で判定 */
+#if 0
     diff2  = (act_root_pos(0) - prev_ref_basePos(0))*(act_root_pos(0) - prev_ref_basePos(0))*(1000.0*1000.0);
     diff2 += (act_root_pos(1) - prev_ref_basePos(1))*(act_root_pos(1) - prev_ref_basePos(1))*(1000.0*1000.0);
+#else /* 動いていないとき、act_root_posはdefault_zmp_offsetだけ動いているはずで、rel_ref_zmpは0,0を示すはずだからact_root_posを使うのではなく,act_zmpを使うのが正しい? */
+    diff2  = (act_root_pos(0) - prev_rel_ref_zmp(0))*(act_root_pos(0) - prev_rel_ref_zmp(0))*(1000.0*1000.0);
+    diff2 += (act_root_pos(1) - prev_rel_ref_zmp(1))*(act_root_pos(1) - prev_rel_ref_zmp(1))*(1000.0*1000.0);
+#endif
 
-    if(loop%500==0){
-        const float diff_x = act_root_pos(0) - prev_ref_basePos(0);
-        const float diff_y = act_root_pos(1) - prev_ref_basePos(1);
-        const float diff_z = act_root_pos(2) - (Zc - InitialLfoot_p[2]);
+    //if(loop%500==0){
+    if(0){
+        const float diff_x = act_root_pos(0) - prev_rel_ref_zmp(0);
+        const float diff_y = act_root_pos(1) - prev_rel_ref_zmp(1);
+        const float diff_z = act_root_pos(2) - Zc;
         const double diff  = sqrt(diff2);
         std::cout << "[pr] diff=" << diff << "[mm]" << std::endl;
         std::cout << "[pr] diffv=[" << diff_x << ", " << diff_y << ", " << diff_z << "]" << std::endl;
+        PRINTVEC3(act_root_pos, true);
+        PRINTVEC3(prev_ref_basePos, true);
+        PRINTVEC3(prev_rel_ref_zmp, true);
     }
 
     if(diff2>threshould2 && loop%250==0){
@@ -989,6 +1037,10 @@ void PushRecover::trajectoryReset(void){
                                         traj_body_init[1],
                                         traj_body_init[2] + InitialLfoot_p[2]
                                         );
+
+    rel_ref_zmp       = hrp::Vector3(traj_body_init[0], 0.0f, -prev_ref_basePos[2]);
+    prev_rel_ref_zmp  = rel_ref_zmp;
+
     prev_ref_traj.clear();
 }
 
@@ -996,7 +1048,6 @@ void PushRecover::trajectoryReset(void){
 RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 {
   bool start_RWG_flag;
-  static int loop = 1;
   struct timeval tv;
   gettimeofday(&tv,NULL);
 
@@ -1103,7 +1154,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #endif
       };
 
-#if 1
+#if 0
       PRINTVEC3(x0[0], (loop%500==0));
       PRINTVEC3(x0[1], (loop%500==0));
       PRINTVEC3(x0[2], (loop%500==0));
@@ -1162,10 +1213,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           ref_traj.dp      = (ref_traj.p      - ((Vec3e)prev_ref_traj.p))      * m_dt_i;
           ref_traj.body_dp = (ref_traj.body_p - ((Vec3e)prev_ref_traj.body_p)) * m_dt_i;
       }
-      /* todo */
       prev_ref_traj = ref_traj;
 
-#if 1
+
 
       {
           /* todo : check the continuity of act_world_root_pos */
@@ -1177,17 +1227,18 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0] + ref_traj.body_p[0],
                                                 traj_body_init[1] + ref_traj.body_p[1],
                                                 traj_body_init[2] + InitialLfoot_p[2] + ref_traj.body_p[2]);
+#if 0
           if(loop%500==0)printf("[pr] todo pos\n");
           PRINTVEC3(act_world_root_pos,(loop%500==0));
           PRINTVEC3(m_robot->rootLink()->p,(loop%500==0));
-
+#endif
           /* set body_p to m_robot loot link Rotation */
           m_robot->rootLink()->R = input_baseRot; /* TODO */
 
           /* calc Reference ZMP relative to base_frame(Loot link)  */
           const hrp::Vector3 default_zmp_offset(default_zmp_offset_l[0],default_zmp_offset_l[1],default_zmp_offset_l[2]);
-          ref_zmp     = hrp::Vector3(ref_traj.p[0],ref_traj.p[1],ref_traj.p[2]) + ref_zmp_modif;
-          rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) - default_zmp_offset;
+          ref_zmp     = hrp::Vector3(ref_traj.p[0],ref_traj.p[1],ref_traj.p[2]) + ref_zmp_modif + default_zmp_offset;
+          rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p));
       }
 
 
@@ -1201,17 +1252,27 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
           if(current_control_state == PR_BUSY){   /* controller main */
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
-                                                            ref_traj.body_p,
+                                                            body_p_default_offset + ref_traj.body_p,
+#if 0
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
                                                             InitialRfoot_p + ref_traj.footr_p - default_zmp_offset_r,
+#else
+                                                            InitialLfoot_p + ref_traj.footl_p,
+                                                            InitialRfoot_p + ref_traj.footr_p,
+#endif
                                                             foot_l_pitch,
                                                             foot_r_pitch,
                                                             target_joint_angle );
           }else if(current_control_state == PR_READY){
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
-                                                            ref_traj.body_p,
+                                                            body_p_default_offset + ref_traj.body_p,
+#if 0
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
                                                             InitialRfoot_p + ref_traj.footr_p - default_zmp_offset_r,
+#else
+                                                            InitialLfoot_p + ref_traj.footl_p,
+                                                            InitialRfoot_p + ref_traj.footr_p,
+#endif
                                                             foot_l_pitch,
                                                             foot_r_pitch,
                                                             target_joint_angle );
@@ -1304,6 +1365,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       /* Finally set rootlink pos to world */
       m_robot->rootLink()->p = act_world_root_pos;
 
+#if 0
       if(loop%500==0)printf("[pr] todo finally\n");
       PRINTVEC3(act_world_root_pos,(loop%500==0));
       PRINTVEC3(m_robot->rootLink()->p,(loop%500==0));
@@ -1403,7 +1465,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       printf("]\n");
   }
 #endif
-#if 1
+#if 0
   if((!checkJointVelocity()) && loop%20==0){
       std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "ERROR Joint Velocity "<< MAKE_CHAR_COLOR_DEFAULT << std::endl;
       printf("[pr] target_q=[");
@@ -1476,7 +1538,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   /*==================================================*/
   /* Set Target Angle Vector and publish from outport */
   /*==================================================*/
-  const bool shw_debug_msg_outputdata = loop%500==0?true:false;;
+  //const bool shw_debug_msg_outputdata = loop%500==0?true:false;;
+  const bool shw_debug_msg_outputdata = ((loop%2000==0) || ((loop%20==0) && (current_control_state == PR_TRANSITION_TO_READY || current_control_state == PR_TRANSITION_TO_IDLE)));
   setOutputData(shw_debug_msg_outputdata);
   //setOutputData(false);
 
