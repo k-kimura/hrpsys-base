@@ -538,6 +538,11 @@ void PushRecover::setTargetDataWithInterpolation(void){
             trajectoryReset();
             stpf.reset();
 
+            /* Set Initial Base Frame Reference Position */
+            m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
+            /* Set Initial Base Frame Reference Rotation */
+            //m_robot->rootLink()->R = 
+
             /* Transition to state PR_READY needs to set default values */
             for ( int i = 0; i < m_robot->numJoints(); i++ ) {
                 m_robot->joint(i)->q = ready_joint_angle[i];
