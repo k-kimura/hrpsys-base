@@ -28,6 +28,9 @@ static float ready_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.595
 /* traj_body_init のZは足首高さを基準とした倒立振子モデル用の初期値なのでロボットのrootlink初期値として使うときには + foot heightする */
 //const static Vec3 traj_body_init( -0.0586f, 0.0f, Zc - InitialLfoot_p[2]);
 const static Vec3 traj_body_init( -0.04f, 0.0f, Zc - InitialLfoot_p[2]);
+const static Vec3 body_p_default_offset(traj_body_init[0], traj_body_init[1], 0.0f);
+//const static Vec3 default_zmp_offset_l(0.0f, 0.0f, 0.0f);
+//const static Vec3 default_zmp_offset_r(0.0f, 0.0f, 0.0f);
 const static Vec3 default_zmp_offset_l(traj_body_init[0],0.0f,0.0f);
 const static Vec3 default_zmp_offset_r(traj_body_init[0],0.0f,0.0f);
 
