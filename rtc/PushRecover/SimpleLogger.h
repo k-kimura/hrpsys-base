@@ -85,8 +85,10 @@ private:
   bool logger_en;
   char filename[256];
 public:
-  SimpleLogger() : buf(5000+200), logger_en(false) {
+ SimpleLogger() : buf(5000+200), logger_en(false) {
+      std::cout << MAKE_CHAR_COLOR_RED << "SimpleLogger()" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
       /* Open DataLog file */
+#if 0
       const bool time_append = true;
       char* homedir = "/home/leus";
       char timevar[] = "";
@@ -100,6 +102,10 @@ public:
           sprintf(filename, "%s/%s/%s.dat",homedir,"log","datalog");
       }
       std::cout << "Opening " << filename << std::endl;
+#else
+      char* homedir = "/home/leus";
+      sprintf(filename, "%s/%s/%s.dat",homedir,"log","datalog");
+#endif
 
       if((fp=fopen(filename,"w"))==NULL){
           std::cerr << "Error Cannot Open " << filename << std::endl;
