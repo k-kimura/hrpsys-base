@@ -306,7 +306,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       const float foot_l_pitch = 0.0f;
       const float foot_r_pitch = 0.0f;
       _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
-                                                    Vec3(traj_body_init[0],traj_body_init[1],0.0f),
+                                                    body_p_default_offset,
                                                     InitialLfoot_p,
                                                     InitialRfoot_p,
                                                     foot_l_pitch,
@@ -530,9 +530,9 @@ void PushRecover::setTargetDataWithInterpolation(void){
         //std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "transition_ratio=" << transition_interpolator_ratio << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     } else {
         /* Interpolation is not currently working */
-        transition_interpolator_ratio = 1.0; /* use controller output */
         if(current_control_state == PR_TRANSITION_TO_READY){
             current_control_state = PR_READY;
+            transition_interpolator_ratio = 1.0; /* use controller output */
 
             /* Initialize PR trajectory generator related values */
             trajectoryReset();
@@ -543,7 +543,10 @@ void PushRecover::setTargetDataWithInterpolation(void){
                 m_robot->joint(i)->q = ready_joint_angle[i];
             }
         }else if(current_control_state == PR_TRANSITION_TO_IDLE){
+            transition_interpolator_ratio = 0.0; /* use input as output */
             current_control_state = PR_IDLE;
+        }else{
+            transition_interpolator_ratio = 1.0; /* use controller output */
         }
     }
 
