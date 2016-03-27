@@ -545,6 +545,11 @@ void PushRecover::setTargetDataWithInterpolation(void){
         }else if(current_control_state == PR_TRANSITION_TO_IDLE){
             transition_interpolator_ratio = 0.0; /* use input as output */
             current_control_state = PR_IDLE;
+
+            /* Transition to state PR_READY needs to set default values */
+            for ( int i = 0; i < m_robot->numJoints(); i++ ) {
+                m_robot->joint(i)->q = m_qRef.data[i];
+            }
         }else{
             transition_interpolator_ratio = 1.0; /* use controller output */
         }
@@ -1387,7 +1392,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       ref_force[1](0) = m_ref_force[1].data[0]; /*ref_force left*/
   }else { /* Transition state */
       for ( int i = 0; i < m_robot->numJoints(); i++ ) {
-          m_robot->joint(i)->q = m_qCurrent.data[i];
+          //m_robot->joint(i)->q = m_qCurrent.data[i];
+          m_robot->joint(i)->q = prev_ref_q[i];
       }
       m_robot->rootLink()->p = input_basePos;
       m_robot->rootLink()->R = input_baseRot;
