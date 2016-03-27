@@ -1005,8 +1005,8 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
     diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)));
 #endif
 
-    //if(loop%500==0){
-    if(0){
+    if(loop%1000==0){
+    //if(0){
         const float diff_x = act_root_pos(0) - prev_rel_ref_zmp(0);
         const float diff_y = act_root_pos(1) - prev_rel_ref_zmp(1);
         const float diff_z = act_root_pos(2) - Zc;
@@ -1132,7 +1132,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   controlBodyCompliance();
 
   if(current_control_state==PR_READY || current_control_state==PR_BUSY){
-      const double threshould  = 40;
+      const double threshould  = 30;
       const double threshould2 = (threshould*threshould);
 
       /* check the state */
