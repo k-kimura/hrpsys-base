@@ -1044,7 +1044,7 @@ void PushRecover::trajectoryReset(void){
                                         traj_body_init[2] + InitialLfoot_p[2]
                                         );
 
-    rel_ref_zmp       = hrp::Vector3(traj_body_init[0], 0.0f, -prev_ref_basePos[2]);
+    rel_ref_zmp       = hrp::Vector3(0.0f, 0.0f, -prev_ref_basePos[2]);
     prev_rel_ref_zmp  = rel_ref_zmp;
 
     prev_ref_traj.clear();
@@ -1514,7 +1514,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       };
       dlog.ref_zmp       = CONV_HRPVEC3(ref_zmp);
       dlog.rel_ref_zmp   = CONV_HRPVEC3(rel_ref_zmp);
-      dlog.ref_base_pos  = CONV_HRPVEC3(m_robot->rootLink()->p);
+      //dlog.ref_base_pos  = CONV_HRPVEC3(m_robot->rootLink()->p);
+      dlog.ref_base_pos  = CONV_HRPVEC3(ref_basePos);
       dlog.ref_cog       = CONV_HRPVEC3(ref_cog);
       for(int i=0;i<6;i++){
           dlog.act_force_l[i] = (float)m_force[ee_index_map["lleg"]].data[i];
