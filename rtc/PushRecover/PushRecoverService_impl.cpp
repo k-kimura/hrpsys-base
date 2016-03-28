@@ -43,6 +43,26 @@ CORBA::Boolean PushRecoverService_impl::stopLogging()
 	return m_pushrecover->stopLogging();
 };
 
+CORBA::Boolean PushRecoverService_impl::enablePushDetect()
+{
+	return m_pushrecover->enablePushDetect();
+};
+
+CORBA::Boolean PushRecoverService_impl::disablePushDetect()
+{
+	return m_pushrecover->disablePushDetect();
+};
+
 void PushRecoverService_impl::pushrecover(PushRecover *i_pushrecover){
-	m_pushrecover = i_pushrecover;
+  m_pushrecover = i_pushrecover;
+};
+
+CORBA::Boolean PushRecoverService_impl::setPushDetectParam(const OpenHRP::PushRecoverService::PushDetectParam& i_param)
+{
+  return m_pushrecover->setPushDetectParam(i_param);
+};
+
+CORBA::Boolean PushRecoverService_impl::getPushDetectParam(OpenHRP::PushRecoverService::PushDetectParam& o_param)
+{
+  return m_pushrecover->getPushDetectParam(o_param);
 };

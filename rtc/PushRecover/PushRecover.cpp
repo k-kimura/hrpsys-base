@@ -359,6 +359,11 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   input_baseRot            = hrp::Matrix33::Identity();
   ref_baseRot              = hrp::Matrix33::Identity();
 
+  /* Initialize PushDetector */
+  pushDetector_state = PD_DISABLE;
+  pushDetectParam.diff_margin_threshold_x = 70.0*70.0;
+  pushDetectParam.diff_margin_threshold_y = (40.0+80.0)*(40.0+80.0);
+
   loop = 1;
 
   if(m_robot->numJoints()!=12){
@@ -1001,7 +1006,7 @@ bool PushRecover::checkJointVelocity(void){
     return ret;
 };
 
-bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, const bool mask){
+bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, const bool mask){
     double diff2;
     const double y_margin_gain = 3.0; /* 円領域ではなく、四角形領域で考える */
     /* mm単位での実root_posとref_root_pos誤差の自乗和で判定 */
@@ -1044,24 +1049,35 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
     }
 
 #if 0 /* Circular Area */
-    if(diff2>threshould2 && loop%250==0){
+    if(diff2>threshold2 && loop%250==0){
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     }
-    return ((diff2>threshould2)?true:false) & mask;
+    return ((diff2>threshold2)?true:false) & mask;
 #else /* Rectanglar Area */
-    if(diff2x>threshould2 && loop%250==0){
+    //if(diff2x>threshold2 && loop%250==0){
+    if(diff2x>pushDetectParam.diff_margin_threshold_x && loop%250==0){
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover by x=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     }
     /* y方向は足幅の分だけ余裕を持たせる */
-    if(diff2y>(threshould2 + 80.0*80.0) && loop%250==0){
+    //if(diff2y>(threshold2 + 80.0*80.0) && loop%250==0){
+    if(diff2y>pushDetectParam.diff_margin_threshold_y && loop%250==0){
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover by y=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     }
     bool diff_flag;
-    if(diff2x>threshould2 || diff2y>threshould2*y_margin_gain){
+#if 0
+    if(diff2x>threshold2 || diff2y>threshold2*y_margin_gain){
         diff_flag = true;
     }else{
         diff_flag = false;
     }
+#else
+    if(diff2x>pushDetectParam.diff_margin_threshold_x || diff2y>pushDetectParam.diff_margin_threshold_y){
+        diff_flag = true;
+    }else{
+        diff_flag = false;
+    }
+#endif
+
     return diff_flag & mask;
 #endif
 };
@@ -1173,11 +1189,11 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   controlBodyCompliance();
 
   if(current_control_state==PR_READY || current_control_state==PR_BUSY){
-      const double threshould  = 70;
-      const double threshould2 = (threshould*threshould);
+      const double threshold  = 70;
+      const double threshold2 = (threshold*threshold);
 
       /* check the state */
-      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, on_ground);
+      const bool  checkBodyPosflag = checkBodyPosMergin(threshold2, loop, on_ground & (pushDetector_state==PD_ENABLE));
 
 #if 0
       const float diff_x = act_root_pos(0) - ref_basePos(0);
@@ -1765,6 +1781,8 @@ bool PushRecover::stopPushRecovery(void){
         break;
     }
 
+    disablePushDetect();
+
     /* Show Message when failed */
     if(!result){
         std::cout << "[" << m_profile.instance_name << "] " << __func__ << ", failed to stop push recovery." << std::endl;
@@ -1813,6 +1831,49 @@ bool PushRecover::stopLogging(void){
 
     return result;
 }
+
+bool PushRecover::enablePushDetect(void){
+    std::cerr << "[" << m_profile.instance_name << "] " << MAKE_CHAR_COLOR_RED << "Enabling Push Detection" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+
+    if(current_control_state == PR_READY){
+        pushDetector_state = PD_ENABLE;
+    }else{
+        pushDetector_state = PD_DISABLE;
+        return false;
+    }
+
+    return true;
+}
+
+bool PushRecover::disablePushDetect(void){
+    std::cerr << "[" << m_profile.instance_name << "] " << MAKE_CHAR_COLOR_RED << "Disabling Push Detection" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+
+    pushDetector_state = PD_DISABLE;
+
+    return true;
+}
+
+bool PushRecover::setPushDetectParam(const OpenHRP::PushRecoverService::PushDetectParam& i_param)
+{
+    std::cerr << "[" << m_profile.instance_name << "] setPushDetectParam" << std::endl;
+    pushDetectParam = i_param;
+
+    std::cout << "[pr] diff_margin_threshold_x=[" << pushDetectParam.diff_margin_threshold_x << "]" << std::endl;
+    std::cout << "[pr] diff_margin_threshold_y=[" << pushDetectParam.diff_margin_threshold_y << "]" << std::endl;
+
+    return true;
+}
+
+bool PushRecover::getPushDetectParam(OpenHRP::PushRecoverService::PushDetectParam& o_param)
+{
+    std::cerr << "[" << m_profile.instance_name << "] getPushDetectParam" << std::endl;
+    o_param.diff_margin_threshold_x = pushDetectParam.diff_margin_threshold_x;
+    o_param.diff_margin_threshold_y = pushDetectParam.diff_margin_threshold_y;
+
+    return true;
+}
+
+
 
 extern "C"
 {
