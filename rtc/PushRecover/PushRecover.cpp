@@ -1013,7 +1013,7 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
     diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_rel_ref_zmp(1))) * (1000.0*1000.0);
 #elif 1
     const double diff2x  = (rel_act_zmp(0) - prev_rel_ref_zmp(0))*(rel_act_zmp(0) - prev_rel_ref_zmp(0)) * (1000.0*1000.0);
-    const double diff2x  = (rel_act_zmp(1) - prev_rel_ref_zmp(1))*(rel_act_zmp(1) - prev_rel_ref_zmp(1)) * (1000.0*1000.0);
+    const double diff2y  = (rel_act_zmp(1) - prev_rel_ref_zmp(1))*(rel_act_zmp(1) - prev_rel_ref_zmp(1)) * (1000.0*1000.0);
 #else /* 動いていないとき、act_root_posはdefault_zmp_offsetだけ動いているはずで、rel_ref_zmpは0,0を示すはずだからact_root_posを使うのではなく,act_zmpを使うのが正しい? */
     diff2  = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*(act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0))) * (1000.0*1000.0);
     diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1))) * (1000.0*1000.0);
