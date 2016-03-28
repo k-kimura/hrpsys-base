@@ -1003,13 +1003,17 @@ bool PushRecover::checkJointVelocity(void){
 
 bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, const bool mask){
     double diff2;
+    const double y_margin_gain = 3.0; /* 円領域ではなく、四角形領域で考える */
     /* mm単位での実root_posとref_root_pos誤差の自乗和で判定 */
 #if 0
     diff2  = (act_root_pos(0) - prev_ref_basePos(0))*(act_root_pos(0) - prev_ref_basePos(0))*(1000.0*1000.0);
     diff2 += (act_root_pos(1) - prev_ref_basePos(1))*(act_root_pos(1) - prev_ref_basePos(1))*(1000.0*1000.0);
-#elif 1
+#elif 0
     diff2  = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*(act_root_pos(0) - (prev_rel_ref_zmp(0))) * (1000.0*1000.0);
     diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_rel_ref_zmp(1))) * (1000.0*1000.0);
+#elif 1
+    const double diff2x  = (rel_act_zmp(0) - prev_rel_ref_zmp(0))*(rel_act_zmp(0) - prev_rel_ref_zmp(0)) * (1000.0*1000.0);
+    const double diff2x  = (rel_act_zmp(1) - prev_rel_ref_zmp(1))*(rel_act_zmp(1) - prev_rel_ref_zmp(1)) * (1000.0*1000.0);
 #else /* 動いていないとき、act_root_posはdefault_zmp_offsetだけ動いているはずで、rel_ref_zmpは0,0を示すはずだからact_root_posを使うのではなく,act_zmpを使うのが正しい? */
     diff2  = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*(act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0))) * (1000.0*1000.0);
     diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1))) * (1000.0*1000.0);
@@ -1034,11 +1038,26 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
         PRINTVEC3(act_cogvel, true);
     }
 
+#if 0 /* Circular Area */
     if(diff2>threshould2 && loop%250==0){
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     }
-
     return ((diff2>threshould2)?true:false) & mask;
+#else /* Rectanglar Area */
+    if(diff2x>threshould2 && loop%250==0){
+        std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover by x=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+    }
+    if(diff2y>threshould2*y_margin_gain && loop%250==0){
+        std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover by x=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+    }
+    bool diff_flag;
+    if(diff2x>threshould2 || diff2y>threshould2*_margin_gain){
+        diff_flag = true;
+    }else{
+        diff_flag = false;
+    }
+    return diff_flag & mask;
+#endif
 };
 
 bool PushRecover::controlBodyCompliance(void){
@@ -1152,7 +1171,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       const double threshould2 = (threshould*threshould);
 
       /* check the state */
-      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, false);
+      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, true);
 
 #if 0
       const float diff_x = act_root_pos(0) - ref_basePos(0);
