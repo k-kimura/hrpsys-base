@@ -1051,7 +1051,7 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover by x=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     }
     bool diff_flag;
-    if(diff2x>threshould2 || diff2y>threshould2*_margin_gain){
+    if(diff2x>threshould2 || diff2y>threshould2*y_margin_gain){
         diff_flag = true;
     }else{
         diff_flag = false;
