@@ -2,7 +2,7 @@
 #define __step_forward_h__
 #include <reactive_walk_generator.h>
 #include <boost/scoped_ptr.hpp>
-#include "realtime_task.h"
+//#include "realtime_task.h"
 #include <pthread.h>
 #include "BodyIKMethod.h"
 #include "SimpleLogger.h" /* for make_char_color macro */
