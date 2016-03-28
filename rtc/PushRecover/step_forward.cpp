@@ -1,11 +1,23 @@
 #include <link_physprof.h>  /* link paramter m,c,I */
 #include "step_forward.h"
+#include <sched.h>
+#include <errno.h>
 
 void* StepForward::func(void* arg){
     StepForward* self = (StepForward*)arg;
     // リアルタイムスレッド
     // 優先度はちょっと落とす
+#if 0  /* need to be run with permission */
     //RealtimeContext rt_context( REALTIME_PRIO_MAX-4, 1000 );
+    {
+        sched_param param;
+        param.sched_priority = sched_get_priority_max(SCHED_FIFO)-4;
+        if( sched_setscheduler( 0, SCHED_FIFO, &param ) == -1 ){
+            std::cout << "[Scheduler] " << MAKE_CHAR_COLOR_RED << "Could not set scheduler setting" << MAKE_CHAR_COLOR_DEFAULT << "errno=[" << errno << "]=" << strerror(errno) << std::endl;
+            throw std::runtime_error( "sched_setscheduler" );
+        }
+    }
+#endif
 
     // きめうっちんぐ軌道
     const int supports_step_lfirst[] = {-1, 1,-1,0};
@@ -56,10 +68,7 @@ void* StepForward::func(void* arg){
                                          traj_body_init,
                                          InitialLfoot_p,
                                          InitialRfoot_p );
-#define DOWHILE_EN
-#ifdef DOWHILE_EN
     while(true){
-#endif
         // シグナル待ち
         if( self->m_waitcond.wait() ){
             return 0;
@@ -94,13 +103,10 @@ void* StepForward::func(void* arg){
 #ifdef DEBUG_STEP_FORWARD
             std::cerr << "[StepForward] Foot Colide" << std::endl;
 #endif
-#if 1
-        }
-#else
         }else{
             self->is_ready = 1;
         }
-#endif
+
         std::cout << "[StepForward] L_first=[" << rwg_lfirst.eval_value << "], R_first=[" << rwg_rfirst.eval_value << "]" << std::endl;
 
         for( int i = 0; i < 5; i++ ){
@@ -111,10 +117,10 @@ void* StepForward::func(void* arg){
                 rwg_rfirst.iterateOnce<false>( 0, 1500+i*100, 1.0 );
             }
             self->is_ready = i + 1;
+            std::cout << "[StepForward] "<< MAKE_CHAR_COLOR_BLUE << "is_ready=" << self->is_ready << MAKE_CHAR_COLOR_DEFAULT << std::endl;
         }
-#ifdef DOWHILE_EN
     } /* End of while(true) */
-#endif
+
     self->is_ready = 0;
     _mm_mfence();
 

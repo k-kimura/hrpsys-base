@@ -1013,7 +1013,8 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
     diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1))) * (1000.0*1000.0);
 #endif
 
-    if(loop%1000==0){
+    //if(loop%1000==0){
+    if(0){
 #if 0
         const float diff_x = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*1000.0;
         const float diff_y = (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*1000.0;
@@ -1149,7 +1150,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       const double threshould2 = (threshould*threshould);
 
       /* check the state */
-      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, true);
+      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, false);
 
 #if 0
       const float diff_x = act_root_pos(0) - ref_basePos(0);
@@ -1183,7 +1184,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #endif
       };
 
-#if 1
+#if 0
       PRINTVEC3(x0[0], (loop%1000==0));
       PRINTVEC3(x0[1], (loop%1000==0));
       PRINTVEC3(x0[2], (loop%1000==0));
@@ -1234,6 +1235,18 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           }else{
               ref_traj = prev_ref_traj;  /* keep current trajectory state */
           }
+#if 0
+          if(loop%1000==0){
+              const unsigned int cf  = rate_matcher.getCurrentFrame();
+              const unsigned int cfc = rate_matcher.getConvertedFrame();
+              std::cout << "[pr] cf=[" << cf << "], cfc=[" << cfc << "]";
+              if(current_control_state == PR_BUSY){
+                  std::cout << " : PR_BUSY" << std::endl;
+              }else{
+                  std::cout << " : PR_READY" << std::endl;
+              }
+          }
+#endif
       }
 
       /* calc the trajectory velocity dp and body_dp */
@@ -1255,7 +1268,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0] + ref_traj.body_p[0],
                                                 traj_body_init[1] + ref_traj.body_p[1],
                                                 traj_body_init[2] + InitialLfoot_p[2] + ref_traj.body_p[2]);
-#if 1
+#if 0
           if(loop%1000==0)printf("[pr] todo pos\n");
           PRINTVEC3(act_world_root_pos,(loop%500==0));
           PRINTVEC3(m_robot->rootLink()->p,(loop%500==0));
@@ -1266,9 +1279,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           /* calc Reference ZMP relative to base_frame(Loot link)  */
           const hrp::Vector3 default_zmp_offset(default_zmp_offset_l[0],default_zmp_offset_l[1],default_zmp_offset_l[2]);
           ref_zmp     = hrp::Vector3(ref_traj.p[0],ref_traj.p[1],ref_traj.p[2]) + ref_zmp_modif + default_zmp_offset;
-          //rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) + default_zmp_offset;
-          /* TODO rel_ref_zmpはSTではどういう座標として使っているのか */
           rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) + default_zmp_offset;
+          /* TODO rel_ref_zmpはSTではどういう座標として使っているのか */
+          //rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) + default_zmp_offset;
       }
 
 
@@ -1360,11 +1373,13 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           }
       }
 
+#if 1
       const int rwg_len_out = 4500; /* TODO */
       if(rate_matcher.getConvertedFrame()>rwg_len_out){
-          //stpf.reset();
+          stpf.reset();
           current_control_state = PR_READY;
       }
+#endif
 
       /* Save log */
       {
@@ -1572,8 +1587,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   /*==================================================*/
   //const bool shw_debug_msg_outputdata = loop%500==0?true:false;;
   const bool shw_debug_msg_outputdata = ((loop%1000==0) || ((loop%20==0) && (current_control_state == PR_TRANSITION_TO_READY || current_control_state == PR_TRANSITION_TO_IDLE)));
-  setOutputData(shw_debug_msg_outputdata);
-  //setOutputData(false);
+  //setOutputData(shw_debug_msg_outputdata);
+  setOutputData(false);
 
   loop ++;
   return RTC::RTC_OK;
