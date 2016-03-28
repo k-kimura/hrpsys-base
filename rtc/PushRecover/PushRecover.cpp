@@ -1173,11 +1173,11 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   controlBodyCompliance();
 
   if(current_control_state==PR_READY || current_control_state==PR_BUSY){
-      const double threshould  = 30;
+      const double threshould  = 50;
       const double threshould2 = (threshould*threshould);
 
       /* check the state */
-      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, false);
+      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, true);
 
 #if 0
       const float diff_x = act_root_pos(0) - ref_basePos(0);
