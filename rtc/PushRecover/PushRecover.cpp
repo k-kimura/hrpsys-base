@@ -1053,8 +1053,8 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover by x=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     }
     /* y方向は足幅の分だけ余裕を持たせる */
-    if(diff2y>(threshould2 + 80.0) && loop%250==0){
-        std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover by x=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+    if(diff2y>(threshould2 + 80.0*80.0) && loop%250==0){
+        std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "=====Invoking PushRecover by y=====" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     }
     bool diff_flag;
     if(diff2x>threshould2 || diff2y>threshould2*y_margin_gain){
