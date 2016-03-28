@@ -885,6 +885,11 @@ bool PushRecover::calcZMP(hrp::Vector3& ret_zmp, const double zmp_z)
         const hrp::Vector3 fsp = world_sensor_ps[eei];
         const hrp::Vector3 nf  = world_force_ps[eei];
         const hrp::Vector3 nm  = world_force_ms[eei];
+        if(loop%1000==0){
+            PRINTVEC3(fsp*1000.0,true);
+            PRINTVEC3(nf,true);
+            PRINTVEC3(nm,true);
+        }
 
         tmpzmpx += nf(2) * fsp(0) - (fsp(2) - zmp_z) * nf(0) - nm(1);
         tmpzmpy += nf(2) * fsp(1) - (fsp(2) - zmp_z) * nf(1) + nm(0);
@@ -1041,6 +1046,21 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
         const double diff  = sqrt(diff2);
         std::cout << "[pr] diff=" << diff << "[mm]" << std::endl;
         std::cout << "[pr] diffv=[" << diff_x << ", " << diff_y << ", " << diff_z << "]" << std::endl;
+        std::cout << "[pr] foots_contact_state=";
+        switch (foots_contact_states) {
+        case BOTH_FOOTS:
+            std::cout << "BOTH_FOOT" << std::endl;
+            break;
+        case RFOOT:
+            std::cout << "RFOOT" << std::endl;
+            break;
+        case LFOOT:
+            std::cout << "LFOOT" << std::endl;
+            break;
+        case ON_AIR:
+            std::cout << "ON AIR" << std::endl;
+            break;
+        }
         PRINTVEC3(act_root_pos, true);
         PRINTVEC3(prev_ref_basePos, true);
         PRINTVEC3(rel_act_zmp, true);
