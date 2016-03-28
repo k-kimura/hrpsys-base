@@ -1215,7 +1215,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           Vec3 sf_footl_p;
           Vec3 sf_footr_p;
           ITrajectoryGenerator* gen = stpf.getReady();
-          if(current_control_state = PR_BUSY && gen!=0){
+          if(current_control_state == PR_BUSY && gen!=0){
               rate_matcher.incrementFrame();
               gen->getTrajectoryFrame(rate_matcher.getConvertedFrame(),
                                       sf_pref,
