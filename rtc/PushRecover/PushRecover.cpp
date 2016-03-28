@@ -601,10 +601,12 @@ void PushRecover::setTargetDataWithInterpolation(void){
         /* set relative Reference ZMP */
         switch (current_control_state){
         case PR_TRANSITION_TO_IDLE:
-            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(0.0f, 0.0f, -Zc);
+            //rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(0.0f, 0.0f, -Zc);
+            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(-default_zmp_offset_l[0], 0.0f, -Zc);
             break;
         case PR_TRANSITION_TO_READY:
-            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(0.0f, 0.0f, -Zc);
+            //rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(0.0f, 0.0f, -Zc);
+            rel_ref_zmp = (1-transition_interpolator_ratio) * input_zmp + transition_interpolator_ratio * hrp::Vector3(-default_zmp_offset_l[0], 0.0f, -Zc);
             break;
         default:
             break;
@@ -1279,7 +1281,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           /* calc Reference ZMP relative to base_frame(Loot link)  */
           const hrp::Vector3 default_zmp_offset(default_zmp_offset_l[0],default_zmp_offset_l[1],default_zmp_offset_l[2]);
           ref_zmp     = hrp::Vector3(ref_traj.p[0],ref_traj.p[1],ref_traj.p[2]) + ref_zmp_modif + default_zmp_offset;
-          rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) + default_zmp_offset;
+          //rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p));
+          rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) - default_zmp_offset;
           /* TODO rel_ref_zmpはSTではどういう座標として使っているのか */
           //rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) + default_zmp_offset;
       }
