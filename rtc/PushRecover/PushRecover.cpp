@@ -307,8 +307,8 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       const float foot_r_pitch = 0.0f;
       _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                     body_p_default_offset,
-                                                    InitialLfoot_p,
-                                                    InitialRfoot_p,
+                                                    InitialLfoot_p - default_zmp_offset_l,
+                                                    InitialRfoot_p - default_zmp_offset_r,
                                                     foot_l_pitch,
                                                     foot_r_pitch,
                                                     target_joint_angle );
@@ -1215,7 +1215,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           Vec3 sf_footl_p;
           Vec3 sf_footr_p;
           ITrajectoryGenerator* gen = stpf.getReady();
-          if(gen!=0){
+          if(current_control_state = PR_BUSY && gen!=0){
               rate_matcher.incrementFrame();
               gen->getTrajectoryFrame(rate_matcher.getConvertedFrame(),
                                       sf_pref,
@@ -1276,7 +1276,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           if(current_control_state == PR_BUSY){   /* controller main */
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                             body_p_default_offset + ref_traj.body_p,
-#if 0
+#if 1
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
                                                             InitialRfoot_p + ref_traj.footr_p - default_zmp_offset_r,
 #else
@@ -1289,7 +1289,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           }else if(current_control_state == PR_READY){
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                             body_p_default_offset + ref_traj.body_p,
-#if 0
+#if 1
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
                                                             InitialRfoot_p + ref_traj.footr_p - default_zmp_offset_r,
 #else
@@ -1776,117 +1776,3 @@ extern "C"
   }
 
 };
-
-
-
-// RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
-// {
-//   static int loop = 1;
-//   if (loop%1000==0){
-//       std::cout << "[" << m_profile.instance_name<< "] onExecute(" << ec_id << ")" << std::endl;
-// #if 0
-//       QzVec3 v1(1, 2, 3);
-//       QzVec3 v2(4, 5, 6);
-//       QzVec3 v3;
-//       QzVec3 v4;
-//       v3 = v1 + v2;
-//       v4 = 3.0*v1 + 2.5*v2;
-//       std::cout << "v3=[" << v3 << "]" << std::endl;
-//       std::cout << "v4=[" << v4 << "]" << std::endl;
-// #endif
-//   }
-// #if 0
-//   if (loop%1000==0){
-//       for(int i=0; i<m_robot->numJoints(); i++){
-//           std::cout << "[" << m_profile.instance_name<< "] m_robot->joint(" << i << ")->q(" << m_robot->joint(i)->q << "), cur_ang=" << m_qCurrent.data[i] << std::endl;
-//       }
-//       for (unsigned int i=0; i<m_forceIn.size(); i++){
-//         if ( m_force[i].data.length()==6 ) {
-//             std::string sensor_name = m_forceIn[i]->name();
-//             hrp::Vector3 data_p(m_force[i].data[0], m_force[i].data[1], m_force[i].data[2]);
-//             hrp::Vector3 data_r(m_force[i].data[3], m_force[i].data[4], m_force[i].data[5]);
-//             std::cout << "[" << m_profile.instance_name << "] force and moment [" << sensor_name << "]" << std::endl;
-//             std::cout << "[" << m_profile.instance_name << "]   sensor force  = " << data_p.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N]" << std::endl;
-//             std::cout << "[" << m_profile.instance_name << "]   sensor moment = " << data_r.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[Nm]" << std::endl;
-//         }
-//       }
-//   }
-// #endif
-// #if 1
-//   {
-//       const float dcomx = 0.4f * cosf(((float)(loop%360))*3.14159265358939323826433f/180.0f);
-//       const float dcomy = 0.4f * sinf(((float)(loop%360))*3.14159265358939323826433f/180.0f);
-//       const Vec3 x0[] = {
-//           Vec3( 0.0f, -0.095f, 0.0f ),
-//           Vec3( 0.0f,    0.0f, 0.0f ),
-//           Vec3( dcomx,    dcomy, 0.0f )
-//       };
-
-//       if(loop%8000==1){ /* 8000Frame = 16sec? Cycle */
-//           std::cout << "[" << m_profile.instance_name << "] Calling StepForward start" << std::endl;
-//           stpf.start(x0);
-//           std::cout << "[" << m_profile.instance_name << "] Calling StepForward func" << std::endl;
-//           frame_ref = 0;
-//       }else{
-//           //virtual void getTrajectoryFrame( const int index, Vec3& pref, Vec3& body_p, Vec3 &footl_p, Vec3 &footr_p )
-//           Vec3 sf_pref;
-//           Vec3 sf_body_p;
-//           Vec3 sf_footl_p;
-//           Vec3 sf_footr_p;
-//           ITrajectoryGenerator* gen = stpf.getReady();
-//           if(gen!=0){
-//               gen->getTrajectoryFrame(frame_ref++,
-//                                      sf_pref,
-//                                      sf_body_p,
-//                                      sf_footl_p,
-//                                      sf_footr_p );
-//               if(loop%500==0){
-//                   std::cout << "[" << m_profile.instance_name << "] pref=" << sf_pref << "  @" << frame_ref << "frame" << std::endl;
-//                   std::cout << "[" << m_profile.instance_name << "] body_p=" << sf_body_p << std::endl;
-//                   std::cout << "[" << m_profile.instance_name << "] footl_p=" << sf_footl_p << std::endl;
-//                   std::cout << "[" << m_profile.instance_name << "] footr_p=" << sf_footr_p << std::endl;
-//               }
-//           }else{
-//               if(loop%500==0){
-//                   std::cout << "[" << m_profile.instance_name << "] Failed to call stfp.getReady()" << std::endl;
-//               }
-//           }
-//       }
-//   }
-// #endif
-//   loop ++;
-//   // check dataport input
-//   for (unsigned int i=0; i<m_forceIn.size(); i++){
-//       if ( m_forceIn[i]->isNew() ) {
-//           m_forceIn[i]->read();
-//       }
-//       if ( m_ref_forceIn[i]->isNew() ) {
-//             m_ref_forceIn[i]->read();
-//       }
-//   }
-//   if (m_rpyIn.isNew()) {
-//       m_rpyIn.read();
-//   }
-//   if (m_qCurrentIn.isNew()) {
-//       m_qCurrentIn.read();
-//   }
-//   if (m_qRefIn.isNew()) {
-//       m_qRefIn.read();
-//       for ( int i = 0; i < m_robot->numJoints(); i++ ){
-//           m_robot->joint(i)->q = m_qRef.data[i];
-//       }
-//   }
-//   // m_robot->joint(m_robot->link("RLEG_JOINT4")->jointId)->q += offset_r;
-//   // m_robot->joint(m_robot->link("LLEG_JOINT4")->jointId)->q += offset_l;
-//   // m_robot->joint(m_robot->link("HEAD_JOINT2")->jointId)->q = m_robot->joint(m_robot->link("RLEG_JOINT4")->jointId)->q - offset_r;
-//   // m_robot->joint(m_robot->link("HEAD_JOINT3")->jointId)->q = m_robot->joint(m_robot->link("LLEG_JOINT4")->jointId)->q - offset_l;
-
-// #if 1
-//   for ( int i = 0; i < m_robot->numJoints(); i++ ){
-//     m_qRef.data[i] = m_robot->joint(i)->q;
-//   }
-// #endif
-//   m_qRefOut.write();
-//   return RTC::RTC_OK;
-// }
-
