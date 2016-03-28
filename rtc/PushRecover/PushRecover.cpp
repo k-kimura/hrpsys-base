@@ -886,7 +886,8 @@ bool PushRecover::calcZMP(hrp::Vector3& ret_zmp, const double zmp_z)
         const hrp::Vector3 nf  = world_force_ps[eei];
         const hrp::Vector3 nm  = world_force_ms[eei];
         if(loop%1000==0){
-            PRINTVEC3(fsp*1000.0,true);
+            const hrp::Vector3 fpmm = hrp::Vector3(fsp(0)*1000.0,fsp(1)*1000.0,fsp(2)*1000.0);
+            PRINTVEC3(fpmm,true);
             PRINTVEC3(nf,true);
             PRINTVEC3(nm,true);
         }
