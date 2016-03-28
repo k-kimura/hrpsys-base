@@ -1178,14 +1178,13 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #endif
       };
 
-#if 0
-      PRINTVEC3(x0[0], (loop%500==0));
-      PRINTVEC3(x0[1], (loop%500==0));
-      PRINTVEC3(x0[2], (loop%500==0));
+#if 1
+      PRINTVEC3(x0[0], (loop%1000==0));
+      PRINTVEC3(x0[1], (loop%1000==0));
+      PRINTVEC3(x0[2], (loop%1000==0));
 #endif
 
       /* TODO set rootLink position default value */
-      //m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]);
       m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]) + ref_basePos_modif;
       /* save current reference rootlink position for checkBodyPosMergin */
       prev_ref_basePos = m_robot->rootLink()->p;
@@ -1251,8 +1250,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0] + ref_traj.body_p[0],
                                                 traj_body_init[1] + ref_traj.body_p[1],
                                                 traj_body_init[2] + InitialLfoot_p[2] + ref_traj.body_p[2]);
-#if 0
-          if(loop%500==0)printf("[pr] todo pos\n");
+#if 1
+          if(loop%1000==0)printf("[pr] todo pos\n");
           PRINTVEC3(act_world_root_pos,(loop%500==0));
           PRINTVEC3(m_robot->rootLink()->p,(loop%500==0));
 #endif
