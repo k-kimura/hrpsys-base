@@ -1070,7 +1070,7 @@ void PushRecover::trajectoryReset(void){
                                         traj_body_init[2] + InitialLfoot_p[2]
                                         );
 
-    rel_ref_zmp       = hrp::Vector3(0.0f, 0.0f, -prev_ref_basePos[2]);
+    rel_ref_zmp       = hrp::Vector3(-default_zmp_offset_l[0], 0.0f, -prev_ref_basePos[2]);
     prev_rel_ref_zmp  = rel_ref_zmp;
 
     prev_ref_traj.clear();
