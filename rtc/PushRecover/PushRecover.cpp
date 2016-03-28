@@ -307,8 +307,13 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       const float foot_r_pitch = 0.0f;
       _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                     body_p_default_offset,
+#if 0
                                                     InitialLfoot_p - default_zmp_offset_l,
                                                     InitialRfoot_p - default_zmp_offset_r,
+#else
+                                                    InitialLfoot_p,
+                                                    InitialRfoot_p,
+#endif
                                                     foot_l_pitch,
                                                     foot_r_pitch,
                                                     target_joint_angle );
@@ -1261,7 +1266,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           /* calc Reference ZMP relative to base_frame(Loot link)  */
           const hrp::Vector3 default_zmp_offset(default_zmp_offset_l[0],default_zmp_offset_l[1],default_zmp_offset_l[2]);
           ref_zmp     = hrp::Vector3(ref_traj.p[0],ref_traj.p[1],ref_traj.p[2]) + ref_zmp_modif + default_zmp_offset;
-          rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p));
+          //rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) + default_zmp_offset;
+          /* TODO rel_ref_zmpはSTではどういう座標として使っているのか */
+          rel_ref_zmp = (m_robot->rootLink()->R.transpose() * (ref_zmp - m_robot->rootLink()->p)) + default_zmp_offset;
       }
 
 
@@ -1276,7 +1283,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           if(current_control_state == PR_BUSY){   /* controller main */
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                             body_p_default_offset + ref_traj.body_p,
-#if 1
+#if 0
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
                                                             InitialRfoot_p + ref_traj.footr_p - default_zmp_offset_r,
 #else
@@ -1289,7 +1296,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           }else if(current_control_state == PR_READY){
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                             body_p_default_offset + ref_traj.body_p,
-#if 1
+#if 0
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
                                                             InitialRfoot_p + ref_traj.footr_p - default_zmp_offset_r,
 #else
