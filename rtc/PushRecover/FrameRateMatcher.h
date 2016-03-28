@@ -15,6 +15,7 @@ public:
     };
     void setCurrentFrame(const unsigned int cur_frame){
         current_source_frame = cur_frame;
+        current_target_frame = cur_frame;
     }
     unsigned int getCurrentFrame(void){
         return current_source_frame;
