@@ -101,7 +101,7 @@ void* StepForward::func(void* arg){
             self->is_ready = 1;
         }
 #endif
-        //std::cout << "[StepForward] L_first=[" << rwg_lfirst.eval_value << "], R_first=[" << rwg_rfirst.eval_value << "]" << std::endl;
+        std::cout << "[StepForward] L_first=[" << rwg_lfirst.eval_value << "], R_first=[" << rwg_rfirst.eval_value << "]" << std::endl;
 
         for( int i = 0; i < 5; i++ ){
             /* template<bool dump> void iterateOnce( const int offset, const int calc_len, const double feedback_gain ) */

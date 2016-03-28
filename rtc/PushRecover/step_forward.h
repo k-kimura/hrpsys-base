@@ -73,6 +73,7 @@ public:
      *  Vec3( 0.4f,    0.0f, 0.0f )};
      */
     void start( const Vec3 x0[] ){
+        std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "Calling StepForward start()" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
         std::copy( x0, x0+3, m_x0 );
         is_ready = false;
         if(gen!=NULL){
@@ -84,7 +85,9 @@ public:
 
     void reset(void){
         is_ready = false;
-        gen = NULL;
+        if(gen!=NULL){
+            gen = NULL;
+        }
     }
 
     ITrajectoryGenerator* getReady(){
