@@ -1019,21 +1019,26 @@ bool PushRecover::checkBodyPosMergin(const double threshould2, const int loop, c
     diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1))) * (1000.0*1000.0);
 #endif
 
-    //if(loop%1000==0){
-    if(0){
+    if(loop%1000==0){
+    //if(0){
 #if 0
         const float diff_x = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*1000.0;
         const float diff_y = (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*1000.0;
+#elif 1
+        const float diff_x = (rel_act_zmp(0) - (prev_rel_ref_zmp(0)))*1000.0;
+        const float diff_y = (rel_act_zmp(1) - (prev_rel_ref_zmp(1)))*1000.0;
+        const float diff_z = (rel_act_zmp(2) + Zc) * 1000.0;
 #else
         const float diff_x = (act_root_pos(0) - (prev_rel_ref_zmp(0)))*1000.0;
         const float diff_y = (act_root_pos(1) - (prev_rel_ref_zmp(1)))*1000.0;
-#endif
         const float diff_z = (act_root_pos(2) - Zc) * 1000.0;
+#endif
         const double diff  = sqrt(diff2);
         std::cout << "[pr] diff=" << diff << "[mm]" << std::endl;
         std::cout << "[pr] diffv=[" << diff_x << ", " << diff_y << ", " << diff_z << "]" << std::endl;
         PRINTVEC3(act_root_pos, true);
         PRINTVEC3(prev_ref_basePos, true);
+        PRINTVEC3(rel_act_zmp, true);
         PRINTVEC3(prev_rel_ref_zmp, true);
         PRINTVEC3(act_cogvel, true);
     }
@@ -1171,7 +1176,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       const double threshould2 = (threshould*threshould);
 
       /* check the state */
-      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, true);
+      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, false);
 
 #if 0
       const float diff_x = act_root_pos(0) - ref_basePos(0);
