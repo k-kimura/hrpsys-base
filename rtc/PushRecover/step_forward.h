@@ -5,6 +5,7 @@
 //#include <realtime_task.h>
 #include <pthread.h>
 #include "BodyIKMethod.h"
+#include "SimpleLogger.h" /* for make_char_color macro */
 
 template<class T>
 class PThreadWaitCond{
