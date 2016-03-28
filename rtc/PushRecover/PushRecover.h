@@ -122,6 +122,7 @@ public:
 
 
     enum PushRecoveryState {PR_IDLE, PR_READY, PR_BUSY, PR_TRANSITION_TO_READY, PR_TRANSITION_TO_IDLE};
+    enum PushDetectorState {PD_DISABLE=0, PD_ENABLE=1};
 
     /* Assert emergencyStopReqFlag = true from service port */
     bool assertEmergencyStop(void);
@@ -143,6 +144,14 @@ public:
 
     /* Stop push recovery logger */
     bool stopLogging(void);
+
+    /* Enable/Disable Push Detection */
+    bool enablePushDetect(void);
+    bool disablePushDetect(void);
+
+    /* PushDetectParam Service function */
+    bool setPushDetectParam(const OpenHRP::PushRecoverService::PushDetectParam& i_param);
+    bool getPushDetectParam(OpenHRP::PushRecoverService::PushDetectParam& o_param);
 
     template<class T>
     struct TrajectoryElement {
@@ -260,6 +269,10 @@ private:
     bool emergencyStopReqFlag;
     int loop;
 
+    /* PushDetectParam */
+    PushDetectorState pushDetector_state;
+    OpenHRP::PushRecoverService::PushDetectParam pushDetectParam;
+
     /* Input data buffer */
     hrp::Vector3 input_zmp, input_basePos;
     hrp::Matrix33 input_baseRot;
@@ -335,7 +348,7 @@ private:
                        const hrp::Matrix33 act_foot_origin_rot);
     bool updateToCurrentRobotPose(void);
     bool checkJointVelocity(void);
-    bool checkBodyPosMergin(const double threshould2, const int loop, const bool mask = false);
+    bool checkBodyPosMergin(const double threshold2, const int loop, const bool mask = false);
     bool controlBodyCompliance(void);
     void trajectoryReset(void);
     /* ============================================== */
