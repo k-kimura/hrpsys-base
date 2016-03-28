@@ -1177,7 +1177,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       const double threshould2 = (threshould*threshould);
 
       /* check the state */
-      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, true);
+      const bool  checkBodyPosflag = checkBodyPosMergin(threshould2, loop, on_ground);
 
 #if 0
       const float diff_x = act_root_pos(0) - ref_basePos(0);
@@ -1227,8 +1227,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       //m_robot->rootLink()->R = input_baseRot; /* TODO */
       m_robot->rootLink()->R = hrp::Matrix33::Identity(); /* TODO */
 
-      //if((start_RWG_flag || checkBodyPosflag) && !m_walkingStates.data && on_ground && current_control_state != PR_BUSY){
-      if((start_RWG_flag || checkBodyPosflag) && !m_walkingStates.data && current_control_state != PR_BUSY){
+      if((start_RWG_flag || checkBodyPosflag) && !m_walkingStates.data && on_ground && current_control_state != PR_BUSY){
+      //if((start_RWG_flag || checkBodyPosflag) && !m_walkingStates.data && current_control_state != PR_BUSY){
           std::cout << "[" << m_profile.instance_name << "] " << MAKE_CHAR_COLOR_RED << "Calling StepForward start" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
           /* Save Current base position */
 
