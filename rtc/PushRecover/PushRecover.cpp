@@ -258,11 +258,12 @@ RTC::ReturnCode_t PushRecover::onInitialize()
               }else{
                   serching_fsensor_name = "none";
               }
+              std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "serching_fsensor_name=" << serching_fsensor_name << MAKE_CHAR_COLOR_DEFAULT << std::endl;
               /* serch for if expected sensor is exists */
               if(serching_fsensor_name!="none"){
-                  it = find(fsensor_names.begin(),fsensor_names.end(), "lfsensor");
+                  it = find(fsensor_names.begin(),fsensor_names.end(), serching_fsensor_name);
                   if(it==fsensor_names.end()){
-                      std::cout << "[" << m_profile.instance_name << "] Error lfsensor not found" << std::endl;
+                      std::cout << "[" << m_profile.instance_name << "] Error " << serching_fsensor_name << " not found" << std::endl;
                       return RTC::RTC_ERROR;
                   }else{
                       ee_params[ee_index_map[ee_name]].fsensor_name = *it;
@@ -794,6 +795,14 @@ bool PushRecover::calcWorldForceVector(void){
         world_sensor_ps[eei] = fsp;
         world_force_ps[eei]  = nf;
         world_force_ms[eei]  = nm;
+#if 0
+        if(loop%1000==0){
+            std::cout << MAKE_CHAR_COLOR_RED << "[pr] calcWorldForceVector" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+            printf("[pr] eei=[%d]=%s=%s\n",eei,legs_ee_name[i].c_str(), ee_params[eei].fsensor_name);
+            const hrp::Vector3 fpmm = hrp::Vector3(fsp(0)*1000.0,fsp(1)*1000.0,fsp(2)*1000.0);
+            PRINTVEC3(fpmm,true);
+        }
+#endif
 
         // calc ee-local COP
         hrp::Link* target = m_robot->link(ee_params[eei].ee_target);
