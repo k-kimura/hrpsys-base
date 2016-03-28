@@ -1173,7 +1173,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   controlBodyCompliance();
 
   if(current_control_state==PR_READY || current_control_state==PR_BUSY){
-      const double threshould  = 50;
+      const double threshould  = 70;
       const double threshould2 = (threshould*threshould);
 
       /* check the state */
