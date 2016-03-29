@@ -1114,18 +1114,39 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 
 bool PushRecover::controlBodyCompliance(void){
     double u;
-#if 0
+    const double k[3] = {0.1,  -0.1,  0.1};
+    const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
+    const double maxmodif = 0.1;
+#if 1
+    if(loop%1000==0) std::cout << "[pr] controlBodyCompliance()" << std::endl;
     for(int i = 0; i<2; i++){
-        u = (rel_act_zmp(i) - prev_rel_ref_zmp(i))
-        rel_act_zmp;
-        act_cogvel;
-        ref_zmp_modif;
-        ref_bodyPos_modif;
+        u = k[0] * (rel_act_zmp(i) - prev_rel_ref_zmp(i)) + k[1] * (ref_basePos_modif(i) - 0.0f);
+        double prev_dx = bodyComplianceContext[i].prev_u;
+        //act_cogvel;も使う？
+        if(u > prev_dx + maxdd){
+            u = prev_dx + maxdd;
+        }else if(u < prev_dx - maxdd){
+            u = prev_dx - maxdd;
+        }
+        double tmp_x = ref_basePos_modif(i) + u;
+        if(tmp_x > maxmodif){
+            tmp_x = maxmodif;
+        }else if(tmp_x < -maxmodif){
+            tmp_x = -maxmodif;
+        }
+        ref_basePos_modif(i) = tmp_x;
+        bodyComplianceContext[i].prev_u = u;
     }
 #endif
+
     /* smoothing by filter */
-    ref_zmp_modif     = ref_zmp_modif_filter->passFilter(ref_zmp_modif);
+    //ref_zmp_modif     = ref_zmp_modif_filter->passFilter(ref_zmp_modif);
+    ref_zmp_modif     = hrp::Vector3(0.0f, 0.0f, 0.0f);
     ref_basePos_modif = ref_basePos_modif_filter->passFilter(ref_basePos_modif);
+
+    if(loop%1000==0) std::cout << "[pr] u=[" << bodyComplianceContext[0].prev_u << ", " << bodyComplianceContext[1].prev_u << "]" << std::endl;
+    if(loop%1000==0) std::cout << "[pr] modif=[" << ref_basePos_modif[0] << ", " << ref_basePos_modif[1] << "]" << std::endl;
+
     return true;
 }; /* controlBodyCompliance */
 
@@ -1232,7 +1253,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       const float diff_x = act_root_pos(0) - prev_ref_basePos(0);
       const float diff_y = act_root_pos(1) - prev_ref_basePos(1);
 #endif
-      const float diff_z = act_root_pos(2) - (Zc - InitialLfoot_p[2]); /* TODO 効果の検証 */
+      //const float diff_z = act_root_pos(2) - (Zc - InitialLfoot_p[2]); /* TODO 効果の検証 */
+      const float diff_z = act_root_pos(2) - Zc; /* TODO 効果の検証 */
       const Vec3 x0[] = {
 #if 0
           Vec3( ref_zmp_modif(0), ref_zmp_modif(1), 0.0f ),

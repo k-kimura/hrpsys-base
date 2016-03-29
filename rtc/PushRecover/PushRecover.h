@@ -332,6 +332,11 @@ private:
 
     StepForward stpf;
 
+    struct ControlBodyComplianceContext {
+        double prev_u;
+    };
+    ControlBodyComplianceContext bodyComplianceContext[2];
+
     void updateInputData(const bool shw_msg_flag = false);
     void updateEstimatedInputData(void);
     void updateEstimatedOutputData(void);
