@@ -1114,7 +1114,7 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 
 bool PushRecover::controlBodyCompliance(void){
     double u;
-    const double k[3] = {0.1,  -0.1,  0.1};
+    const double k[3] = {0.001,  -0.001,  0.1};
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
