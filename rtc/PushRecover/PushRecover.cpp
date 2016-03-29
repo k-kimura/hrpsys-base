@@ -1054,10 +1054,10 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 #elif 0
     diff2  = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*(act_root_pos(0) - (prev_rel_ref_zmp(0))) * (1000.0*1000.0);
     diff2 += (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*(act_root_pos(1) - (prev_rel_ref_zmp(1))) * (1000.0*1000.0);
-#elif 0
+#elif 1   /* USE Actual ZMP */
     const double diff2x  = (rel_act_zmp(0) - prev_rel_ref_zmp(0))*(rel_act_zmp(0) - prev_rel_ref_zmp(0)) * (1000.0*1000.0);
     const double diff2y  = (rel_act_zmp(1) - prev_rel_ref_zmp(1))*(rel_act_zmp(1) - prev_rel_ref_zmp(1)) * (1000.0*1000.0);
-#elif 1
+#elif 0  /* USE Modified body_p */
     const double diff2x  = ref_basePos_modif(0) * ref_basePos_modif(0) * (1000.0*1000.0);
     const double diff2y  = ref_basePos_modif(1) * ref_basePos_modif(1) * (1000.0*1000.0);
 #else /* 動いていないとき、act_root_posはdefault_zmp_offsetだけ動いているはずで、rel_ref_zmpは0,0を示すはずだからact_root_posを使うのではなく,act_zmpを使うのが正しい? */
@@ -1070,11 +1070,11 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 #if 0
         const float diff_x = (act_root_pos(0) - (prev_ref_basePos(0) + prev_rel_ref_zmp(0)))*1000.0;
         const float diff_y = (act_root_pos(1) - (prev_ref_basePos(1) + prev_rel_ref_zmp(1)))*1000.0;
-#elif 0
+#elif 1
         const float diff_x = (rel_act_zmp(0) - (prev_rel_ref_zmp(0)))*1000.0;
         const float diff_y = (rel_act_zmp(1) - (prev_rel_ref_zmp(1)))*1000.0;
         const float diff_z = (rel_act_zmp(2) + Zc) * 1000.0;
-#elif 1
+#elif o
         const float diff_x = ref_basePos_modif(0) * 1000.0;
         const float diff_y = ref_basePos_modif(1) * 1000.0;
         const float diff_z = (rel_act_zmp(2) + Zc) * 1000.0;
@@ -1144,7 +1144,7 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 
 bool PushRecover::controlBodyCompliance(bool is_enable){
     double u;
-    const double k[3] = {0.05,  -0.05,  0.1};
+    const double k[3] = {0.05,  -0.04,  0.1};
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
