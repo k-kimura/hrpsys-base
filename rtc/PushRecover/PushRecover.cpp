@@ -1121,6 +1121,7 @@ bool PushRecover::controlBodyCompliance(void){
     if(loop%1000==0) std::cout << "[pr] controlBodyCompliance()" << std::endl;
     for(int i = 0; i<2; i++){
         u = k[0] * (rel_act_zmp(i) - prev_rel_ref_zmp(i)) + k[1] * (ref_basePos_modif(i) - 0.0f);
+        if(loop%1000==0) std::cout << "[pr] zmp_diff=[" << rel_act_zmp(i) << " - " << prev_rel_ref_zmp(i) << "]" << std::endl;
         double prev_dx = bodyComplianceContext[i].prev_u;
         //act_cogvel;も使う？
         if(u > prev_dx + maxdd){
@@ -1139,13 +1140,13 @@ bool PushRecover::controlBodyCompliance(void){
     }
 #endif
 
+    if(loop%1000==0) std::cout << "[pr] u=[" << bodyComplianceContext[0].prev_u << ", " << bodyComplianceContext[1].prev_u << "]" << std::endl;
+    if(loop%1000==0) std::cout << "[pr] modif=[" << ref_basePos_modif[0] << ", " << ref_basePos_modif[1] << "]" << std::endl;
+
     /* smoothing by filter */
     //ref_zmp_modif     = ref_zmp_modif_filter->passFilter(ref_zmp_modif);
     ref_zmp_modif     = hrp::Vector3(0.0f, 0.0f, 0.0f);
     ref_basePos_modif = ref_basePos_modif_filter->passFilter(ref_basePos_modif);
-
-    if(loop%1000==0) std::cout << "[pr] u=[" << bodyComplianceContext[0].prev_u << ", " << bodyComplianceContext[1].prev_u << "]" << std::endl;
-    if(loop%1000==0) std::cout << "[pr] modif=[" << ref_basePos_modif[0] << ", " << ref_basePos_modif[1] << "]" << std::endl;
 
     return true;
 }; /* controlBodyCompliance */
@@ -1164,6 +1165,10 @@ void PushRecover::trajectoryReset(void){
 
     rel_ref_zmp       = hrp::Vector3(-default_zmp_offset_l[0], 0.0f, -prev_ref_basePos[2]);
     prev_rel_ref_zmp  = rel_ref_zmp;
+
+    for(int i=0;i<2;i++){
+        bodyComplianceContext[i].prev_u = 0.0;
+    }
 
     prev_ref_traj.clear();
 }
