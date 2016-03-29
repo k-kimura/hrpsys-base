@@ -4,10 +4,17 @@
 #include <boost/static_assert.hpp>
 
 /* from control/robot_parameter.h */
+#if 0
 /// 左脚先座標の初期値
 const static Vec3 InitialLfoot_p(-0.015,  0.08, 0.1045);
 /// 右脚先座標の初期値
 const static Vec3 InitialRfoot_p(-0.015,  -0.08, 0.1045);
+#else
+/// 左脚先座標の初期値
+const static Vec3 InitialLfoot_p(-0.015,  0.095, 0.1045);
+/// 右脚先座標の初期値
+const static Vec3 InitialRfoot_p(-0.015,  -0.095, 0.1045);
+#endif
 
 #if 1
 /* default joint angle for Zc = 0.578752 */
