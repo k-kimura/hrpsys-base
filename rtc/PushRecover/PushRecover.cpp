@@ -1398,7 +1398,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           _MM_ALIGN16 Mat3 body_R = Mat3::identity();
           const float foot_l_pitch = 0.0f;
           const float foot_r_pitch = 0.0f;
-          const Vec3 basePos_modif = Vec3(ref_basePos_modif(0),ref_basePos_modif(1),ref_basePos_modif(2))
+          const Vec3 basePos_modif = Vec3(ref_basePos_modif(0),ref_basePos_modif(1),ref_basePos_modif(2));
 
           if(current_control_state == PR_BUSY){   /* controller main */
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
