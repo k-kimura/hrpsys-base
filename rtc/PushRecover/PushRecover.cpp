@@ -566,6 +566,29 @@ void PushRecover::setTargetDataWithInterpolation(void){
             for ( int i = 0; i < m_robot->numJoints(); i++ ) {
                 m_robot->joint(i)->q = m_qRef.data[i];
             }
+            /* Initialize Default joint angle on PR_READY state */
+            {
+                _MM_ALIGN16 float target_joint_angle[12];
+                _MM_ALIGN16 float pre_joint_angle[12];
+                _MM_ALIGN16 Mat3 body_R = Mat3::identity();
+                const float foot_l_pitch = 0.0f;
+                const float foot_r_pitch = 0.0f;
+                _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
+                                                              body_p_default_offset,
+#if 0
+                                                              InitialLfoot_p - default_zmp_offset_l,
+                                                              InitialRfoot_p - default_zmp_offset_r,
+#else
+                                                              InitialLfoot_p,
+                                                              InitialRfoot_p,
+#endif
+                                                              foot_l_pitch,
+                                                              foot_r_pitch,
+                                                              target_joint_angle );
+                for(int i=0;i<12;i++){
+                    ready_joint_angle[i] = target_joint_angle[i];
+                }
+            }
         }else{
             transition_interpolator_ratio = 1.0; /* use controller output */
         }
@@ -1114,7 +1137,7 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 
 bool PushRecover::controlBodyCompliance(bool is_enable){
     double u;
-    const double k[3] = {0.001,  -0.001,  0.1};
+    const double k[3] = {0.05,  -0.05,  0.1};
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
@@ -1276,9 +1299,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #else
           Vec3( traj_body_init[0], traj_body_init[1], 0.0f),
 #endif
-#if 0
+#if 1
           Vec3( ref_basePos_modif(0), ref_basePos_modif(1), diff_z ),
-#elif 1
+#elif 0
           Vec3( 0.0f,    0.0f, diff_z ),
 #else
           Vec3( traj_body_init[0],  traj_body_init[1], diff_z),
@@ -1439,6 +1462,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           /* set target_joint_angle */
           for(int i=0;i < 12; i++){
               m_robot->joint(i)->q = target_joint_angle[i];  /* rad to rad */
+              ready_joint_angle[i] = target_joint_angle[i];
           }
       }
 
