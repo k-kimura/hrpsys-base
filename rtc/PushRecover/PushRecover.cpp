@@ -1112,13 +1112,13 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 #endif
 };
 
-bool PushRecover::controlBodyCompliance(void){
+bool PushRecover::controlBodyCompliance(bool is_enable){
     double u;
     const double k[3] = {0.001,  -0.001,  0.1};
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
-    if(loop%1000==0) std::cout << "[pr] controlBodyCompliance()" << std::endl;
+    if(loop%1000==0) std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "controlBodyCompliance()" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     for(int i = 0; i<2; i++){
         u = k[0] * (rel_act_zmp(i) - prev_rel_ref_zmp(i)) + k[1] * (ref_basePos_modif(i) - 0.0f);
         if(loop%1000==0) std::cout << "[pr] zmp_diff=[" << rel_act_zmp(i) << " - " << prev_rel_ref_zmp(i) << "]" << std::endl;
@@ -1135,8 +1135,10 @@ bool PushRecover::controlBodyCompliance(void){
         }else if(tmp_x < -maxmodif){
             tmp_x = -maxmodif;
         }
-        ref_basePos_modif(i) = tmp_x;
-        bodyComplianceContext[i].prev_u = u;
+        if(is_enable){
+            ref_basePos_modif(i) = tmp_x;
+            bodyComplianceContext[i].prev_u = u;
+        }
     }
 #endif
 
@@ -1170,6 +1172,7 @@ void PushRecover::trajectoryReset(void){
         bodyComplianceContext[i].prev_u = 0.0;
     }
     ref_basePos_modif = hrp::Vector3::Zero();
+    ref_basePos_modif_filter->reset(ref_basePos_modif);
     ref_zmp_modif     = hrp::Vector3::Zero();
 
     prev_ref_traj.clear();
@@ -1244,7 +1247,10 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   }
 
   // TODO set modified ref_basePos_modif and ref_zmp_modif
-  controlBodyCompliance();
+  {
+      const bool do_body_compliance = ((current_control_state==PR_READY)||(current_control_state==PR_BUSY))?true:false;
+      controlBodyCompliance(do_body_compliance);
+  }
 
   if(current_control_state==PR_READY || current_control_state==PR_BUSY){
       const double threshold  = 70;

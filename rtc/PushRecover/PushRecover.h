@@ -354,7 +354,7 @@ private:
     bool updateToCurrentRobotPose(void);
     bool checkJointVelocity(void);
     bool checkBodyPosMergin(const double threshold2, const int loop, const bool mask = false);
-    bool controlBodyCompliance(void);
+    bool controlBodyCompliance(bool is_enable);
     void trajectoryReset(void);
     /* ============================================== */
     /* checkEmergencyFlag()                           */
