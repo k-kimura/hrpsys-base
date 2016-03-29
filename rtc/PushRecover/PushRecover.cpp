@@ -1313,13 +1313,11 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #else
           Vec3( traj_body_init[0],  traj_body_init[1], diff_z),
 #endif
-#if 1
+#if 0
           Vec3( (float)act_cogvel(0), (float)act_cogvel(1), 0.0f)
-#elif 0
-          /* これでいいのだろうか */
+#elif 1
+          /* これでいいのだろうか */ /* 挙動的にはこっちが正しそう */
           Vec3( (float)act_cogvel(0), -(float)act_cogvel(1), 0.0f)
-#elif 0
-          Vec3( diff_x * 1.0, diff_y * 1.0, 0.0f)
 #else
           Vec3( 0.0f, 0.0f, 0.0f )
 #endif
