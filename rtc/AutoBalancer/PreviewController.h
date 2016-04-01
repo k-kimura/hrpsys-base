@@ -226,6 +226,49 @@ namespace rats
     virtual ~extended_preview_control() {};
   };
 
+#define USE_SINGULAR_LQ_PC
+#ifdef  USE_SINGULAR_LQ_PC
+    class SingularLQPreviewControl : public preview_control_base<3>
+    {
+    private:
+        const double a;
+        const double dt;
+        const double zc;
+        Eigen::Matrix<double, 3, 3> A;
+        Eigen::Matrix<double, 3, 1> B;
+        Eigen::Matrix<double, 1, 3> C;
+        Eigen::Matrix<double, 1, 3> Ch;
+        Eigen::Matrix<double, 1, 3> Kh;
+    public:
+        SingularLQPreviewControl(const double _dt, const double _zc,
+                                 const double hrp::Vector3& init_xk,
+                                 const double _gravitational_acceleration = DEFAULT_GRAVITATIONAL_ACCELERATION,
+                                 const double d = 1.6) : dt(_dt), zc(_zc), a(sqrt(_gravitational_acceleration/_zc))
+        {
+            A  << 1, 0, 0,
+                  0, 1, dt,
+                 -(a*a*dt), (a*a*dt), 1;
+            B  << dt, 0, 0;
+            C  << 1, 0, 0;
+            Ch << -(1+a*dt),  (2+a*dt), (2+a*dt)/a;
+            Kh << (1+a*dt)/dt + a/(1+a*dt), -(2+a*dt)/dt, -(2+a*dt)/(a*dt);
+
+            //calc_f;
+            {
+                f.resize(delay+1);
+                const b = -(2.0+a*dt)*a;
+                const double ga = (1.0/(1.0+a*dt));
+                double gas = ga;
+                for(size_t i=0;i<delay;i++){
+                    f(i) = b*gas;
+                    gas *= ga;
+                }
+                f(0) += 1.0/dt;
+            }
+        };
+    };
+#endif
+
   template <class previw_T>
   class preview_dynamics_filter
   {

@@ -1273,7 +1273,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       dlog.act_cog      = CONV_HRPVEC3(act_cog);
       dlog.act_root_pos = CONV_HRPVEC3(act_root_pos);
       dlog.act_contact_state[0] = (float)((uint32_t)ee_params[ee_index_map["lleg"]].act_contact_state);
-      dlog.act_contact_state[0] = (float)((uint32_t)ee_params[ee_index_map["rleg"]].act_contact_state);
+      dlog.act_contact_state[1] = (float)((uint32_t)ee_params[ee_index_map["rleg"]].act_contact_state);
   }
 
   // TODO set modified ref_basePos_modif and ref_zmp_modif
@@ -1867,8 +1867,10 @@ bool PushRecover::stopPushRecovery(void){
         result = true;
         break;
     case PR_READY:
-    case PR_TRANSITION_TO_READY:
         result = shiftPushRecoveryState(PR_IDLE);
+    case PR_TRANSITION_TO_READY:
+        std::cout << "[" << m_profile.instance_name << "] " << __func__ << " Currently moving to start push recovery. Please try again later." << std::endl;
+        result = false;
         break;
     case PR_BUSY:
         waitPushRecoveryStateReady(); /* sleep during state is busy */
