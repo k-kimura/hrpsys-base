@@ -1523,15 +1523,17 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #if 1
       const int rwg_len_out = 4500; /* TODO */
       if(rate_matcher.getConvertedFrame()>rwg_len_out){
+          if(current_control_state==PR_BUSY){
+              /* TODO reset basepos modif */
+              for(int i=0;i<2;i++){
+                  bodyComplianceContext[i].prev_u = 0.0;
+              }
+              ref_basePos_modif = hrp::Vector3::Zero();
+              ref_basePos_modif_filter->reset(ref_basePos_modif);
+              ref_zmp_modif     = hrp::Vector3::Zero();
+          }
           stpf.reset();
           current_control_state = PR_READY;
-          /* TODO reset basepos modif */
-          for(int i=0;i<2;i++){
-              bodyComplianceContext[i].prev_u = 0.0;
-          }
-          ref_basePos_modif = hrp::Vector3::Zero();
-          ref_basePos_modif_filter->reset(ref_basePos_modif);
-          ref_zmp_modif     = hrp::Vector3::Zero();
       }
 #endif
 
