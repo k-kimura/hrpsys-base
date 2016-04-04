@@ -15,6 +15,10 @@ module OpenHRP
           double body_compliance_k1;
           double body_compliance_k2;
           double body_compliance_k3;
+          double x_gain_0;
+          double x_gain_1;
+          double dx_gain_0;
+          double dx_gain_1;
       };
 
       boolean dummy(in double a);

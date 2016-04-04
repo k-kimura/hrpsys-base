@@ -367,6 +367,10 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   pushDetectParam.body_compliance_k1      = 0.03;
   pushDetectParam.body_compliance_k2      = -0.03;
   pushDetectParam.body_compliance_k3      = 0.1;
+  pushDetectParam.x_gain_0                = 1.0;
+  pushDetectParam.x_gain_1                = 1.0;
+  pushDetectParam.dx_gain_0               = 1.0;
+  pushDetectParam.dx_gain_1               = 1.0;
 
   loop = 1;
 
@@ -1312,7 +1316,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           Vec3( traj_body_init[0], traj_body_init[1], 0.0f),
 #endif
 #if 1
-          Vec3( ref_basePos_modif(0), ref_basePos_modif(1), diff_z ),
+          Vec3( pushDetectParam.x_gain_0 * ref_basePos_modif(0), pushDetectParam.x_gain_1 * ref_basePos_modif(1), diff_z ),
 #elif 0
           Vec3( 0.0f,    0.0f, diff_z ),
 #else
@@ -1322,7 +1326,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           Vec3( (float)act_cogvel(0), (float)act_cogvel(1), 0.0f)
 #elif 1
           /* これでいいのだろうか */ /* 挙動的にはこっちが正しそう */
-          Vec3( (float)act_cogvel(0), -(float)act_cogvel(1), 0.0f)
+          Vec3( (float)(pushDetectParam.dx_gain_0 * act_cogvel(0)), -(float)(pushDetectParam.dx_gain_1 * act_cogvel(1)), 0.0f)
 #else
           Vec3( 0.0f, 0.0f, 0.0f )
 #endif
@@ -1992,6 +1996,10 @@ bool PushRecover::getPushDetectParam(OpenHRP::PushRecoverService::PushDetectPara
     o_param.body_compliance_k1      = pushDetectParam.body_compliance_k1;
     o_param.body_compliance_k2      = pushDetectParam.body_compliance_k2;
     o_param.body_compliance_k3      = pushDetectParam.body_compliance_k3;
+    o_param.x_gain_0                = pushDetectParam.x_gain_0;
+    o_param.x_gain_1                = pushDetectParam.x_gain_1;
+    o_param.dx_gain_0               = pushDetectParam.dx_gain_0;
+    o_param.dx_gain_1               = pushDetectParam.dx_gain_1;
 
     return true;
 }
