@@ -12,6 +12,9 @@ module OpenHRP
       {
           double diff_margin_threshold_x;
           double diff_margin_threshold_y;
+          double body_compliance_k1;
+          double body_compliance_k2;
+          double body_compliance_k3;
       };
 
       boolean dummy(in double a);

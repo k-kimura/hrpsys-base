@@ -364,6 +364,9 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   pushDetector_state = PD_DISABLE;
   pushDetectParam.diff_margin_threshold_x = 70.0*70.0;
   pushDetectParam.diff_margin_threshold_y = (40.0+80.0)*(40.0+80.0);
+  pushDetectParam.body_compliance_k1      = 0.03;
+  pushDetectParam.body_compliance_k2      = -0.03;
+  pushDetectParam.body_compliance_k3      = 0.1;
 
   loop = 1;
 
@@ -1144,7 +1147,8 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 
 bool PushRecover::controlBodyCompliance(bool is_enable){
     double u;
-    const double k[3] = {0.07,  -0.07,  0.1};
+
+    const double k[3] = {pushDetectParam.body_compliance_k1, pushDetectParam.body_compliance_k2, pushDetectParam.body_compliance_k3};
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
@@ -1968,6 +1972,7 @@ bool PushRecover::setPushDetectParam(const OpenHRP::PushRecoverService::PushDete
 
     std::cout << "[pr] diff_margin_threshold_x=[" << pushDetectParam.diff_margin_threshold_x << "]" << std::endl;
     std::cout << "[pr] diff_margin_threshold_y=[" << pushDetectParam.diff_margin_threshold_y << "]" << std::endl;
+    std::cout << "[pr] body_compliance_k=[" << pushDetectParam.body_compliance_k1 << ", " << pushDetectParam.body_compliance_k2 << ", " << pushDetectParam.body_compliance_k3 << "]" << std::endl;
 
     return true;
 }
@@ -1977,6 +1982,9 @@ bool PushRecover::getPushDetectParam(OpenHRP::PushRecoverService::PushDetectPara
     std::cerr << "[" << m_profile.instance_name << "] getPushDetectParam" << std::endl;
     o_param.diff_margin_threshold_x = pushDetectParam.diff_margin_threshold_x;
     o_param.diff_margin_threshold_y = pushDetectParam.diff_margin_threshold_y;
+    o_param.body_compliance_k1      = pushDetectParam.body_compliance_k1;
+    o_param.body_compliance_k2      = pushDetectParam.body_compliance_k2;
+    o_param.body_compliance_k3      = pushDetectParam.body_compliance_k3;
 
     return true;
 }
