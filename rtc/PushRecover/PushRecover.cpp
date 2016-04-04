@@ -1458,7 +1458,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                                                             target_joint_angle );
           }else if(current_control_state == PR_READY){
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
-                                                            body_p_default_offset + ref_traj.body_p + basePos_modif,
+                                                            body_p_default_offset + ref_traj.body_p + basePos_modif - vbasePos_modif_at_start,
 #if 0
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
                                                             InitialRfoot_p + ref_traj.footr_p - default_zmp_offset_r,
