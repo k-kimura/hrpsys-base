@@ -1208,7 +1208,7 @@ void PushRecover::trajectoryReset(void){
     ref_basePos_modif = hrp::Vector3::Zero();
     ref_basePos_modif_filter->reset(ref_basePos_modif);
     ref_zmp_modif     = hrp::Vector3::Zero();
-    bodyPos_modif_at_start = hrp::Vector::Zero();
+    basePos_modif_at_start = hrp::Vector3::Zero();
 
     prev_ref_traj.clear();
 }
