@@ -1411,6 +1411,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0] + ref_traj.body_p[0],
                                                 traj_body_init[1] + ref_traj.body_p[1],
                                                 traj_body_init[2] + InitialLfoot_p[2] + ref_traj.body_p[2]);
+          m_robot->rootLink()->p += ref_basePos_modif;
 #if 0
           if(loop%1000==0)printf("[pr] todo pos\n");
           PRINTVEC3(act_world_root_pos,(loop%500==0));
