@@ -1564,7 +1564,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       }
 
       /* Finally set rootlink pos to world */
-      m_robot->rootLink()->p = act_world_root_pos;
+      //m_robot->rootLink()->p = act_world_root_pos;
+      m_robot->rootLink()->p = act_world_root_pos + ref_basePos_modif;
 
 #if 0
       if(loop%500==0)printf("[pr] todo finally\n");
