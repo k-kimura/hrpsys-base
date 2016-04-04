@@ -1374,7 +1374,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                                       sf_footl_p,
                                       sf_footr_p );
               ref_traj.p       = sf_pref;
-              ref_traj.body_p  = sf_body_p - basePos_modif_at_start;
+              ref_traj.body_p  = sf_body_p;
               ref_traj.footl_p = sf_footl_p;
               ref_traj.footr_p = sf_footr_p;
           }else{
@@ -1440,10 +1440,11 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           const float foot_l_pitch = 0.0f;
           const float foot_r_pitch = 0.0f;
           const Vec3 basePos_modif = Vec3(ref_basePos_modif(0),ref_basePos_modif(1),ref_basePos_modif(2));
+          const Vec3 vbasePos_modif_at_start = Vec3(basePos_modif_at_start(0),basePos_modif_at_start(1),basePos_modif_at_start(2));
 
           if(current_control_state == PR_BUSY){   /* controller main */
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
-                                                            body_p_default_offset + ref_traj.body_p + basePos_modif,
+                                                            body_p_default_offset + ref_traj.body_p + basePos_modif - vbasePos_modif_at_start,
                                                             //body_p_default_offset + ref_traj.body_p + basePos_modif,
 #if 0
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
