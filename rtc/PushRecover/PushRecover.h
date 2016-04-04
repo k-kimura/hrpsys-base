@@ -328,6 +328,7 @@ private:
 
     IIKMethod* m_pIKMethod;
     hrp::Vector3 body_p_at_start, body_p_diff_at_start;
+    hrp::Vector3 bodyPos_modif_at_start;
     FrameRateMatcher rate_matcher;
 
     StepForward stpf;

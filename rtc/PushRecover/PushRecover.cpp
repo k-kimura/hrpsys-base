@@ -1208,6 +1208,7 @@ void PushRecover::trajectoryReset(void){
     ref_basePos_modif = hrp::Vector3::Zero();
     ref_basePos_modif_filter->reset(ref_basePos_modif);
     ref_zmp_modif     = hrp::Vector3::Zero();
+    bodyPos_modif_at_start = hrp::Vector::Zero();
 
     prev_ref_traj.clear();
 }
@@ -1350,6 +1351,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
           body_p_at_start = act_world_root_pos;
           body_p_diff_at_start = hrp::Vector3( diff_x, diff_y, diff_z );
+          basePos_modif_at_start = ref_basePos_modif;
 
           stpf.start(x0);
           rate_matcher.setCurrentFrame(0);
@@ -1372,7 +1374,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                                       sf_footl_p,
                                       sf_footr_p );
               ref_traj.p       = sf_pref;
-              ref_traj.body_p  = sf_body_p;
+              ref_traj.body_p  = sf_body_p - basePos_modif_at_start;
               ref_traj.footl_p = sf_footl_p;
               ref_traj.footr_p = sf_footr_p;
           }else{
@@ -1441,7 +1443,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
           if(current_control_state == PR_BUSY){   /* controller main */
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
-                                                            body_p_default_offset + ref_traj.body_p,
+                                                            body_p_default_offset + ref_traj.body_p + basePos_modif,
                                                             //body_p_default_offset + ref_traj.body_p + basePos_modif,
 #if 0
                                                             InitialLfoot_p + ref_traj.footl_p - default_zmp_offset_l,
@@ -1524,15 +1526,15 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #if 1
       const int rwg_len_out = 4500; /* TODO */
       if(rate_matcher.getConvertedFrame()>rwg_len_out){
-          if(current_control_state==PR_BUSY){
-              /* TODO reset basepos modif */
-              for(int i=0;i<2;i++){
-                  bodyComplianceContext[i].prev_u = 0.0;
-              }
-              ref_basePos_modif = hrp::Vector3::Zero();
-              ref_basePos_modif_filter->reset(ref_basePos_modif);
-              ref_zmp_modif     = hrp::Vector3::Zero();
-          }
+          // if(current_control_state==PR_BUSY){
+          //     /* TODO reset basepos modif */
+          //     for(int i=0;i<2;i++){
+          //         bodyComplianceContext[i].prev_u = 0.0;
+          //     }
+          //     ref_basePos_modif = hrp::Vector3::Zero();
+          //     ref_basePos_modif_filter->reset(ref_basePos_modif);
+          //     ref_zmp_modif     = hrp::Vector3::Zero();
+          // }
           stpf.reset();
           current_control_state = PR_READY;
       }
