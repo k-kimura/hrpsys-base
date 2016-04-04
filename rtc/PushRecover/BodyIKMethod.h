@@ -16,7 +16,7 @@ const static Vec3 InitialLfoot_p(-0.015,  0.095, 0.1045);
 const static Vec3 InitialRfoot_p(-0.015,  -0.095, 0.1045);
 #endif
 
-#if 1
+#if 0
 /* default joint angle for Zc = 0.578752 */
 const static float Zc = 0.578752;
 /* ready_jointangle must be initialized to be radian */
