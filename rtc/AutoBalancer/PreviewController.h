@@ -226,7 +226,7 @@ namespace rats
     virtual ~extended_preview_control() {};
   };
 
-#define USE_SINGULAR_LQ_PC
+//#define USE_SINGULAR_LQ_PC
 #ifdef  USE_SINGULAR_LQ_PC
     class SingularLQPreviewControl : public preview_control_base<3>
     {
