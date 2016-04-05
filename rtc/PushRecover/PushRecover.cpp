@@ -1152,7 +1152,8 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
 bool PushRecover::controlBodyCompliance(bool is_enable){
     double u;
 
-    const double k[3] = {pushDetectParam.body_compliance_k1, pushDetectParam.body_compliance_k2, pushDetectParam.body_compliance_k3};
+    const double walking_gain = (current_control_state==PR_BUSY)?0.2:1.0;
+    const double k[3] = {walking_gain * pushDetectParam.body_compliance_k1, walking_gain * pushDetectParam.body_compliance_k2, walking_gain * pushDetectParam.body_compliance_k3};
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
