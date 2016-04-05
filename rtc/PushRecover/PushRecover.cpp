@@ -1316,7 +1316,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           Vec3( traj_body_init[0], traj_body_init[1], 0.0f),
 #endif
 #if 1
-          Vec3( pushDetectParam.x_gain_0 * ref_basePos_modif(0), pushDetectParam.x_gain_1 * ref_basePos_modif(1), diff_z ),
+          //Vec3( pushDetectParam.x_gain_0 * ref_basePos_modif(0), pushDetectParam.x_gain_1 * ref_basePos_modif(1), diff_z ),
+          Vec3( pushDetectParam.x_gain_0 * ref_basePos_modif(0), pushDetectParam.x_gain_1 * ref_basePos_modif(1), 0.0f ),
 #elif 0
           Vec3( 0.0f,    0.0f, diff_z ),
 #else
@@ -1355,7 +1356,10 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
           body_p_at_start = act_world_root_pos;
           body_p_diff_at_start = hrp::Vector3( diff_x, diff_y, diff_z );
-          basePos_modif_at_start = ref_basePos_modif;
+          basePos_modif_at_start = hrp::Vector3(pushDetectParam.x_gain_0 * ref_basePos_modif(0),
+                                                pushDetectParam.x_gain_1 * ref_basePos_modif(1),
+                                                ref_basePos_modif(2)
+                                                );
 
           stpf.start(x0);
           rate_matcher.setCurrentFrame(0);
