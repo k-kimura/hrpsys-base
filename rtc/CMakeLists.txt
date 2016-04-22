@@ -51,8 +51,11 @@ if (QHULL_FOUND)
   add_subdirectory(CollisionDetector)
 endif()
 add_subdirectory(PDcontroller)
-add_subdirectory(TendonJointController)
+#add_subdirectory(TendonJointController)
 add_subdirectory(PushRecover)
+add_subdirectory(Beeper)
+add_subdirectory(ReferenceForceUpdater)
+
 
 if (NOT APPLE AND USE_HRPSYSUTIL)
   add_subdirectory(VideoCapture)

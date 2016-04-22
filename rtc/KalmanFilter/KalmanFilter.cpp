@@ -8,7 +8,7 @@
  */
 
 #include "KalmanFilter.h"
-#include "util/VectorConvert.h"
+#include "hrpsys/util/VectorConvert.h"
 #include <rtm/CorbaNaming.h>
 #include <hrpModel/ModelLoaderUtil.h>
 #include <math.h>
@@ -309,6 +309,7 @@ bool KalmanFilter::setKalmanFilterParam(const OpenHRP::KalmanFilterService::Kalm
 bool KalmanFilter::resetKalmanFilterState()
 {
     rpy_kf.resetKalmanFilterState();
+    ekf_filter.resetKalmanFilterState();
 };
 
 bool KalmanFilter::getKalmanFilterParam(OpenHRP::KalmanFilterService::KalmanFilterParam& i_param)

@@ -14,7 +14,7 @@
 #include "AutoBalancer.h"
 #include <hrpModel/JointPath.h>
 #include <hrpUtil/MatrixSolvers.h>
-#include "util/Hrpsys.h"
+#include "hrpsys/util/Hrpsys.h"
 
 
 typedef coil::Guard<coil::Mutex> Guard;
@@ -686,15 +686,15 @@ void AutoBalancer::getTargetParameters()
               ABCIKparam& tmpikp = ikp[leg_names[i]];
               ee_pos.push_back(tmpikp.target_p0 + tmpikp.target_r0 * tmpikp.localPos + tmpikp.target_r0 * tmpikp.localR * default_zmp_offsets[i]);
           }
-          double alpha = (ref_zmp - ee_pos[1]).norm() / (ee_pos[0] - ee_pos[1]).norm();
+          double alpha = (ref_zmp - ee_pos[1]).norm() / ((ee_pos[0] - ref_zmp).norm() + (ee_pos[1] - ref_zmp).norm());
           if (alpha>1.0) alpha = 1.0;
           if (alpha<0.0) alpha = 0.0;
           if (DEBUGP) {
           std::cerr << "[" << m_profile.instance_name << "] alpha:" << alpha << std::endl;
           }
           double mg = m_robot->totalMass() * gg->get_gravitational_acceleration();
-          m_force[0].data[0] = alpha * mg;
-          m_force[1].data[0] = (1-alpha) * mg;
+          m_force[0].data[2] = alpha * mg;
+          m_force[1].data[2] = (1-alpha) * mg;
       }
       // set limbCOPOffset
       {

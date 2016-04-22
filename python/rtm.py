@@ -538,7 +538,7 @@ def connectPorts(outP, inPs, subscription="flush", dataflow="Push", bufferlength
             print('[rtm.py] \033[31m   Failed to connect %s to %s(%s)\033[0m' % \
                   (outP.get_port_profile().name, inP, inPs))
             continue
-        if isConnected(outP, inP) == True and False:
+        if isConnected(outP, inP) == True:
             print('[rtm.py]      %s and %s are already connected' % \
                   (outP.get_port_profile().name, inP.get_port_profile().name))
             continue
@@ -556,7 +556,7 @@ def connectPorts(outP, inPs, subscription="flush", dataflow="Push", bufferlength
         con_prof = RTC.ConnectorProfile("connector0", "", [outP, inP],
                                         [nv1, nv2, nv3, nv4, nv5, nv6, nv7])
         print('[rtm.py]    Connect ' + outP.get_port_profile().name + ' - ' + \
-              inP.get_port_profile().name)
+              inP.get_port_profile().name+' (dataflow_type='+dataflow+', subscription_type='+ subscription+', bufferlength='+str(bufferlength)+', push_rate='+str(rate)+', push_policy='+pushpolicy+')')
         ret, prof = inP.connect(con_prof)
         if ret != RTC.RTC_OK:
             print("failed to connect")

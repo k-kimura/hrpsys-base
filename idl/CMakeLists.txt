@@ -28,6 +28,7 @@ set(idl_files
   ThermoLimiterService.idl
   TendonJointControllerService.idl
   PushRecoverService.idl
+  ReferenceForceUpdaterService.idl
   )
 
 set(openhrp_idl_files
