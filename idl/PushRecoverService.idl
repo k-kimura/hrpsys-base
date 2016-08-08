@@ -2,6 +2,7 @@
  * @file PushRecoverService.idl
  * @brief Services for tendon joint controlling interface
  */
+//#include "OpenHRPCommon.idl"
 module OpenHRP
 {
   interface PushRecoverService

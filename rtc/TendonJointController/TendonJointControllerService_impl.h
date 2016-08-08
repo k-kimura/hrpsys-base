@@ -2,7 +2,7 @@
 #ifndef ABSOLUTEFORCESENSORSERVICESVC_IMPL_H
 #define ABSOLUTEFORCESENSORSERVICESVC_IMPL_H
 
-#include "TendonJointControllerService.hh"
+#include "hrpsys/idl/TendonJointControllerService.hh"
 
 using namespace OpenHRP;
 

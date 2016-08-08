@@ -2,7 +2,7 @@
 #ifndef PUSHRECOVERSVC_IMPL_H
 #define PUSHRECOVERSVC_IMPL_H
 
-#include "PushRecoverService.hh"
+#include "hrpsys/idl/PushRecoverService.hh"
 
 using namespace OpenHRP;
 
