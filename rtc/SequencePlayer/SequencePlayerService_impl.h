@@ -25,6 +25,8 @@ public:
   CORBA::Boolean setJointAngles(const dSequence& jvs, CORBA::Double tm);
   CORBA::Boolean setJointAnglesWithMask(const dSequence& jvs, const bSequence& mask, CORBA::Double tm);
   CORBA::Boolean setJointAngle(const char *jname, CORBA::Double jv, CORBA::Double tm);
+  CORBA::Boolean setJointTorques(const dSequence& jts, CORBA::Double tm);
+  CORBA::Boolean setJointTorque(const char *jname, CORBA::Double jt, CORBA::Double tm);
   CORBA::Boolean setBasePos(const dSequence& pos, CORBA::Double tm);
   CORBA::Boolean setBaseRpy(const dSequence& rpy, CORBA::Double tm);
   CORBA::Boolean setZmp(const dSequence& zmp, CORBA::Double tm);

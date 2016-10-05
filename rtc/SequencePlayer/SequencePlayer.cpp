@@ -417,6 +417,31 @@ bool SequencePlayer::setJointAngles(const double *angles, const bool *mask,
     return true;
 }
 
+bool SequencePlayer::setJointTorque(short id, double torque, double tm)
+{
+    if ( m_debugLevel > 0 ) {
+        std::cerr << __PRETTY_FUNCTION__ << std::endl;
+    }
+    Guard guard(m_mutex);
+    if (!setInitialState()) return false;
+    dvector tq(m_robot->numJoints());
+    m_seq->getJointTorques(tq.data());
+    tq[id] = torque;
+    m_seq->setJointTorques(tq.data(), tm);
+    return true;
+}
+
+bool SequencePlayer::setJointTorques(const double *torques, double tm)
+{
+    if ( m_debugLevel > 0 ) {
+        std::cerr << __PRETTY_FUNCTION__ << std::endl;
+    }
+    Guard guard(m_mutex);
+    if (!setInitialState()) return false;
+    m_seq->setJointTorques(torques, tm);
+    return true;
+}
+
 bool SequencePlayer::setJointAnglesSequence(const OpenHRP::dSequenceSequence angless, const OpenHRP::bSequence& mask, const OpenHRP::dSequence& times)
 {
     if ( m_debugLevel > 0 ) {

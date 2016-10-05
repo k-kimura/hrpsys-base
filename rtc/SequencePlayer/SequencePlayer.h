@@ -101,6 +101,8 @@ class SequencePlayer
   bool setJointAngle(short id, double angle, double tm);
   bool setJointAngles(const double *angles, double tm);
   bool setJointAngles(const double *angles, const bool *mask, double tm);
+  bool setJointTorque(short id, double torque, double tm);
+  bool setJointTorques(const double *torques, double tm);
   bool setJointAnglesSequence(const OpenHRP::dSequenceSequence angless, const OpenHRP::bSequence& mask, const OpenHRP::dSequence& times);
   bool setJointAnglesSequenceFull(const OpenHRP::dSequenceSequence i_jvss, const OpenHRP::dSequenceSequence i_vels, const OpenHRP::dSequenceSequence i_torques, const OpenHRP::dSequenceSequence i_poss, const OpenHRP::dSequenceSequence i_rpys, const OpenHRP::dSequenceSequence i_accs, const OpenHRP::dSequenceSequence i_zmps, const OpenHRP::dSequenceSequence i_wrenches, const OpenHRP::dSequenceSequence i_optionals, const dSequence i_tms);
   bool clearJointAngles();
