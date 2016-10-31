@@ -141,6 +141,11 @@ class Stabilizer
   hrp::Vector3 vlimit(const hrp::Vector3& value, double llimit_value, double ulimit_value);
   hrp::Vector3 vlimit(const hrp::Vector3& value, const hrp::Vector3& limit_value);
   hrp::Vector3 vlimit(const hrp::Vector3& value, const hrp::Vector3& llimit_value, const hrp::Vector3& ulimit_value);
+  void calcForceMapping(const std::vector<hrp::dvector6> ee_force, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint);
+  void distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& tau_ga, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint, std::vector<hrp::dvector6>& ee_force);
+  void generateForce(const hrp::Matrix33& foot_origin_rot, hrp::Vector3& f_ga, hrp::Vector3& tau_ga);
+  void calcEforce2TauMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint);
+  void torqueST();
 
   inline bool isContact (const size_t idx) // 0 = right, 1 = left
   {
@@ -279,7 +284,7 @@ class Stabilizer
   hrp::BodyPtr m_robot;
   coil::Mutex m_mutex;
   unsigned int m_debugLevel;
-  hrp::dvector transition_joint_q, qorg, qrefv;
+  hrp::dvector transition_joint_q, qorg, qrefv, qold;
   std::vector<STIKParam> stikp;
   std::map<std::string, size_t> contact_states_index_map;
   std::vector<bool> ref_contact_states, prev_ref_contact_states, act_contact_states, is_ik_enable, is_feedback_control_enable, is_zmp_calc_enable;
@@ -298,11 +303,12 @@ class Stabilizer
   std::vector<std::string> rel_ee_name;
   rats::coordinates target_foot_midcoords;
   hrp::Vector3 ref_zmp, ref_cog, ref_cp, ref_cogvel, rel_ref_cp, prev_ref_cog, prev_ref_zmp;
-  hrp::Vector3 act_zmp, act_cog, act_cogvel, act_cp, rel_act_zmp, rel_act_cp, prev_act_cog, act_base_rpy, current_base_rpy, current_base_pos, sbp_cog_offset;
+  hrp::Vector3 act_zmp, act_cog, act_cogvel, act_base_omega, act_cp, rel_act_zmp, rel_act_cp, prev_act_cog, act_base_rpy, current_base_rpy, current_base_pos, sbp_cog_offset;
+  hrp::Matrix33 act_base_R, prev_act_base_R;
   hrp::Vector3 foot_origin_offset[2];
   std::vector<double> prev_act_force_z;
   double zmp_origin_off, transition_smooth_gain, d_pos_z_root, limb_stretch_avoidance_time_const, limb_stretch_avoidance_vlimit[2];
-  boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > act_cogvel_filter;
+  boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > act_cogvel_filter, act_base_omega_filter;
   OpenHRP::StabilizerService::STAlgorithm st_algorithm;
   SimpleZMPDistributor* szd;
   // TPCC
