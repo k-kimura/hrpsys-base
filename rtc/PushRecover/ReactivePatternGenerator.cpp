@@ -1,10 +1,10 @@
 #include <link_physprof.h>  /* link paramter m,c,I */
-#include "step_forward.h"
+#include "ReactivePatternGenerator.h"
 #include <sched.h>
 #include <errno.h>
 
-void* StepForward::func(void* arg){
-    StepForward* self = (StepForward*)arg;
+void* ReactivePatternGenerator::func(void* arg){
+    ReactivePatternGenerator* self = (ReactivePatternGenerator*)arg;
     // リアルタイムスレッド
     // 優先度はちょっと落とす
 #if 0  /* need to be run with permission */
@@ -101,13 +101,13 @@ void* StepForward::func(void* arg){
         _mm_mfence(); /* assure memory access */
         if(( rwg_lfirst.eval_value > 1.0 ) && (rwg_rfirst.eval_value > 1.0) ) {
 #ifdef DEBUG_STEP_FORWARD
-            std::cerr << "[StepForward] Foot Colide" << std::endl;
+            std::cerr << "[ReactivePatternGenerator] Foot Colide" << std::endl;
 #endif
         }else{
             self->is_ready = 1;
         }
 
-        std::cout << "[StepForward] L_first=[" << rwg_lfirst.eval_value << "], R_first=[" << rwg_rfirst.eval_value << "]" << std::endl;
+        std::cout << "[ReactivePatternGenerator] L_first=[" << rwg_lfirst.eval_value << "], R_first=[" << rwg_rfirst.eval_value << "]" << std::endl;
 
         for( int i = 0; i < 5; i++ ){
             /* template<bool dump> void iterateOnce( const int offset, const int calc_len, const double feedback_gain ) */
@@ -117,7 +117,7 @@ void* StepForward::func(void* arg){
                 rwg_rfirst.iterateOnce<false>( 0, 1500+i*100, 1.0 );
             }
             self->is_ready = i + 1;
-            std::cout << "[StepForward] "<< MAKE_CHAR_COLOR_BLUE << "is_ready=" << self->is_ready << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+            std::cout << "[ReactivePatternGenerator] "<< MAKE_CHAR_COLOR_BLUE << "is_ready=" << self->is_ready << MAKE_CHAR_COLOR_DEFAULT << std::endl;
         }
     } /* End of while(true) */
 
@@ -125,4 +125,5 @@ void* StepForward::func(void* arg){
     _mm_mfence();
 
     return 0;
-} /* End of StepForward::func() */
+} /* End of ReactivePatternGenerator::func() */
+

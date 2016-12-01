@@ -6,7 +6,7 @@ set(LIBDIRECT_DIR /home/leus/prog/projects/libdirect)
 include_directories(${BODY_LINK_DIR}/include ${LIBDIRECT_DIR}/include ${PROJECT_SOURCE_DIR}/rtc/SequencePlayer)
 link_directories(${BODY_LINK_DIR}/lib)
 
-set(comp_sources PushRecover.cpp PushRecoverService_impl.cpp step_forward.cpp Vec3e.cpp ../SequencePlayer/interpolator.cpp ../ImpedanceController/RatsMatrix.cpp)
+set(comp_sources PushRecover.cpp PushRecoverService_impl.cpp ReactivePatternGenerator.cpp Vec3e.cpp ../SequencePlayer/interpolator.cpp ../ImpedanceController/RatsMatrix.cpp)
 set(libs hrpModel-3.1 hrpUtil-3.1 hrpsysBaseStub body_link pthread rt)
 add_library(PushRecover SHARED ${comp_sources})
 target_link_libraries(PushRecover ${libs})

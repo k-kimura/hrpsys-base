@@ -26,7 +26,8 @@
 #include "../TorqueFilter/IIRFilter.h"
 
 #include "QzMatrix.h"
-#include "step_forward.h"
+#include "ReactivePatternGenerator.h"
+//#include "OnlinePatternGenerator.h"
 #include "BodyIKMethod.h"
 #include "interpolator.h"  /* from hrpsys/rtc/SequencePlayer */
 #include "FrameRateMatcher.h"
@@ -331,7 +332,7 @@ private:
     hrp::Vector3 basePos_modif_at_start;
     FrameRateMatcher rate_matcher;
 
-    StepForward stpf;
+    ReactivePatternGenerator stpf;
 
     struct ControlBodyComplianceContext {
         double prev_u;

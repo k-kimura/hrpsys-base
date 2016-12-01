@@ -1352,7 +1352,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
       if((start_RWG_flag || checkBodyPosflag) && !m_walkingStates.data && on_ground && current_control_state != PR_BUSY){
       //if((start_RWG_flag || checkBodyPosflag) && !m_walkingStates.data && current_control_state != PR_BUSY){
-          std::cout << "[" << m_profile.instance_name << "] " << MAKE_CHAR_COLOR_RED << "Calling StepForward start" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+          std::cout << "[" << m_profile.instance_name << "] " << MAKE_CHAR_COLOR_RED << "Calling ReactivePatternGenerator start" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
           /* Save Current base position */
 
           body_p_at_start = act_world_root_pos;
