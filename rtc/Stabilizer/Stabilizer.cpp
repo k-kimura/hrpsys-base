@@ -2818,9 +2818,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     f_tau << f_ga, tau_ga;
     size_t ee_num = enable_ee.size();
     size_t state_dim = 6 * ee_num;
-    size_t friction_dim = 4 * ee_num;
     size_t tau_dim = enable_joint.size();
-    size_t const_dim = friction_dim + tau_dim;
     double a = 100, b = 100, c = 1;
 
     //calc Gc
@@ -2839,14 +2837,11 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     hrp::dmatrix I2 = hrp::dmatrix::Identity(state_dim, state_dim)*c;
     hrp::dmatrix ef2tau;
     calcEforce2TauMatrix(ef2tau, enable_ee, enable_joint);
-    hrp::dmatrix friction = hrp::dmatrix::Zero(friction_dim, state_dim);
-    for (size_t i = 0; i < ee_num; i++){
-        friction.block(i * 4, i * 6, 4, 6)
-            << 1, 0,  0.1, 0, 0, 0,
-            1, 0, -0.1, 0, 0, 0,
-            0, 1,  0.1, 0, 0, 0,
-            0, 1, -0.1, 0, 0, 0;
-    }
+    hrp::dmatrix friction;
+    hrp::dvector upperFrictionLimit;
+    hrp::dvector lowerFrictionLimit;
+    size_t friction_dim = makeFrictionConstraint(ee_num, 0.1, true, friction, upperFrictionLimit, lowerFrictionLimit);
+    size_t const_dim = friction_dim + tau_dim;
 
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Q = Gc.transpose() * I1 * Gc + I2;
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> C = -Gc.transpose() * I1 * f_tau;
@@ -2856,8 +2851,6 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     hrp::dmatrix lowerStateLimit(6, ee_num);
     hrp::dvector upperTauLimit(tau_dim);
     hrp::dvector lowerTauLimit(tau_dim);
-    hrp::dmatrix upperFrictionLimit(4, ee_num);
-    hrp::dmatrix lowerFrictionLimit(4, ee_num);
     hrp::dvector upperConstLimit(const_dim);
     hrp::dvector lowerConstLimit(const_dim);
     for (size_t i = 0; i < ee_num; i++) {
@@ -2873,16 +2866,6 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         lowerStateLimit(3, i) = -1e10;
         lowerStateLimit(4, i) = -1e10;
         lowerStateLimit(5, i) = -1e10;
-    }
-    for (size_t i = 0; i < ee_num; i++) {
-        upperFrictionLimit(0, i) =  1e10; //Fx +
-        upperFrictionLimit(1, i) =     0; //Fx -
-        upperFrictionLimit(2, i) =  1e10; //Fy +
-        upperFrictionLimit(3, i) =     0; //Fy -
-        lowerFrictionLimit(0, i) =     0;
-        lowerFrictionLimit(1, i) = -1e10;
-        lowerFrictionLimit(2, i) =     0;
-        lowerFrictionLimit(3, i) = -1e10;
     }
     double pgain[12] = {3300, 8300, 3300, 3300, 4700, 3300, 3300, 8300, 3300, 3300, 4700, 3300};
     double dgain[12] = {24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24};
@@ -2978,6 +2961,35 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         }
         std::cerr << "[" << m_profile.instance_name << "] optimized value = " << example.getObjVal() << std::endl;
     }
+}
+
+size_t Stabilizer::makeFrictionConstraint(size_t num, double coef, bool enable_tau, hrp::dmatrix& const_matrix, hrp::dvector& upper_limit, hrp::dvector& lower_limit)
+{
+    size_t dim = enable_tau ? 6 : 3;
+    const_matrix = hrp::dmatrix::Zero(4 * num, dim * num);
+    for (size_t i = 0; i < num; i++){
+        const_matrix.block(i * 4, i * dim, 4, 3)
+            << 1, 0,  coef,
+            1, 0, -coef,
+            0, 1,  coef,
+            0, 1, -coef;
+        if (enable_tau) {
+            const_matrix.block(i * 4, i * dim + 3, 4, 3) = hrp::dmatrix::Zero(4, 3);
+        }
+    }
+    upper_limit = hrp::dvector(4 * num);
+    lower_limit = hrp::dvector(4 * num);
+    for (size_t i = 0; i < num; i++) {
+        upper_limit(0 + 4 * i) =  1e10; //Fx +
+        upper_limit(1 + 4 * i) =     0; //Fx -
+        upper_limit(2 + 4 * i) =  1e10; //Fy +
+        upper_limit(3 + 4 * i) =     0; //Fy -
+        lower_limit(0 + 4 * i) =     0;
+        lower_limit(1 + 4 * i) = -1e10;
+        lower_limit(2 + 4 * i) =     0;
+        lower_limit(3 + 4 * i) = -1e10;
+    }
+    return 4 * num;
 }
 
 void Stabilizer::calcEforce2TauMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint)
