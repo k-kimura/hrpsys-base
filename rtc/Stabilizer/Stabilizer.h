@@ -143,6 +143,7 @@ class Stabilizer
   hrp::Vector3 vlimit(const hrp::Vector3& value, const hrp::Vector3& llimit_value, const hrp::Vector3& ulimit_value);
   void calcForceMapping(const std::vector<hrp::dvector6> ee_force, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint);
   size_t makeFrictionConstraint(size_t num, double coef, bool enable_tau, hrp::dmatrix& const_matrix, hrp::dvector& upper_limit, hrp::dvector& lower_limit);
+  void makeJointTorqueLimit(size_t num, const std::vector<int>& enable_joint, double pgain[], double dgain[], hrp::dvector& upper_limit, hrp::dvector& lower_limit);
   void distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& tau_ga, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint, std::vector<hrp::dvector6>& ee_force);
   void generateForce(const hrp::Matrix33& foot_origin_rot, hrp::Vector3& f_ga, hrp::Vector3& tau_ga);
   void calcEforce2TauMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint);

@@ -2725,6 +2725,8 @@ void Stabilizer::torqueST()
     // update by current joint angles
     for ( int i = 0; i < m_robot->numJoints(); i++ ){
         m_robot->joint(i)->q = m_qCurrent.data[i];
+        m_robot->joint(i)->dq =  (m_robot->joint(i)->q - qold(i)) / dt;
+        qold(i) = m_robot->joint(i)->q;
     }
     // tempolary
     m_robot->rootLink()->p = hrp::Vector3::Zero();
@@ -2818,7 +2820,6 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     f_tau << f_ga, tau_ga;
     size_t ee_num = enable_ee.size();
     size_t state_dim = 6 * ee_num;
-    size_t tau_dim = enable_joint.size();
     double a = 100, b = 100, c = 1;
 
     //calc Gc
@@ -2835,24 +2836,35 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     I1 << hrp::dmatrix::Identity(3, 3) * a, hrp::dmatrix::Zero(3, 3),
         hrp::dmatrix::Zero(3, 3), hrp::dmatrix::Identity(3, 3) * b;
     hrp::dmatrix I2 = hrp::dmatrix::Identity(state_dim, state_dim)*c;
+
+    //joint torque constraint
     hrp::dmatrix ef2tau;
     calcEforce2TauMatrix(ef2tau, enable_ee, enable_joint);
+    size_t tau_dim = enable_joint.size();
+    hrp::dvector upperTauLimit;
+    hrp::dvector lowerTauLimit;
+    double pgain[] = {3300, 8300, 3300, 3300, 4700, 3300, 3300, 8300, 3300, 3300, 4700, 3300};
+    double dgain[] = {24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24};
+    makeJointTorqueLimit(tau_dim, enable_joint, pgain, dgain, upperTauLimit, lowerTauLimit);
+
+    //friction constraint
     hrp::dmatrix friction;
     hrp::dvector upperFrictionLimit;
     hrp::dvector lowerFrictionLimit;
     size_t friction_dim = makeFrictionConstraint(ee_num, 0.1, true, friction, upperFrictionLimit, lowerFrictionLimit);
+
     size_t const_dim = friction_dim + tau_dim;
+    Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Const(const_dim, state_dim);
+    Const << ef2tau, friction;
+    hrp::dvector upperConstLimit(const_dim);
+    hrp::dvector lowerConstLimit(const_dim);
+    upperConstLimit << upperTauLimit, upperFrictionLimit;
+    lowerConstLimit << lowerTauLimit, lowerFrictionLimit;
 
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Q = Gc.transpose() * I1 * Gc + I2;
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> C = -Gc.transpose() * I1 * f_tau;
-    Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Const(const_dim, state_dim);
-    Const << ef2tau, friction;
     hrp::dmatrix upperStateLimit(6, ee_num);
     hrp::dmatrix lowerStateLimit(6, ee_num);
-    hrp::dvector upperTauLimit(tau_dim);
-    hrp::dvector lowerTauLimit(tau_dim);
-    hrp::dvector upperConstLimit(const_dim);
-    hrp::dvector lowerConstLimit(const_dim);
     for (size_t i = 0; i < ee_num; i++) {
         upperStateLimit(0, i) =  1e10;
         upperStateLimit(1, i) =  1e10;
@@ -2867,22 +2879,6 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         lowerStateLimit(4, i) = -1e10;
         lowerStateLimit(5, i) = -1e10;
     }
-    double pgain[12] = {3300, 8300, 3300, 3300, 4700, 3300, 3300, 8300, 3300, 3300, 4700, 3300};
-    double dgain[12] = {24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24, 24};
-    for (size_t i = 0; i < tau_dim; i++) {
-        double tlimit = m_robot->joint(enable_joint[i])->climit * m_robot->joint(enable_joint[i])->gearRatio * m_robot->joint(enable_joint[i])->torqueConst;
-        double ulimit = -pgain[enable_joint[i]] * (m_robot->joint(enable_joint[i])->q - m_robot->joint(enable_joint[i])->ulimit)
-            -dgain[enable_joint[i]] * (m_robot->joint(enable_joint[i])->q - qold(enable_joint[i]))/dt;
-        double llimit = -pgain[enable_joint[i]] * (m_robot->joint(enable_joint[i])->q - m_robot->joint(enable_joint[i])->llimit)
-            -dgain[enable_joint[i]] * (m_robot->joint(enable_joint[i])->q - qold(enable_joint[i]))/dt;
-        upperTauLimit(i) =  std::max(std::min(tlimit, ulimit), -tlimit);
-        lowerTauLimit(i) =  std::min(std::max(-tlimit, llimit), tlimit);
-    }
-    for (size_t i = 0; i < m_robot->numJoints(); i++) {
-        qold(i) = m_robot->joint(i)->q;
-    }
-    upperConstLimit << upperTauLimit, upperFrictionLimit;
-    lowerConstLimit << lowerTauLimit, lowerFrictionLimit;
     hrp::dmatrix output(6, ee_num);
 
     qpOASES::real_t* H = (qpOASES::real_t*)Q.data();
@@ -2990,6 +2986,21 @@ size_t Stabilizer::makeFrictionConstraint(size_t num, double coef, bool enable_t
         lower_limit(3 + 4 * i) = -1e10;
     }
     return 4 * num;
+}
+
+void Stabilizer::makeJointTorqueLimit(size_t num, const std::vector<int>& enable_joint, double pgain[], double dgain[], hrp::dvector& upper_limit, hrp::dvector& lower_limit)
+{
+    upper_limit = hrp::dvector(num);
+    lower_limit = hrp::dvector(num);
+    for (size_t i = 0; i < num; i++) {
+        double tlimit = m_robot->joint(enable_joint[i])->climit * m_robot->joint(enable_joint[i])->gearRatio * m_robot->joint(enable_joint[i])->torqueConst;
+        double ulimit = -pgain[enable_joint[i]] * (m_robot->joint(enable_joint[i])->q - m_robot->joint(enable_joint[i])->ulimit)
+            -dgain[enable_joint[i]] * m_robot->joint(enable_joint[i])->dq;
+        double llimit = -pgain[enable_joint[i]] * (m_robot->joint(enable_joint[i])->q - m_robot->joint(enable_joint[i])->llimit)
+            -dgain[enable_joint[i]] * m_robot->joint(enable_joint[i])->dq;
+        upper_limit(i) =  std::max(std::min(tlimit, ulimit), -tlimit);
+        lower_limit(i) =  std::min(std::max(-tlimit, llimit), tlimit);
+    }
 }
 
 void Stabilizer::calcEforce2TauMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint)
