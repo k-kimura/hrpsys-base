@@ -2851,7 +2851,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     hrp::dmatrix friction;
     hrp::dvector upperFrictionLimit;
     hrp::dvector lowerFrictionLimit;
-    size_t friction_dim = makeFrictionConstraint(ee_num, 0.1, true, friction, upperFrictionLimit, lowerFrictionLimit);
+    size_t friction_dim = makeFrictionConstraint(ee_num, 0.9, true, friction, upperFrictionLimit, lowerFrictionLimit);
 
     size_t const_dim = friction_dim + tau_dim;
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Const(const_dim, state_dim);
