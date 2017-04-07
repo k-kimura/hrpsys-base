@@ -2899,10 +2899,10 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     //calc Gc
     hrp::dmatrix Gc(6, state_dim);
     for (size_t i = 0; i < ee_num; i++) {
-        Gc.block(0, i * 6, 3, 3) = act_ee_R[enable_ee[i]];
-        Gc.block(3, i * 6, 3, 3) = hrp::hat(act_ee_p[enable_ee[i]]  - act_cog) * act_ee_R[enable_ee[i]];
+        Gc.block(0, i * 6, 3, 3) = act_el_R[enable_ee[i]];
+        Gc.block(3, i * 6, 3, 3) = hrp::hat(act_el_p[enable_ee[i]]  - act_cog) * act_el_R[enable_ee[i]];
         Gc.block(0, i * 6 + 3, 3, 3) = hrp::dmatrix::Zero(3, 3);
-        Gc.block(3, i * 6 + 3, 3, 3) = act_ee_R[enable_ee[i]];
+        Gc.block(3, i * 6 + 3, 3, 3) = act_el_R[enable_ee[i]];
     }
     hrp::Vector3 foot_origin_pos;
     hrp::Matrix33 foot_origin_rot;
