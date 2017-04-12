@@ -145,6 +145,7 @@ class Stabilizer
   size_t makeFrictionConstraint(size_t num, double coef, bool enable_tau, hrp::dmatrix& const_matrix, hrp::dvector& upper_limit, hrp::dvector& lower_limit);
   void makeJointTorqueLimit(size_t num, const std::vector<int>& enable_joint, double pgain[], double dgain[], hrp::dvector& upper_limit, hrp::dvector& lower_limit);
   void distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& tau_ga, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint, std::vector<hrp::dvector6>& ee_force);
+  void generateSwingFootForce(hrp::Vector3& f_foot, hrp::Vector3& tau_foot, size_t i);
   void generateForce(const hrp::Matrix33& foot_origin_rot, hrp::Vector3& f_ga, hrp::Vector3& tau_ga);
   void calcEforce2ZmpMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const double zmp_z);
   void calcEforce2TauMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint);
@@ -302,6 +303,8 @@ class Stabilizer
   hrp::Vector3 current_root_p, target_root_p;
   hrp::Matrix33 current_root_R, target_root_R, prev_act_foot_origin_rot, prev_ref_foot_origin_rot, target_foot_origin_rot;
   std::vector <hrp::Vector3> target_ee_p, rel_ee_pos, act_ee_p, projected_normal, act_force;
+  std::vector <hrp::Vector3> ref_el_p, act_el_p, act_el_vel, prev_act_el_p, act_el_omega;
+  std::vector <hrp::Matrix33> ref_el_R, act_el_R, prev_act_el_R;
   std::vector <hrp::Matrix33> target_ee_R, rel_ee_rot, act_ee_R;
   std::vector<std::string> rel_ee_name;
   rats::coordinates target_foot_midcoords;
@@ -312,6 +315,7 @@ class Stabilizer
   std::vector<double> prev_act_force_z;
   double zmp_origin_off, transition_smooth_gain, d_pos_z_root, limb_stretch_avoidance_time_const, limb_stretch_avoidance_vlimit[2];
   boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > act_cogvel_filter, act_base_omega_filter;
+  std::vector<boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > > act_el_vel_filter, act_el_omega_filter;
   OpenHRP::StabilizerService::STAlgorithm st_algorithm;
   SimpleZMPDistributor* szd;
   // TPCC
