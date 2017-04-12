@@ -2920,9 +2920,13 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         hrp::dvector y(state_dim+const_dim);
         qpOASES::real_t* yOpt = (qpOASES::real_t*)y.data();
         example.getDualSolution(yOpt);
-        Eigen::Map<hrp::dmatrix> tmp1(y.head(state_dim).data(), 6, ee_num);
-        Eigen::Map<hrp::dvector> tmp2(y.segment(tau_dim, state_dim).data(), tau_dim);
-        Eigen::Map<hrp::dmatrix> tmp3(y.tail(friction_dim).data(), 4, ee_num);
+        size_t tmp_index = 0;
+        Eigen::Map<hrp::dmatrix> tmp1(y.segment(tmp_index, state_dim).data(), 6, ee_num);
+        tmp_index += state_dim;
+        Eigen::Map<hrp::dvector> tmp2(y.segment(tmp_index, tau_dim).data(), tau_dim);
+        tmp_index += tau_dim;
+        Eigen::Map<hrp::dmatrix> tmp3(y.segment(tmp_index, friction_dim).data(), 4, ee_num);
+        tmp_index += friction_dim;
         std::cerr << "[" << m_profile.instance_name << "] qp result" << std::endl;
         std::cerr << "[" << m_profile.instance_name << "] try num = " << qpcounter << std::endl;
         if (qpcounter > const_dim + state_dim + 1) {
@@ -3000,6 +3004,23 @@ void Stabilizer::makeJointTorqueLimit(size_t num, const std::vector<int>& enable
             -dgain[enable_joint[i]] * m_robot->joint(enable_joint[i])->dq;
         upper_limit(i) =  std::max(std::min(tlimit, ulimit), -tlimit);
         lower_limit(i) =  std::min(std::max(-tlimit, llimit), tlimit);
+    }
+}
+
+void Stabilizer::calcEforce2ZmpMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const double zmp_z)
+{
+    size_t ee_num = enable_ee.size();
+    ret = hrp::dmatrix(3, 6 * ee_num);
+    for (size_t i = 0; i < ee_num; i++) {
+        hrp::Link* target = m_robot->link(stikp[enable_ee[i]].target_name);
+        hrp::dmatrix tmpR(6, 6);
+        tmpR << target->R, hrp::dmatrix::Zero(3, 3), hrp::dmatrix::Zero(3, 3), target->R;
+        ret.block(0, i * 6, 2, 6) <<
+            -(target->p(2) - zmp_z), 0, target->p(0), 0, -1, 0,
+            0, -(target->p(2) - zmp_z), target->p(1), 1,  0, 0;
+        ret.block(2, i * 6, 1, 6) <<
+            0, 0, 1, 0, 0, 0;
+        ret.block(0, i * 6, 3, 6) = ret.block(0, i * 6, 3, 6) * tmpR;
     }
 }
 
