@@ -480,6 +480,7 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   m_allEEComp.data.length(stikp.size() * 6); // 6 is pos+rot dim
   m_debugData.data.length(1); m_debugData.data[0] = 0.0;
 
+  qp_solver = qpOASES::SQProblem(1, 1);
   //
   szd = new SimpleZMPDistributor(dt);
   std::vector<std::vector<Eigen::Vector2d> > support_polygon_vec;
@@ -2970,35 +2971,33 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     qpOASES::real_t* xOpt = (qpOASES::real_t*)output.data();
 
     //solve QP
-    qpOASES::QProblem example(state_dim, const_dim);
+    if (qp_solver.getNV() != state_dim || qp_solver.getNC() != const_dim) {
+        qp_solver = qpOASES::SQProblem(state_dim, const_dim);
+    }
     qpOASES::Options options;
     options.printLevel = qpOASES::PL_NONE;
-    options.initialStatusBounds = qpOASES::ST_LOWER;
-    example.setOptions(options);
+    qp_solver.setOptions(options);
     int nWSR = 100;
     qpOASES::real_t time = 0.0000;
-    for (size_t i = 0; i < ee_num; i++) {
-        output(0, i) = 0;
-        output(1, i) = 0;
-        output(2, i) = upperStateLimit(2, i) == 0 ? 0 : 1;
-        output(3, i) = 0;
-        output(4, i) = 0;
-        output(5, i) = 0;
+    qpOASES::returnValue status;
+    if (qp_solver.isInitialised()) {
+        status = qp_solver.hotstart(H, g, A, lb, ub, lbA, ubA, nWSR, &time);
+    } else {
+        status = qp_solver.init(H, g, A, lb, ub, lbA, ubA, nWSR);
     }
-    qpOASES::returnValue status = example.init(H, g, A, lb, ub, lbA, ubA, nWSR, &time, xOpt, (qpOASES::real_t*)0, (qpOASES::Bounds*)0, (qpOASES::Constraints*)0);
     int qpcounter = 1;
-    while (qpOASES::getSimpleStatus(status) && qpcounter <= const_dim + state_dim + 1) { //TODO
-        status = example.hotstart(g, lb, ub, lbA, ubA, nWSR, &time);
+    while (!qp_solver.isSolved() && !qp_solver.isInfeasible() && qpcounter < state_dim + const_dim) {
+        status = qp_solver.hotstart(g, lb, ub, lbA, ubA, nWSR, &time);
         qpcounter++;
     }
-    example.getPrimalSolution(xOpt);
+    qp_solver.getPrimalSolution(xOpt);
     for (size_t i = 0; i < ee_num; i++) {
         ee_force.push_back(output.col(i));
     }
     if (DEBUGP) {
         hrp::dvector y(state_dim+const_dim);
         qpOASES::real_t* yOpt = (qpOASES::real_t*)y.data();
-        example.getDualSolution(yOpt);
+        qp_solver.getDualSolution(yOpt);
         size_t tmp_index = 0;
         Eigen::Map<hrp::dmatrix> tmp1(y.segment(tmp_index, state_dim).data(), 6, ee_num);
         tmp_index += state_dim;
@@ -3008,7 +3007,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         tmp_index += friction_dim;
         std::cerr << "[" << m_profile.instance_name << "] qp result" << std::endl;
         std::cerr << "[" << m_profile.instance_name << "] try num = " << qpcounter << std::endl;
-        if (qpcounter > const_dim + state_dim + 1) {
+        if (qp_solver.isInfeasible()) {
             std::cerr << "[" << m_profile.instance_name << "] optimization failed " << qpcounter << std::endl;
         }
         std::cerr << "[" << m_profile.instance_name << "] end efector force =" << std::endl;
@@ -3038,7 +3037,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
             else if (tmp2(i) < 0)
                 std::cerr << "[" << m_profile.instance_name << "]     torque(" << i << ") upper limit" << std::endl;
         }
-        std::cerr << "[" << m_profile.instance_name << "] optimized value = " << example.getObjVal() << std::endl;
+        std::cerr << "[" << m_profile.instance_name << "] optimized value = " << qp_solver.getObjVal() << std::endl;
     }
 }
 
