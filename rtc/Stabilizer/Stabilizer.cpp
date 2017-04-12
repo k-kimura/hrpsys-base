@@ -2933,13 +2933,19 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     hrp::dvector lowerFrictionLimit;
     size_t friction_dim = makeFrictionConstraint(ee_num, 0.9, true, friction, upperFrictionLimit, lowerFrictionLimit);
 
-    size_t const_dim = friction_dim + tau_dim;
+    //cop constraint
+    hrp::dmatrix cop;
+    hrp::dvector upperCopLimit;
+    hrp::dvector lowerCopLimit;
+    size_t cop_dim = makeCopConstraint(enable_ee, cop, upperCopLimit, lowerCopLimit);
+
+    size_t const_dim = friction_dim + tau_dim + cop_dim;
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Const(const_dim, state_dim);
-    Const << ef2tau, friction;
+    Const << ef2tau, friction, cop;
     hrp::dvector upperConstLimit(const_dim);
     hrp::dvector lowerConstLimit(const_dim);
-    upperConstLimit << upperTauLimit, upperFrictionLimit;
-    lowerConstLimit << lowerTauLimit, lowerFrictionLimit;
+    upperConstLimit << upperTauLimit, upperFrictionLimit, upperCopLimit;
+    lowerConstLimit << lowerTauLimit, lowerFrictionLimit, lowerCopLimit;
 
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Q = Gc.transpose() * I1 * Gc + I2 + 5 * Gc2.transpose() * Gc2;
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> C = -Gc.transpose() * I1 * f_tau;
@@ -3005,6 +3011,8 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         tmp_index += tau_dim;
         Eigen::Map<hrp::dmatrix> tmp3(y.segment(tmp_index, friction_dim).data(), 4, ee_num);
         tmp_index += friction_dim;
+        Eigen::Map<hrp::dvector> tmp4(y.segment(tmp_index, cop_dim).data(), cop_dim);
+        tmp_index += cop_dim;
         std::cerr << "[" << m_profile.instance_name << "] qp result" << std::endl;
         std::cerr << "[" << m_profile.instance_name << "] try num = " << qpcounter << std::endl;
         if (qp_solver.isInfeasible()) {
@@ -3036,6 +3044,11 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
                 std::cerr << "[" << m_profile.instance_name << "]     torque(" << i << ") lower limit" << std::endl;
             else if (tmp2(i) < 0)
                 std::cerr << "[" << m_profile.instance_name << "]     torque(" << i << ") upper limit" << std::endl;
+        }
+        std::cerr << "[" << m_profile.instance_name << "] cop limit" << std::endl;
+        for (size_t i = 0; i < cop_dim; i++) {
+            if (tmp4(i) > 0)
+                std::cerr << "[" << m_profile.instance_name << "]     side(" << i << ") limit" << std::endl;
         }
         std::cerr << "[" << m_profile.instance_name << "] optimized value = " << qp_solver.getObjVal() << std::endl;
     }
@@ -3083,6 +3096,59 @@ void Stabilizer::makeJointTorqueLimit(size_t num, const std::vector<int>& enable
         upper_limit(i) =  std::max(std::min(tlimit, ulimit), -tlimit);
         lower_limit(i) =  std::min(std::max(-tlimit, llimit), tlimit);
     }
+}
+
+size_t Stabilizer::makeCopConstraint(const std::vector<int>& enable_ee, hrp::dmatrix& const_matrix, hrp::dvector& upper_limit, hrp::dvector& lower_limit)
+{
+    size_t ee_num = enable_ee.size();
+    std::vector<std::vector<Eigen::Vector2d> > support_polygon_vertices;
+    szd->get_vertices(support_polygon_vertices);
+    size_t const_dim = 0;
+    for (size_t i = 0; i < ee_num; i++) {
+        const_dim += support_polygon_vertices[enable_ee[i]].size();
+    }
+    const_matrix = hrp::dmatrix::Zero(const_dim, 6 * ee_num);
+    size_t index = 0;
+
+    for (size_t i = 0; i < ee_num; i++) {
+        size_t ver_num = support_polygon_vertices[enable_ee[i]].size();
+        //calc matrix to check if zmp is inside support polygon
+        hrp::dmatrix check_matrix(ver_num, 3);
+        for (size_t j = 0; j < ver_num - 1; j++) {
+            check_matrix.block(j, 0, 1, 3) <<
+                support_polygon_vertices[enable_ee[i]][j+1](1) - support_polygon_vertices[enable_ee[i]][j](1),
+                support_polygon_vertices[enable_ee[i]][j](0) - support_polygon_vertices[enable_ee[i]][j+1](0),
+                support_polygon_vertices[enable_ee[i]][j+1](0) * support_polygon_vertices[enable_ee[i]][j](1)
+                - support_polygon_vertices[enable_ee[i]][j+1](1) * support_polygon_vertices[enable_ee[i]][j](0);
+        }
+        check_matrix.block(ver_num-1, 0, 1, 3) <<
+            support_polygon_vertices[enable_ee[i]].front()(1) - support_polygon_vertices[enable_ee[i]].back()(1),
+            support_polygon_vertices[enable_ee[i]].back()(0) - support_polygon_vertices[enable_ee[i]].front()(0),
+            support_polygon_vertices[enable_ee[i]].front()(0) * support_polygon_vertices[enable_ee[i]].back()(1)
+            - support_polygon_vertices[enable_ee[i]].front()(1) * support_polygon_vertices[enable_ee[i]].back()(0);
+        //calc COP matrix
+        hrp::dmatrix cop_num_den(3, 6);
+        hrp::Link* target = m_robot->link(stikp[enable_ee[i]].target_name);
+        hrp::Vector3 tp = - stikp[enable_ee[i]].localR.transpose() * stikp[enable_ee[i]].localp;
+        cop_num_den <<
+            -tp(2), 0, tp(0), 0, -1, 0,
+            0, -tp(2), tp(1), 1,  0, 0,
+            0, 0, 1, 0, 0, 0;
+        hrp::dmatrix tmpR = hrp::dmatrix::Zero(6, 6);
+        tmpR.block(0, 0, 3, 3) = stikp[enable_ee[i]].localR.transpose();
+        tmpR.block(3, 3, 3, 3) = stikp[enable_ee[i]].localR.transpose();
+        cop_num_den = cop_num_den * tmpR;
+        const_matrix.block(index, 6 * i, ver_num, 6) = check_matrix * cop_num_den;
+        index += ver_num;
+    }
+
+    upper_limit = hrp::dvector(const_dim);
+    lower_limit = hrp::dvector(const_dim);
+    for (size_t i = 0; i < const_dim; i++) {
+        upper_limit(i) = 10e10;
+        lower_limit(i) = 0;
+    }
+    return const_dim;
 }
 
 void Stabilizer::calcEforce2ZmpMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const double zmp_z)
