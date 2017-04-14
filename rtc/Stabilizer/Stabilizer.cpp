@@ -2793,13 +2793,17 @@ void Stabilizer::torqueST()
     hrp::dvector6 tmp_f;
     hrp::Vector3 f_foot = hrp::Vector3::Zero();
     hrp::Vector3 tau_foot = hrp::Vector3::Zero();
+    Kpp = hrp::Matrix33::Identity() * 500;
+    Kpd = hrp::Matrix33::Identity() * 50;
+    Krp = hrp::Matrix33::Identity() * 100;
+    Krd = hrp::Matrix33::Identity() * 10;
     for (size_t i = 0; i < act_el_p.size(); i++) {
         if (!ref_contact_states[i]) {
             Gc1.block(0, 0, 3, 3) = act_el_R[i];
             Gc2.block(0, 0, 3, 3) = hrp::hat(act_el_p[i] - act_cog) * act_ee_R[i];
             Gc1.block(0, 3, 3, 3) = hrp::dmatrix::Zero(3, 3);
             Gc2.block(0, 3, 3, 3) = act_el_R[i];
-            generateSwingFootForce(f_foot, tau_foot, i);
+            generateSwingFootForce(Kpp, Kpd, Krp, Krd, f_foot, tau_foot, i);
         }
     }
     tmp_f << f_foot, tau_foot;
@@ -2868,18 +2872,13 @@ void Stabilizer::generateForce(const hrp::Matrix33& foot_origin_rot, const hrp::
     tau_ga = foot_origin_rot.transpose() * tau_ga;
 }
 
-void Stabilizer::generateSwingFootForce(hrp::Vector3& f_foot, hrp::Vector3& tau_foot, size_t i)
+void Stabilizer::generateSwingFootForce(const hrp::Matrix33& Kpp, const hrp::Matrix33& Kpd, const hrp::Matrix33 Krp, const hrp::Matrix33 Krd, hrp::Vector3& f_foot, hrp::Vector3& tau_foot, size_t i)
 {
-    hrp::Matrix33 Kp, Kd, Kr, Dr;
-    Kp = hrp::Matrix33::Identity() * 500;
-    Kd = hrp::Matrix33::Identity() * 50;
-    Kr = hrp::Matrix33::Identity() * 100;
-    Dr = hrp::Matrix33::Identity() * 10;
-    f_foot = act_el_R[i].transpose() * Kp * (act_el_p[i] - ref_el_p[i]) + act_el_R[i].transpose() * Kd * act_el_vel[i];
+    f_foot = act_el_R[i].transpose() * Kpp * (act_el_p[i] - ref_el_p[i]) + act_el_R[i].transpose() * Kpd * act_el_vel[i];
     Eigen::Quaternion<double> q(ref_el_R[i].transpose() * act_el_R[i]);
     hrp::Vector3 e = q.vec();
     double d = q.w();
-    tau_foot = 2 * (d * hrp::Matrix33::Identity() + hrp::hat(e)) * Kr * e + Dr * act_el_omega[i];
+    tau_foot = 2 * (d * hrp::Matrix33::Identity() + hrp::hat(e)) * Krp * e + Krd * act_el_omega[i];
 }
 
 void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& tau_ga, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint, std::vector<hrp::dvector6>& ee_force)
