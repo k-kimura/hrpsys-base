@@ -2782,7 +2782,12 @@ void Stabilizer::torqueST()
     }
     std::sort(enable_joint.begin(), enable_joint.end());
     enable_joint.erase(std::unique(enable_joint.begin(), enable_joint.end()), enable_joint.end());
-    generateForce(foot_origin_rot, f_ga, tau_ga);
+    hrp::Matrix33 Kpp = hrp::Matrix33::Identity() * 450;
+    Kpp(2, 2) *= 2;
+    hrp::Matrix33 Kpd = ((Kpp.array() * 2 * m_robot->totalMass()).sqrt() * 0.8).matrix();
+    hrp::Matrix33 Krp = hrp::Matrix33::Identity() * 500;
+    hrp::Matrix33 Krd = hrp::Matrix33::Identity() * 50;
+    generateForce(foot_origin_rot, Kpp, Kpd, Krp, Krd, f_ga, tau_ga);
     hrp::dmatrix Gc1 = hrp::dmatrix::Zero(3, 6);
     hrp::dmatrix Gc2 = hrp::dmatrix::Zero(3, 6);
     hrp::dvector6 tmp_f;
@@ -2838,24 +2843,13 @@ void Stabilizer::torqueST()
     }
 }
 
-void Stabilizer::generateForce(const hrp::Matrix33& foot_origin_rot, hrp::Vector3& f_ga, hrp::Vector3& tau_ga)
+void Stabilizer::generateForce(const hrp::Matrix33& foot_origin_rot, const hrp::Matrix33& Kpp, const hrp::Matrix33& Kpd, const hrp::Matrix33 Krp, const hrp::Matrix33 Krd, hrp::Vector3& f_ga, hrp::Vector3& tau_ga)
 {
     hrp::Vector3 g(0, 0, 9.80665);
-    hrp::Matrix33 Kp, Kd, Kr, Dr;
-    Kp = hrp::Matrix33::Identity();
-    Kd = hrp::Matrix33::Identity();
-    Kr = hrp::Matrix33::Identity() * 500;
-    Dr = hrp::Matrix33::Identity() * 50;
-    Kp(0, 0) = 450;
-    Kp(1, 1) = 450;
-    Kp(2, 2) = 450;
-    Kd(0, 0) = std::sqrt(2 * m_robot->totalMass() * Kp(0, 0)) * 0.8;
-    Kd(1, 1) = std::sqrt(2 * m_robot->totalMass() * Kp(1, 1)) * 0.8;
-    Kd(2, 2) = std::sqrt(2 * m_robot->totalMass() * Kp(2, 2)) * 1.6;
 
     //calc f_ga
     //world frame
-    f_ga = m_robot->totalMass() * g - Kp * foot_origin_rot * (act_cog - ref_cog) - Kd * foot_origin_rot * act_cogvel;
+    f_ga = m_robot->totalMass() * g - Kpp * foot_origin_rot * (act_cog - ref_cog) - Kpd * foot_origin_rot * act_cogvel;
     //foot origin frame
     f_ga = foot_origin_rot.transpose() * f_ga;
 
@@ -2867,9 +2861,9 @@ void Stabilizer::generateForce(const hrp::Matrix33& foot_origin_rot, hrp::Vector
     Eigen::Quaternion<double> q(target_root_R.transpose() * new_act_base_R);
     hrp::Vector3 e = q.vec();
     double d = q.w();
-    hrp::Vector3 tau_r = -2 * (d * hrp::Matrix33::Identity() + hrp::hat(e)) * Kr * e;
+    hrp::Vector3 tau_r = -2 * (d * hrp::Matrix33::Identity() + hrp::hat(e)) * Krp * e;
     //world frame
-    tau_ga = new_act_base_R * (tau_r - Dr * act_base_omega);
+    tau_ga = new_act_base_R * (tau_r - Krd * act_base_omega);
     //foot origin frame
     tau_ga = foot_origin_rot.transpose() * tau_ga;
 }
