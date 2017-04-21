@@ -2901,7 +2901,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     hrp::Matrix33 foot_origin_rot;
     calcFootOriginCoords(foot_origin_pos, foot_origin_rot);
     hrp::dmatrix tmp_matrix;
-    calcEforce2ZmpMatrix(tmp_matrix, enable_ee, ref_zmp(2));
+    calcEforce2ZmpMatrix(tmp_matrix, enable_ee, zmp_origin_off+foot_origin_pos(2));
     hrp::dmatrix Gc2 = tmp_matrix.block(0, 0, 2, state_dim) - ref_zmp.segment(0, 2) * tmp_matrix.block(2, 0, 1, state_dim);
 
     //calc QP param
