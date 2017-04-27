@@ -1,0 +1,90 @@
+/**
+ * @file PushRecoverService.idl
+ * @brief Services for tendon joint controlling interface
+ */
+//#include "OpenHRPCommon.idl"
+module OpenHRP
+{
+  interface PushRecoverService
+  {
+      typedef sequence<string> sSequence;
+
+      struct PushDetectParam
+      {
+          double diff_margin_threshold_x;
+          double diff_margin_threshold_y;
+          double body_compliance_k1;
+          double body_compliance_k2;
+          double body_compliance_k3;
+          double x_gain_0;
+          double x_gain_1;
+          double dx_gain_0;
+          double dx_gain_1;
+      };
+
+      boolean dummy(in double a);
+
+      /**
+       * @brief Shift to PushRecoveryReady mode.
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean startPushRecovery();
+
+      /**
+       * @brief Shift to PassThrough mode.
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean stopPushRecovery();
+
+      /**
+       * @brief start logging on pr RTC
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean startLogging();
+
+      /**
+       * @brief stop logging on pr RTC
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean stopLogging();
+
+      /**
+       * @brief Stop stepping immediately.
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean emergencyStop();
+
+      /**
+       * @brief Enable push detection
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean enablePushDetect();
+
+      /**
+       * @brief disable push detection
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean disablePushDetect();
+
+      /**
+       * @brief Set Push Detect Param
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean setPushDetectParam(in PushDetectParam i_param);
+
+      /**
+       * @brief Get Push Detect Param
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean getPushDetectParam(out PushDetectParam o_param);
+  };
+};

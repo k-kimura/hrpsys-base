@@ -1,0 +1,732 @@
+diff --git a/idl/CMakeLists.txt b/idl/CMakeLists.txt
+index a301e09..fcea8c6 100644
+--- a/idl/CMakeLists.txt
++++ b/idl/CMakeLists.txt
+@@ -24,6 +24,7 @@ set(idl_files
+   RemoveForceSensorLinkOffsetService.idl
+   ServoControllerService.idl
+   TorqueControllerService.idl
++  TendonJointControllerService.idl
+   )
+ 
+ set(openhrp_idl_files
+diff --git a/idl/TendonJointControllerService.idl b/idl/TendonJointControllerService.idl
+new file mode 100644
+index 0000000..e98eb15
+--- /dev/null
++++ b/idl/TendonJointControllerService.idl
+@@ -0,0 +1,29 @@
++/**
++ * @file TendonJointControllerService.idl
++ * @brief Services for tendon joint controlling interface
++ */
++module OpenHRP
++{
++  interface TendonJointControllerService
++  {
++    typedef sequence<string> sSequence;
++    struct TendonPairParam {
++      sSequence joint_names;
++      double offset;
++    };
++
++    /**
++     * @brief set offset parameters.
++     * @param i_param new offset parameters
++     * @return true if set successfully, false otherwise
++     */
++    boolean setTendonPairParam(in TendonPairParam i_param);
++
++    /**
++     * @brief get offset parameters.
++     * @param name is name of the offset parameter set and i_param output offset parameters
++     * @return true if set successfully, false otherwise
++     */
++    boolean getTendonPairParam(out TendonPairParam i_param);
++  };
++};
+diff --git a/rtc/CMakeLists.txt b/rtc/CMakeLists.txt
+index 9111622..e84be2f 100644
+--- a/rtc/CMakeLists.txt
++++ b/rtc/CMakeLists.txt
+@@ -48,6 +48,7 @@ if (QHULL_FOUND)
+   add_subdirectory(CollisionDetector)
+ endif()
+ add_subdirectory(PDcontroller)
++add_subdirectory(TendonJointController)
+ 
+ if (NOT APPLE AND USE_HRPSYSUTIL)
+   add_subdirectory(VideoCapture)
+diff --git a/rtc/TendonJointController/CMakeLists.txt b/rtc/TendonJointController/CMakeLists.txt
+new file mode 100644
+index 0000000..bbc62db
+--- /dev/null
++++ b/rtc/TendonJointController/CMakeLists.txt
+@@ -0,0 +1,15 @@
++set(comp_sources TendonJointController.cpp TendonJointControllerService_impl.cpp)
++set(libs hrpModel-3.1 hrpUtil-3.1 hrpsysBaseStub)
++add_library(TendonJointController SHARED ${comp_sources})
++target_link_libraries(TendonJointController ${libs})
++set_target_properties(TendonJointController PROPERTIES PREFIX "")
++
++add_executable(TendonJointControllerComp TendonJointControllerComp.cpp ${comp_sources})
++target_link_libraries(TendonJointControllerComp ${libs})
++
++set(target TendonJointController TendonJointControllerComp)
++
++install(TARGETS ${target}
++  RUNTIME DESTINATION bin CONFIGURATIONS Release Debug
++  LIBRARY DESTINATION lib CONFIGURATIONS Release Debug
++)
+diff --git a/rtc/TendonJointController/TendonJointController.cpp b/rtc/TendonJointController/TendonJointController.cpp
+new file mode 100644
+index 0000000..8d0fbde
+--- /dev/null
++++ b/rtc/TendonJointController/TendonJointController.cpp
+@@ -0,0 +1,248 @@
++// -*- C++ -*-
++/*!
++ * @file  TendonJointController.cpp
++ * @brief tendon joint controlling component
++ * $Date$
++ *
++ * $Id$
++ */
++
++#include "TendonJointController.h"
++#include <rtm/CorbaNaming.h>
++#include <hrpModel/ModelLoaderUtil.h>
++#include <hrpUtil/MatrixSolvers.h>
++#include <hrpModel/Sensor.h>
++
++// Module specification
++// <rtc-template block="module_spec">
++static const char* tendonjointcontroller_spec[] =
++  {
++    "implementation_id", "TendonJointController",
++    "type_name",         "TendonJointController",
++    "description",       "Tendon Joint Controller",
++    "version",           HRPSYS_PACKAGE_VERSION,
++    "vendor",            "AIST",
++    "category",          "example",
++    "activity_type",     "DataFlowComponent",
++    "max_instance",      "10",
++    "language",          "C++",
++    "lang_type",         "compile",
++    // Configuration variables
++    "conf.default.debugLevel", "0",
++    ""
++  };
++// </rtc-template>
++
++TendonJointController::TendonJointController(RTC::Manager* manager)
++  : RTC::DataFlowComponentBase(manager),
++    // <rtc-template block="initializer">
++    m_qRefIn("qRef", m_qRef),
++    m_qRefOut("q", m_qRef),
++    m_TendonJointControllerServicePort("TendonJointControllerService"),
++    // </rtc-template>
++    m_debugLevel(0)
++{
++  m_service0.absorber(this);
++}
++
++TendonJointController::~TendonJointController()
++{
++}
++
++
++
++RTC::ReturnCode_t TendonJointController::onInitialize()
++{
++  std::cout << m_profile.instance_name << ": onInitialize()" << std::endl;
++  // <rtc-template block="bind_config">
++  // Bind variables and configuration variable
++  bindParameter("debugLevel", m_debugLevel, "0");
++  
++  // </rtc-template>
++
++  // Registration: InPort/OutPort/Service
++  // <rtc-template block="registration">
++  // Set InPort buffers
++  addInPort("qRef", m_qRefIn);
++
++  // Set OutPort buffer
++  addOutPort("q", m_qRefOut);
++
++  // Set OutPort buffer
++  
++  // Set service provider to Ports
++  m_TendonJointControllerServicePort.registerProvider("service0", "TendonJointControllerService", m_service0);
++  
++  // Set service consumers to Ports
++  
++  // Set CORBA Service Ports
++  addPort(m_TendonJointControllerServicePort);
++  
++  // </rtc-template>
++
++  RTC::Properties& prop = getProperties();
++  coil::stringTo(m_dt, prop["dt"].c_str());
++
++  m_robot = hrp::BodyPtr(new hrp::Body());
++
++  RTC::Manager& rtcManager = RTC::Manager::instance();
++  std::string nameServer = rtcManager.getConfig()["corba.nameservers"];
++  int comPos = nameServer.find(",");
++  if (comPos < 0){
++      comPos = nameServer.length();
++  }
++  nameServer = nameServer.substr(0, comPos);
++  RTC::CorbaNaming naming(rtcManager.getORB(), nameServer.c_str());
++  if (!loadBodyFromModelLoader(m_robot, prop["model"].c_str(),
++			       CosNaming::NamingContext::_duplicate(naming.getRootContext())
++	  )){
++      std::cerr << "failed to load model[" << prop["model"] << "] in "
++                << m_profile.instance_name << std::endl;
++      return RTC::RTC_ERROR;
++  }
++
++  // for ystleg
++  TendonPairParam tp1, tp2;
++  tp1.joint_names.push_back("RLEG_JOINT4");
++  tp1.joint_names.push_back("RLEG_JOINT4_2");
++  pair_params.push_back(tp1);
++  tp2.joint_names.push_back("LLEG_JOINT4");
++  tp2.joint_names.push_back("LLEG_JOINT4_2");
++  pair_params.push_back(tp2);
++
++  return RTC::RTC_OK;
++}
++
++/*
++RTC::ReturnCode_t TendonJointController::onFinalize()
++{
++  return RTC::RTC_OK;
++}
++*/
++
++/*
++RTC::ReturnCode_t TendonJointController::onStartup(RTC::UniqueId ec_id)
++{
++  return RTC::RTC_OK;
++}
++*/
++
++/*
++RTC::ReturnCode_t TendonJointController::onShutdown(RTC::UniqueId ec_id)
++{
++  return RTC::RTC_OK;
++}
++*/
++
++RTC::ReturnCode_t TendonJointController::onActivated(RTC::UniqueId ec_id)
++{
++  std::cout << m_profile.instance_name<< ": onActivated(" << ec_id << ")" << std::endl;
++  return RTC::RTC_OK;
++}
++
++RTC::ReturnCode_t TendonJointController::onDeactivated(RTC::UniqueId ec_id)
++{
++  std::cout << m_profile.instance_name<< ": onDeactivated(" << ec_id << ")" << std::endl;
++  return RTC::RTC_OK;
++}
++
++#define DEBUGP ((m_debugLevel==1 && loop%200==0) || m_debugLevel > 1 )
++RTC::ReturnCode_t TendonJointController::onExecute(RTC::UniqueId ec_id)
++{
++  static int loop = 0;
++  //if (loop%200==0) std::cout << m_profile.instance_name<< ": onExecute(" << ec_id << ")" << std::endl;
++  loop ++;
++  if (m_qRefIn.isNew()) {
++    m_qRefIn.read();
++    for ( int i = 0; i < m_robot->numJoints(); i++ ){
++      m_robot->joint(i)->q = m_qRef.data[i];
++    }
++  }
++  // m_robot->joint(m_robot->link("RLEG_JOINT4")->jointId)->q += offset_r;
++  // m_robot->joint(m_robot->link("LLEG_JOINT4")->jointId)->q += offset_l;
++  // m_robot->joint(m_robot->link("HEAD_JOINT2")->jointId)->q = m_robot->joint(m_robot->link("RLEG_JOINT4")->jointId)->q - offset_r;
++  // m_robot->joint(m_robot->link("HEAD_JOINT3")->jointId)->q = m_robot->joint(m_robot->link("LLEG_JOINT4")->jointId)->q - offset_l;
++  for ( int i = 0; i < pair_params.size(); i++ ){
++    m_robot->joint(m_robot->link(pair_params[i].joint_names[1])->jointId)->q = m_robot->joint(m_robot->link(pair_params[i].joint_names[0])->jointId)->q - pair_params[i].offset;
++    m_robot->joint(m_robot->link(pair_params[i].joint_names[0])->jointId)->q += pair_params[i].offset;
++  }
++
++  for ( int i = 0; i < m_robot->numJoints(); i++ ){
++    m_qRef.data[i] = m_robot->joint(i)->q;
++  }
++  m_qRefOut.write();
++  return RTC::RTC_OK;
++}
++
++bool TendonJointController::setTendonPairParam(const TendonJointControllerService::TendonPairParam& i_param)
++{
++  std::cerr << m_profile.instance_name<< ": setTendonPairParam" << std::endl;
++  for ( int i = 0; i < pair_params.size(); i++ ){
++    if ( pair_params[i].joint_names[0] == std::string(i_param.joint_names[0]) ) {
++      pair_params[i].offset = i_param.offset;
++      std::cerr << "   pair(" << pair_params[i].joint_names[0] << " " << pair_params[i].joint_names[1] << "), offset = " << pair_params[i].offset << "[rad]" << std::endl;
++    }
++  }
++  return true;
++}
++
++bool TendonJointController::getTendonPairParam(TendonJointControllerService::TendonPairParam& i_param)
++{
++  std::cerr << m_profile.instance_name<< ": getTendonPairParam" << std::endl;
++  // for ( int i = 0; i < pair_params.size(); i++ ){
++  //   if ( pair_params[i].joint_names[0] == std::string(i_param.joint_names[0]) ) {
++  //     i_param.offset = pair_params[i].offset;
++  //   }
++  // }
++  return true;
++}
++
++/*
++RTC::ReturnCode_t TendonJointController::onAborting(RTC::UniqueId ec_id)
++{
++  return RTC::RTC_OK;
++}
++*/
++
++/*
++RTC::ReturnCode_t TendonJointController::onError(RTC::UniqueId ec_id)
++{
++  return RTC::RTC_OK;
++}
++*/
++
++/*
++RTC::ReturnCode_t TendonJointController::onReset(RTC::UniqueId ec_id)
++{
++  return RTC::RTC_OK;
++}
++*/
++
++/*
++RTC::ReturnCode_t TendonJointController::onStateUpdate(RTC::UniqueId ec_id)
++{
++  return RTC::RTC_OK;
++}
++*/
++
++/*
++RTC::ReturnCode_t TendonJointController::onRateChanged(RTC::UniqueId ec_id)
++{
++  return RTC::RTC_OK;
++}
++*/
++
++extern "C"
++{
++
++  void TendonJointControllerInit(RTC::Manager* manager)
++  {
++    RTC::Properties profile(tendonjointcontroller_spec);
++    manager->registerFactory(profile,
++                             RTC::Create<TendonJointController>,
++                             RTC::Delete<TendonJointController>);
++  }
++
++};
++
++
+diff --git a/rtc/TendonJointController/TendonJointController.h b/rtc/TendonJointController/TendonJointController.h
+new file mode 100644
+index 0000000..ec3cc29
+--- /dev/null
++++ b/rtc/TendonJointController/TendonJointController.h
+@@ -0,0 +1,164 @@
++// -*- C++ -*-
++/*!
++ * @file  TendonJointController.h
++ * @brief null component
++ * @date  $Date$
++ *
++ * $Id$
++ */
++
++#ifndef TENDONJOINTCONTROLLER_H
++#define TENDONJOINTCONTROLLER_H
++
++#include <rtm/Manager.h>
++#include <rtm/DataFlowComponentBase.h>
++#include <rtm/CorbaPort.h>
++#include <rtm/DataInPort.h>
++#include <rtm/DataOutPort.h>
++#include <rtm/idl/BasicDataTypeSkel.h>
++#include <rtm/idl/ExtendedDataTypesSkel.h>
++#include <hrpModel/Body.h>
++#include <hrpModel/Link.h>
++#include <hrpModel/JointPath.h>
++#include <hrpUtil/EigenTypes.h>
++
++#include "TendonJointControllerService_impl.h"
++
++// Service implementation headers
++// <rtc-template block="service_impl_h">
++
++// </rtc-template>
++
++// Service Consumer stub headers
++// <rtc-template block="consumer_stub_h">
++
++// </rtc-template>
++
++using namespace RTC;
++
++/**
++   \brief sample RT component which has one data input port and one data output port
++ */
++class TendonJointController
++  : public RTC::DataFlowComponentBase
++{
++ public:
++  /**
++     \brief Constructor
++     \param manager pointer to the Manager
++  */
++  TendonJointController(RTC::Manager* manager);
++  /**
++     \brief Destructor
++  */
++  virtual ~TendonJointController();
++
++  // The initialize action (on CREATED->ALIVE transition)
++  // formaer rtc_init_entry()
++  virtual RTC::ReturnCode_t onInitialize();
++
++  // The finalize action (on ALIVE->END transition)
++  // formaer rtc_exiting_entry()
++  // virtual RTC::ReturnCode_t onFinalize();
++
++  // The startup action when ExecutionContext startup
++  // former rtc_starting_entry()
++  // virtual RTC::ReturnCode_t onStartup(RTC::UniqueId ec_id);
++
++  // The shutdown action when ExecutionContext stop
++  // former rtc_stopping_entry()
++  // virtual RTC::ReturnCode_t onShutdown(RTC::UniqueId ec_id);
++
++  // The activated action (Active state entry action)
++  // former rtc_active_entry()
++  virtual RTC::ReturnCode_t onActivated(RTC::UniqueId ec_id);
++
++  // The deactivated action (Active state exit action)
++  // former rtc_active_exit()
++  virtual RTC::ReturnCode_t onDeactivated(RTC::UniqueId ec_id);
++
++  // The execution action that is invoked periodically
++  // former rtc_active_do()
++  virtual RTC::ReturnCode_t onExecute(RTC::UniqueId ec_id);
++
++  // The aborting action when main logic error occurred.
++  // former rtc_aborting_entry()
++  // virtual RTC::ReturnCode_t onAborting(RTC::UniqueId ec_id);
++
++  // The error action in ERROR state
++  // former rtc_error_do()
++  // virtual RTC::ReturnCode_t onError(RTC::UniqueId ec_id);
++
++  // The reset action that is invoked resetting
++  // This is same but different the former rtc_init_entry()
++  // virtual RTC::ReturnCode_t onReset(RTC::UniqueId ec_id);
++
++  // The state update action that is invoked after onExecute() action
++  // no corresponding operation exists in OpenRTm-aist-0.2.0
++  // virtual RTC::ReturnCode_t onStateUpdate(RTC::UniqueId ec_id);
++
++  // The action that is invoked when execution context's rate is changed
++  // no corresponding operation exists in OpenRTm-aist-0.2.0
++  // virtual RTC::ReturnCode_t onRateChanged(RTC::UniqueId ec_id);
++  bool setTendonPairParam(const TendonJointControllerService::TendonPairParam& i_param);
++  bool getTendonPairParam(TendonJointControllerService::TendonPairParam& i_param);
++
++ protected:
++  // Configuration variable declaration
++  // <rtc-template block="config_declare">
++  TimedDoubleSeq m_qRef;
++  std::vector<TimedDoubleSeq> m_force;
++  // </rtc-template>
++  
++  // DataInPort declaration
++  // <rtc-template block="inport_declare">
++  RTC::InPort<RTC::TimedDoubleSeq> m_qRefIn;
++  std::vector<InPort<TimedDoubleSeq> *> m_forceIn;
++  // </rtc-template>
++
++  // DataOutPort declaration
++  // <rtc-template block="outport_declare">
++  // </rtc-template>
++
++  // DataOutPort declaration
++  // <rtc-template block="outport_declare">
++  RTC::OutPort<RTC::TimedDoubleSeq> m_qRefOut;
++  // </rtc-template>
++
++  // CORBA Port declaration
++  // <rtc-template block="corbaport_declare">
++  
++  // </rtc-template>
++
++  // Service declaration
++  // <rtc-template block="service_declare">
++  RTC::CorbaPort m_TendonJointControllerServicePort;
++  
++  // </rtc-template>
++
++  // Consumer declaration
++  // <rtc-template block="consumer_declare">
++  TendonJointControllerService_impl m_service0;
++  
++  // </rtc-template>
++
++ private:
++  struct TendonPairParam {
++    std::vector<std::string> joint_names;
++    double offset;
++    TendonPairParam () : offset(0) {};
++    ~TendonPairParam () {};
++  };
++  std::vector<TendonPairParam> pair_params;
++  double m_dt;
++  hrp::BodyPtr m_robot;
++  unsigned int m_debugLevel;
++};
++
++
++extern "C"
++{
++  void TendonJointControllerInit(RTC::Manager* manager);
++};
++
++#endif // TENDONJOINTCONTROLLER_H
+diff --git a/rtc/TendonJointController/TendonJointController.txt b/rtc/TendonJointController/TendonJointController.txt
+new file mode 100644
+index 0000000..0cb9996
+--- /dev/null
++++ b/rtc/TendonJointController/TendonJointController.txt
+@@ -0,0 +1,56 @@
++/**
++
++\page NullComponent
++
++\section introduction Overview
++
++This component is a very simple RT component to learn how to develop.
++
++<table>
++<tr><th>implementation_id</th><td>NullComponent</td></tr>
++<tr><th>category</th><td>example</td></tr>
++</table>
++
++\section dataports Data Ports
++
++\subsection inports Input Ports
++
++<table>
++<tr><th>port name</th><th>data type</th><th>unit</th><th>description</th></tr>
++<tr><td>dataIn</td><td>RTC::TimedDouble</td><td></td><td></td></tr>
++</table>
++
++\subsection outports Output Ports
++
++<table>
++<tr><th>port name</th><th>data type</th><th>unit</th><th>description</th></tr>
++<tr><td>dataOut</td><td>RTC::TimedDouble</td><td></td><td></td></tr>
++</table>
++
++\section serviceports Service Ports
++
++\subsection provider Service Providers
++
++<table>
++<tr><th>port name</th><th>interface name</th><th>service type</th><th>IDL</th><th>description</th></tr>
++<tr><td>NullService</td><td>service0</td><td>NullService</td><td>\ref OpenHRP::NullService</td><td></td></tr>
++</table>
++
++\subsection consumer Service Consumers
++
++N/A
++
++\section configuration Configuration Variables
++
++<table>
++<tr><th>name</th><th>type</th><th>unit</th><th>default value</th><th>description</th></tr>
++<tr><td>string</td><td>std::string</td><td></td><td>testtest</td><td>example of string configuration variables</td></tr>
++<tr><td>intvec</td><td>std::vector<int></td><td></td><td>4,5,6,7</td><td>example of integer array configuration variables</td></tr>
++<tr><td>double</td><td>double<int></td><td></td><td>4.567</td><td>example of double precision configuration variable</td></tr>
++</table>
++
++\section conf Configuration File
++
++N/A
++
++ */
+diff --git a/rtc/TendonJointController/TendonJointControllerComp.cpp b/rtc/TendonJointController/TendonJointControllerComp.cpp
+new file mode 100644
+index 0000000..0b10cb0
+--- /dev/null
++++ b/rtc/TendonJointController/TendonJointControllerComp.cpp
+@@ -0,0 +1,91 @@
++// -*- C++ -*-
++/*!
++ * @file TendonJointControllerComp.cpp
++ * @brief Standalone component
++ * @date $Date$
++ *
++ * $Id$
++ */
++
++#include <rtm/Manager.h>
++#include <iostream>
++#include <string>
++#include "TendonJointController.h"
++
++
++void MyModuleInit(RTC::Manager* manager)
++{
++  TendonJointControllerInit(manager);
++  RTC::RtcBase* comp;
++
++  // Create a component
++  comp = manager->createComponent("TendonJointController");
++
++
++  // Example
++  // The following procedure is examples how handle RT-Components.
++  // These should not be in this function.
++
++  // Get the component's object reference
++ RTC::RTObject_var rtobj;
++ rtobj = RTC::RTObject::_narrow(manager->getPOA()->servant_to_reference(comp));
++
++  // Get the port list of the component
++ PortServiceList* portlist;
++ portlist = rtobj->get_ports();
++
++  // getting port profiles
++ std::cout << "Number of Ports: ";
++ std::cout << portlist->length() << std::endl << std::endl; 
++ for (CORBA::ULong i(0), n(portlist->length()); i < n; ++i)
++ {
++   PortService_ptr port;
++   port = (*portlist)[i];
++   std::cout << "Port" << i << " (name): ";
++   std::cout << port->get_port_profile()->name << std::endl;
++   
++   RTC::PortInterfaceProfileList iflist;
++   iflist = port->get_port_profile()->interfaces;
++   std::cout << "---interfaces---" << std::endl;
++   for (CORBA::ULong i(0), n(iflist.length()); i < n; ++i)
++   {
++     std::cout << "I/F name: ";
++     std::cout << iflist[i].instance_name << std::endl;
++     std::cout << "I/F type: ";
++     std::cout << iflist[i].type_name << std::endl;
++     const char* pol;
++     pol = iflist[i].polarity == 0 ? "PROVIDED" : "REQUIRED";
++     std::cout << "Polarity: " << pol << std::endl;
++   }
++   std::cout << "---properties---" << std::endl;
++   NVUtil::dump(port->get_port_profile()->properties);
++   std::cout << "----------------" << std::endl << std::endl;
++ }
++
++  return;
++}
++
++int main (int argc, char** argv)
++{
++  RTC::Manager* manager;
++  manager = RTC::Manager::init(argc, argv);
++
++  // Initialize manager
++  manager->init(argc, argv);
++
++  // Set module initialization proceduer
++  // This procedure will be invoked in activateManager() function.
++  manager->setModuleInitProc(MyModuleInit);
++
++  // Activate manager and register to naming service
++  manager->activateManager();
++
++  // run the manager in blocking mode
++  // runManager(false) is the default.
++  manager->runManager();
++
++  // If you want to run the manager in non-blocking mode, do like this
++  // manager->runManager(true);
++
++  return 0;
++}
+diff --git a/rtc/TendonJointController/TendonJointControllerService_impl.cpp b/rtc/TendonJointController/TendonJointControllerService_impl.cpp
+new file mode 100644
+index 0000000..2fbd4ae
+--- /dev/null
++++ b/rtc/TendonJointController/TendonJointControllerService_impl.cpp
+@@ -0,0 +1,30 @@
++// -*- mode: c++; indent-tabs-mode: t; tab-width: 4; c-basic-offset: 4; -*-
++#include <iostream>
++#include "TendonJointControllerService_impl.h"
++#include "TendonJointController.h"
++
++TendonJointControllerService_impl::TendonJointControllerService_impl() : m_absorber(NULL)
++{
++}
++
++TendonJointControllerService_impl::~TendonJointControllerService_impl()
++{
++}
++
++CORBA::Boolean TendonJointControllerService_impl::setTendonPairParam(const OpenHRP::TendonJointControllerService::TendonPairParam& i_param)
++{
++  return m_absorber->setTendonPairParam(i_param);
++}
++
++CORBA::Boolean TendonJointControllerService_impl::getTendonPairParam(OpenHRP::TendonJointControllerService::TendonPairParam_out i_param)
++{
++	i_param = new OpenHRP::TendonJointControllerService::TendonPairParam();
++	i_param->joint_names.length(2);
++	return m_absorber->getTendonPairParam(*i_param);
++}
++
++void TendonJointControllerService_impl::absorber(TendonJointController *i_absorber)
++{
++	m_absorber = i_absorber;
++}
++
+diff --git a/rtc/TendonJointController/TendonJointControllerService_impl.h b/rtc/TendonJointController/TendonJointControllerService_impl.h
+new file mode 100644
+index 0000000..ac6a583
+--- /dev/null
++++ b/rtc/TendonJointController/TendonJointControllerService_impl.h
+@@ -0,0 +1,27 @@
++// -*-C++-*-
++#ifndef ABSOLUTEFORCESENSORSERVICESVC_IMPL_H
++#define ABSOLUTEFORCESENSORSERVICESVC_IMPL_H
++
++#include "TendonJointControllerService.hh"
++
++using namespace OpenHRP;
++
++class TendonJointController;
++
++class TendonJointControllerService_impl 
++  : public virtual POA_OpenHRP::TendonJointControllerService,
++    public virtual PortableServer::RefCountServantBase
++{
++public:
++  TendonJointControllerService_impl();
++  virtual ~TendonJointControllerService_impl();
++  //
++  CORBA::Boolean setTendonPairParam(const OpenHRP::TendonJointControllerService::TendonPairParam& i_param);
++  CORBA::Boolean getTendonPairParam(OpenHRP::TendonJointControllerService::TendonPairParam_out i_param);
++  //
++  void absorber(TendonJointController *i_absorber);
++private:
++  TendonJointController *m_absorber;
++};				 
++
++#endif

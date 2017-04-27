@@ -1,0 +1,29 @@
+/**
+ * @file TendonJointControllerService.idl
+ * @brief Services for tendon joint controlling interface
+ */
+module OpenHRP
+{
+  interface TendonJointControllerService
+  {
+    typedef sequence<string> sSequence;
+    struct TendonPairParam {
+      sSequence joint_names;
+      double offset;
+    };
+
+    /**
+     * @brief set offset parameters.
+     * @param i_param new offset parameters
+     * @return true if set successfully, false otherwise
+     */
+    boolean setTendonPairParam(in TendonPairParam i_param);
+
+    /**
+     * @brief get offset parameters.
+     * @param name is name of the offset parameter set and i_param output offset parameters
+     * @return true if set successfully, false otherwise
+     */
+    boolean getTendonPairParam(out TendonPairParam i_param);
+  };
+};

@@ -26,6 +26,8 @@ set(idl_files
   ServoControllerService.idl
   TorqueControllerService.idl
   ThermoLimiterService.idl
+  TendonJointControllerService.idl
+  PushRecoverService.idl
   ReferenceForceUpdaterService.idl
   )
 

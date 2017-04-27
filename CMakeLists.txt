@@ -219,7 +219,7 @@ if(need_catkin OR "${CATKIN_BUILD_BINARY_PACKAGE}")
       message( FATAL_ERROR "hrpsys_version (from package.xml): ${hrpsys_VERSION} is not equal CPACK_PACKAGE_VERSION: ${CPACK_PACKAGE_VERSION}" )
     endif()
   endif()
-  install(CODE "file(WRITE \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/doc/hrpsys/rospack_nosubdirs)")
+  #install(CODE "file(WRITE \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/doc/hrpsys/rospack_nosubdirs)")
   install(FILES package.xml DESTINATION share/hrpsys/)
   install(CODE "
 execute_process(COMMAND cmake -E make_directory lib WORKING_DIRECTORY \$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/hrpsys)
