@@ -72,9 +72,12 @@ PushRecover::PushRecover(RTC::Manager* manager)
 {
     m_service0.pushrecover(this);
     emergencyStopReqFlag = false;
-
+#if defined(__INTEL_COMPILER)||defined(__ICC)
     BOOST_STATIC_ASSERT( __alignof__(BodyIKMethod) == 16 );
     m_pIKMethod          = new BodyIKMethod( 0.0f, Zc );
+#elif defined(__GNUC__)
+    m_pIKMethod          = new BodyIKMethod( 0.0f, Zc );
+#endif
     //slogger = boost::shared_ptr<SimpleLogger>(new SimpleLogger());
     slogger = new SimpleLogger();
 }
