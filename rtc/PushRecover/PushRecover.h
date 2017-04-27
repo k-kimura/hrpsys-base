@@ -386,14 +386,15 @@ extern "C"
     void PushRecoverInit(RTC::Manager* manager);
 };
 
-#define PRINTVEC3(v,f) if( f ){                \
-    printf("%s=[", #v );       \
-    for(int i=0;i<3;i++){\
-        printf("%+3.3lf",(double) v##[i]);         \
-        if(i!=2){printf(", ");}                 \
-        else{printf("]\n");}                    \
-    }                                           \
-        }
+// #define PRINTVEC3(v,f) if( f ){                \
+//     printf("%s=[", #v );       \
+//     for(int i=0;i<3;i++){\
+//         printf("%+3.3lf",(double) v##[i]);         \
+//         if(i!=2){printf(", ");}                 \
+//         else{printf("]\n");}                    \
+//     }                                           \
+//         }
+#define PRINTVEC3(v,f)
 //#undef PRINTVEC3
 //#define PRINTVEC3(v,f) printf("%s", #v )
 #endif // PUSHRECOVER_H
