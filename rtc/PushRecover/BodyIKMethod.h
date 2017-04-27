@@ -61,10 +61,10 @@ inline float deg2rad(const float a){
 
 /* IIKMethod, BodyIKMethod LinkIKParam are from ikfk_controller.h.cpp */
 #if defined(ROBOT)
-#if (ROBOT=="URATALEG")||(ROBOT=="L0")
+#if ROBOT==0
 typedef LzeroIKParam LegIKParam;
 #define LEG_IK_TYPE IK_LEG_TYPE_A
-#elif ROBOT=="L1"
+#elif ROBOT==1
 typedef LoneIKParam LegIKParam;
 #define LEG_IK_TYPE IK_LEG_TYPE_B
 #else
