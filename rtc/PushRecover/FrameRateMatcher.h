@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef _FRAME_RATE_MATCHER_H_
 #define _FRAME_RATE_MATCHER_H_
 

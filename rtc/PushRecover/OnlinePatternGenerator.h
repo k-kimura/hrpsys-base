@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __OnlinePatternGenerator_h__
 #define __OnlinePatternGenerator_h__
 #include <reactive_walk_generator.h>

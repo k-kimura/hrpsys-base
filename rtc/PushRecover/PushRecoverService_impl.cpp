@@ -1,4 +1,4 @@
-// -*- mode: c++; indent-tabs-mode: t; tab-width: 4; c-basic-offset: 4; -*-
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #include <iostream>
 #include "PushRecoverService_impl.h"
 #include "PushRecover.h"

@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __pthread_waitcod_h__
 #define __pthread_waitcod_h__
 

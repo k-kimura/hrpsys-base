@@ -1,7 +1,14 @@
+option(USE_ICC_COMPILE "Allow generate component by intel icc." OFF)
+if(USE_ICC_COMPILE)
 SET(CMAKE_CXX_COMPILER "icpc")
 SET(CMAKE_CXX_FLAGS "-O3 -fPIC -g -ip -fp-model fast=2 -fp-speculation=fast -fomit-frame-pointer -use-intel-optimized-headers -fasm-blocks -inline-max-total-size=12000 -std=c++0x -U__GXX_EXPERIMENTAL_CXX0X__")
-
 set(BODY_LINK_DIR /home/leus/prog/projects/body_link)
+else()
+SET(CMAKE_CXX_COMPILER "gcc")
+SET(CMAKE_CXX_FLAGS "-O3 -fPIC -g -fomit-frame-pointer -msse4 -pthread -march=native -fno-math-errno -mfpmath=sse -ffast-math -std=c++0x -U__GXX_EXPERIMENTAL_CXX0X__")
+set(BODY_LINK_DIR /home/leus/prog/projects/body_link_gcc)
+endif()
+
 set(LIBDIRECT_DIR /home/leus/prog/projects/libdirect)
 include_directories(${BODY_LINK_DIR}/include ${LIBDIRECT_DIR}/include ${PROJECT_SOURCE_DIR}/rtc/SequencePlayer)
 link_directories(${BODY_LINK_DIR}/lib)
@@ -12,10 +19,11 @@ add_library(PushRecover SHARED ${comp_sources})
 target_link_libraries(PushRecover ${libs})
 set_target_properties(PushRecover PROPERTIES PREFIX "")
 
-add_executable(PushRecoverComp PushRecoverComp.cpp ${comp_sources})
-target_link_libraries(PushRecoverComp ${libs})
+#add_executable(PushRecoverComp PushRecoverComp.cpp ${comp_sources})
+#target_link_libraries(PushRecoverComp ${libs})
 
-set(target PushRecover PushRecoverComp)
+#set(target PushRecover PushRecoverComp)
+set(target PushRecover)
 
 install(TARGETS ${target}
   RUNTIME DESTINATION bin CONFIGURATIONS Release Debug

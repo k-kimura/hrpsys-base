@@ -25,7 +25,15 @@
 #include "../ImpedanceController/RatsMatrix.h"
 #include "../TorqueFilter/IIRFilter.h"
 
+#if defined(__INTEL_COMPILER)||defined(__ICC)
 #include "QzMatrix.h"
+#include "Vec3e.h"
+#endif
+#if defined(__GNUC__)
+#include "link_kinematics.h"
+#include "Vec3e.h"
+#endif
+
 #include "ReactivePatternGenerator.h"
 //#include "OnlinePatternGenerator.h"
 #include "BodyIKMethod.h"
@@ -42,8 +50,6 @@
 // Service implementation headers
 // <rtc-template block="service_impl_h">
 #include "PushRecoverService_impl.h"
-
-#include "Vec3e.h"
 
 // </rtc-template>
 

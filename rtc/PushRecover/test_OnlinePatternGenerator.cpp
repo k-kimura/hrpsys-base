@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -12,14 +13,25 @@ void main(void){
     BodyControlContext cty;
     ControlState cstate(&ctx,&cty);
     JoyCommand command;
+#if defined(__INTEL_COMPILER)||defined(__ICC)
     Vec3 body_p_offset = Vec3(0.0f);
     Vec3 pref_offset = Vec3(0.0f);
     Vec3 body_p_prev = Vec3(0.0f);
     Vec3 pref_prev = Vec3(0.0f);
-
+#elif defined(__GNUC__)
+    Vec3 body_p_offset = Vec3( Vec3Zero() );
+    Vec3 pref_offset = Vec3( Vec3Zero() );
+    Vec3 body_p_prev = Vec3( Vec3Zero() );
+    Vec3 pref_prev = Vec3( Vec3Zero() );
+#endif
     {
+#if defined(__INTEL_COMPILER)||defined(__ICC)
         state.body_p = Vec3(0.0f);
         state.p = Vec3(0.0f);
+#elif defined(__GNUC__)
+        state.body_p = Vec3( Vec3Zero() );
+        state.p = Vec3( Vec3Zero() );
+#endif
     }
 
     InitContext(&ctx);
@@ -52,9 +64,9 @@ void main(void){
         }
         p_gen->command(command);
         p_gen->incrementFrame(state, cstate);
-        const Vec3 rot_rp = Vec3(0.0f);
-        const Vec3 rate = Vec3(0.0f);
-        UpdateState ustate = { pref_prev, pref_prev, body_p_prev, Vec3(0.0f), rot_rp, rate };
+        const Vec3 rot_rp = Vec3(0.0f,0.0f,0.0f);
+        const Vec3 rate = Vec3(0.0f,0.0f,0.0f);
+        UpdateState ustate = { pref_prev, pref_prev, body_p_prev, Vec3(0.0f,0.0f,0.0f), rot_rp, rate };
         p_gen->update(ustate);
         cstate.pxstate->body_q[0] = state.body_p[0];
         cstate.pystate->body_q[0] = state.body_p[1];

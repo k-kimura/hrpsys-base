@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __PatternGenerator_H__
 #define __PatternGenerator_H__
 
@@ -12,6 +13,7 @@ struct PatternState{
     float gain_r_p;
     float foot_l_pitch;
     float foot_r_pitch;
+#if defined(__INTEL_COMPILER)||defined(__ICC)
     PatternState() : 
         body_p( QzVec3Zero() ),
         p( QzVec3Zero() ),
@@ -23,6 +25,19 @@ struct PatternState{
         foot_l_pitch( 0.0f ),
         foot_r_pitch( 0.0f )
     {};
+#elif defined(__GNUC__)
+    PatternState() : 
+        body_p( Vec3Zero() ),
+        p( Vec3Zero() ),
+        foot_l_p( Vec3Zero() ),
+        foot_r_p( Vec3Zero() ),
+        body_R( Mat3::Identity() ),
+        gain_l_p( 1.0f ),
+        gain_r_p( 1.0f ),
+        foot_l_pitch( 0.0f ),
+        foot_r_pitch( 0.0f )
+    {};
+#endif
 };
 
 struct UpdateState{

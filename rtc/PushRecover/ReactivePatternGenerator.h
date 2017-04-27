@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __ReactivePatternGenerator_h__
 #define __ReactivePatternGenerator_h__
 #include <reactive_walk_generator.h>
@@ -11,36 +12,61 @@
 #include "PatternGenerator.h"
 
 class ReactivePatternGenerator : public IPatternGenerator {
-    pthread_t m_thread; /* Reactive Walk Generatorã¯å°‚ç”¨ã‚¹ãƒ¬ãƒƒãƒ‰ã«ã¦å®ŸåŠ¹ã™ã‚‹ */
+    pthread_t m_thread; /* Reactive Walk Generator¤ÏÀìÍÑ¥¹¥ì¥Ã¥É¤Ë¤Æ¼Â¸ú¤¹¤ë */
     ITrajectoryGenerator* gen;
     static void* func(void* arg);
     PThreadWaitCond<bool> m_waitcond;
 public:
     volatile int is_ready;
     Vec3* m_x0;
+#if defined(__INTEL_COMPILER)||defined(__ICC)
     ReactivePatternGenerator() : gen( 0 ), is_ready( 0 ){
-        //åˆæœŸåŒ–
+        //½é´ü²½
         m_x0 = (Vec3*)_mm_malloc( 3*sizeof(Vec3), sizeof(Vec3) );
         std::fill( m_x0, m_x0+3, Vec3( QzVec3Zero() ) );
-        // ã‚¹ãƒ¬ãƒƒãƒ‰èµ·å‹•
+        // ¥¹¥ì¥Ã¥Éµ¯Æ°
         if ( pthread_create( &m_thread, NULL, func, this ) )
             {
-                // ã‚¹ãƒ¬ãƒƒãƒ‰ç”Ÿæˆã«å¤±æ•—
+                // ¥¹¥ì¥Ã¥ÉÀ¸À®¤Ë¼ºÇÔ
                 throw std::runtime_error( "::ReactivePatternGeneratorTask failed to pthread_create" );
             }
     }
     ~ReactivePatternGenerator() {
-        // çµ‚äº†ãƒ•ãƒ©ã‚°
+        // ½ªÎ»¥Õ¥é¥°
         m_waitcond.signal( true );
-        // ã‚¹ãƒ¬ãƒƒãƒ‰çµ‚äº†å¾…ã¡
+        // ¥¹¥ì¥Ã¥É½ªÎ»ÂÔ¤Á
         if ( pthread_join ( m_thread, NULL ) ) {
-            // ã‚¹ãƒ¬ãƒƒãƒ‰ã®joinã«å¤±æ•—
+            // ¥¹¥ì¥Ã¥É¤Îjoin¤Ë¼ºÇÔ
             throw std::runtime_error( "::~ReactivePatternGeneratorTask failed to pthread_join" );
         }
         _mm_free( m_x0 );
     }
+#elif defined(__GNUC__)
+    ReactivePatternGenerator() : gen( 0 ), is_ready( 0 ){
+        //½é´ü²½
+        m_x0 = (Vec3*) new Vec3[3];
+        std::fill( m_x0, m_x0+3, Vec3( Vec3Zero() ) );
+        // ¥¹¥ì¥Ã¥Éµ¯Æ°
+        if ( pthread_create( &m_thread, NULL, func, this ) ){
+            // ¥¹¥ì¥Ã¥ÉÀ¸À®¤Ë¼ºÇÔ
+            throw std::runtime_error( "::ReactivePatternGeneratorTask failed to pthread_create" );
+        }
+    }
+    ~ReactivePatternGenerator() {
+        // ½ªÎ»¥Õ¥é¥°
+        m_waitcond.signal( true );
+        // ¥¹¥ì¥Ã¥É½ªÎ»ÂÔ¤Á
+        if ( pthread_join ( m_thread, NULL ) ) {
+            // ¥¹¥ì¥Ã¥É¤Îjoin¤Ë¼ºÇÔ
+            throw std::runtime_error( "::~ReactivePatternGeneratorTask failed to pthread_join" );
+        }
+        delete m_x0;
+    }
+#else
+#error "ReactivePatternGenerator() cannot build."
+#endif
     /**
-     * @param x0 ã‚³ãƒ”ãƒ¼ã•ã‚Œã‚‹
+     * @param x0 ¥³¥Ô¡¼¤µ¤ì¤ë
      * ex.
      * const Vec3 x0[] = {
      *  Vec3( 0.0f, -0.095f, 0.0f ),

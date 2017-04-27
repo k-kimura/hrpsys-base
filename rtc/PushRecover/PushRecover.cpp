@@ -1,4 +1,4 @@
-// -*- C++ -*-
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 /*!
  * @file  PushRecover.cpp
  * @brief Push recovery controller
@@ -303,7 +303,11 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   {
       _MM_ALIGN16 float target_joint_angle[12];
       _MM_ALIGN16 float pre_joint_angle[12];
+#if defined(__INTEL_COMPILER)||defined(__ICC)
       _MM_ALIGN16 Mat3 body_R = Mat3::identity();
+#elif defined(__GNUC__)
+      const Mat3 body_R = Mat3::Identity();
+#endif
       const float foot_l_pitch = 0.0f;
       const float foot_r_pitch = 0.0f;
       _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
@@ -577,7 +581,11 @@ void PushRecover::setTargetDataWithInterpolation(void){
             {
                 _MM_ALIGN16 float target_joint_angle[12];
                 _MM_ALIGN16 float pre_joint_angle[12];
+#if defined(__INTEL_COMPILER)||defined(__ICC)
                 _MM_ALIGN16 Mat3 body_R = Mat3::identity();
+#elif defined(__GNUC__)
+                const Mat3 body_R = Mat3::Identity();
+#endif
                 const float foot_l_pitch = 0.0f;
                 const float foot_r_pitch = 0.0f;
                 _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
@@ -1445,7 +1453,12 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           // 新しい target_joint_angleを計算
           _MM_ALIGN16 float target_joint_angle[12];
           _MM_ALIGN16 float pre_joint_angle[12];
+#if defined(__INTEL_COMPILER)||defined(__ICC)
           _MM_ALIGN16 Mat3 body_R = Mat3::identity();
+#elif defined(__GNUC__)
+          //TODO ここはIdentityを使うよりもKFからの姿勢を使うのが良いかも。
+          const Mat3 body_R = Mat3::Identity();
+#endif
           const float foot_l_pitch = 0.0f;
           const float foot_r_pitch = 0.0f;
           const Vec3 basePos_modif = Vec3(ref_basePos_modif(0),ref_basePos_modif(1),ref_basePos_modif(2));

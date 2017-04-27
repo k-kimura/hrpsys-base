@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __BODYIKMETHOD_H__
 #define __BODYIKMETHOD_H__
 #include <reactive_walk_generator.h>
@@ -44,14 +45,22 @@ const static Vec3 default_zmp_offset_r(traj_body_init[0],0.0f,0.0f);
 
 
 inline float rad2deg(const float a){
+#if defined(__INTEL_COMPILER)||defined(__ICC)
     return a * (180.0f / Q_PI);
+#elif defined(__GNUC__)
+    return a * (180.0f / S_PI);
+#endif
 }
 inline float deg2rad(const float a){
+#if defined(__INTEL_COMPILER)||defined(__ICC)
     return a * (Q_PI / 180.0f);
+#elif defined(__GNUC__)
+    return a * (S_PI / 180.0f);
+#endif
 }
 
 /* IIKMethod, BodyIKMethod LinkIKParam are from ikfk_controller.h.cpp */
-struct LegIKParam{
+struct LzeroIKParam{
         static const int D = 80*1000; // um
         static const int A = 300*1000; // um
         static const int B = 300*1000; // um
@@ -77,10 +86,14 @@ public:
         BodyIKMethod( const float body_x, const float body_z )
                 : InitialBody_p( body_x, 0, body_z )
         {
+#if defined(__INTEL_COMPILER)||defined(__ICC)
                 BOOST_STATIC_ASSERT( __alignof__(InitialBody_p) == 16 );
+#elif defined(__GNUC__)
+#endif
         }
         virtual Vec3 calcik( const Mat3& body_R, const Vec3& ref_pos, const Vec3& footl_pos, const Vec3& footr_pos, const float footl_pitch, const float footr_pitch, float* joint_angle )
         {
+#if defined(__INTEL_COMPILER)||defined(__ICC)
                 Mat3 footl_R, footr_R;
                 Mat3::identity().rotate<1>( cosf( footl_pitch ), sinf( footl_pitch ), footl_R );
                 Mat3::identity().rotate<1>( cosf( footr_pitch ), sinf( footr_pitch ), footr_R );
@@ -91,6 +104,18 @@ public:
                                      footr_R, footr_pos,
                                      joint_angle );
                 return body_pos;
+#elif defined(__GNUC__)
+                _MM_ALIGN16 float c[4],s[4];
+                bodylink::sincos_ps( bodylink::F32vec4(footl_pitch,footr_pitch,0.0f,0.0f), (bodylink::v4sf*)s, (bodylink::v4sf*)c );
+                const Mat3 footl_R = rotateMat3<1>( c[0], s[0] );
+                const Mat3 footr_R = rotateMat3<1>( c[1], s[1] );
+                Vec3 body_pos = InitialBody_p + ref_pos;
+                ik_legLR<LegIKParam,IK_LEG_TYPE_A>(
+                                     body_R, body_pos,
+                                     footl_R, footl_pos,
+                                     footr_R, footr_pos,
+                                     joint_angle );
+#endif
         }
         virtual Vec3 calcref( JointTransform& pR )
         {

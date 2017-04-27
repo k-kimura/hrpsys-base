@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __SIMPLE_LOGGER_H__
 #define __SIMPLE_LOGGER_H__
 #include <boost/circular_buffer.hpp>

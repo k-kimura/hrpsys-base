@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #include <link_physprof.h>  /* link paramter m,c,I */
 #include "ReactivePatternGenerator.h"
 #include <sched.h>
@@ -112,9 +113,9 @@ void* ReactivePatternGenerator::func(void* arg){
         for( int i = 0; i < 5; i++ ){
             /* template<bool dump> void iterateOnce( const int offset, const int calc_len, const double feedback_gain ) */
             if( rwg_lfirst.eval_value < rwg_rfirst.eval_value ){
-                rwg_lfirst.iterateOnce<false>( 0, 1500+i*100, 1.0 );
+                rwg_lfirst.template iterateOnce<false>( 0, 1500+i*100, 1.0 );
             }else{
-                rwg_rfirst.iterateOnce<false>( 0, 1500+i*100, 1.0 );
+                rwg_rfirst.template iterateOnce<false>( 0, 1500+i*100, 1.0 );
             }
             self->is_ready = i + 1;
             std::cout << "[ReactivePatternGenerator] "<< MAKE_CHAR_COLOR_BLUE << "is_ready=" << self->is_ready << MAKE_CHAR_COLOR_DEFAULT << std::endl;

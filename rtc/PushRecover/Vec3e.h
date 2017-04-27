@@ -1,6 +1,6 @@
 #ifndef _VEC3E_H_
 #define _VEC3E_H_
-#include "QzMatrix.h"
+
 #include <reactive_walk_generator.h>
 #include <hrpUtil/EigenTypes.h>
 
@@ -33,7 +33,7 @@ namespace hrp
     };
 }
 
-
+#if defined(__INTEL_COMPILER)||defined(__ICC)
 class Vec3e : public Vec3 {
 public:
     Vec3e() : Vec3(0.0f, 0.0f, 0.0f) {
@@ -49,5 +49,24 @@ public:
         return *this;
     };
 };
+#elif defined(__GNUC__)
+class Vec3e : public Vec3 {
+public:
+  Vec3e() : Vec3(0.0f, 0.0f, 0.0f) {
+  };
+  Vec3e(Vec3 v) : Vec3(v) {
+  };
+  Vec3e(float x, float y, float z) : Vec3(x,y,z) {
+  };
+  operator hrp::Vector3e();
+  template<typename U>
+  Vec3e& operator=(const U &v){
+    *this = v;
+    return *this;
+  };
+};
+#else
+#error "Vec3e Error"
+#endif
 
 #endif /* _VEC3E_H_ */

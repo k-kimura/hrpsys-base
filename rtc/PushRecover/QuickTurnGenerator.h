@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef _QUICK_TURN_GENERATOR_H_
 #define _QUICK_TURN_GENERATOR_H_
 #include "reactive_walk_generator.h"
@@ -29,8 +30,13 @@ public:
     Vec3* m_x0;
     QuickTurn() : gen( 0 ), is_ready( 0 ){
         //初期化
+#if defined(__INTEL_COMPILER)||defined(__ICC)
         m_x0 = (Vec3*)_mm_malloc( 3*sizeof(Vec3), sizeof(Vec3) );
         std::fill( m_x0, m_x0+3, Vec3( QzVec3Zero() ) );
+#elif defined(__GNUC__)
+        m_x0 = (Vec3*) new Vec3[3];
+        std::fill( m_x0, m_x0+3, Vec3( Vec3Zero() ) );
+#endif
         // スレッド起動
         if ( pthread_create( &m_thread, NULL, func, this ) )
             {
@@ -46,7 +52,11 @@ public:
             // スレッドのjoinに失敗
             throw std::runtime_error( "::~QuickTurnGeneratorTask failed to pthread_join" );
         }
+#if defined(__INTEL_COMPILER)||defined(__ICC)
         _mm_free( m_x0 );
+#elif defined(__GNUC__)
+        delete m_x0;
+#endif
     };
     /**
      * @param x0 コピーされる

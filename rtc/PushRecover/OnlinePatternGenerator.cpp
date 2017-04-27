@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #include <link_physprof.h>  /* link paramter m,c,I */
 #include "OnlinePatternGenerator.h"
 #include <sched.h>
@@ -34,6 +35,7 @@ void* OnlinePatternGenerator::func(void *arg){
     return 0;
 } /* End of OnlinePatternGenerator::func */
 
+#if defined(__INTEL_COMPILER)||defined(__ICC)
 OnlinePatternGenerator::State::State()
     : rot_offsets_len( 300 ),
       com_p( 0.0f ),
@@ -80,8 +82,56 @@ OnlinePatternGenerator::~OnlinePatternGenerator(){
         // スレッドのjoinに失敗
         throw std::runtime_error( "::~OnlinePatternGenerator failed to pthread_join" );
     }
+};
+#elif defined(__GNUC__)
+OnlinePatternGenerator::State::State()
+    : rot_offsets_len( 300 ),
+      com_p( Vec3Zero() ),
+      x_offset( Vec3Zero() ),
+      dx_offset( Vec3Zero() ),
+      rot( Vec3Zero() ),
+      filtered_rot( Vec3Zero() ),
+      lpf_rot( Vec3Zero() ),
+      rot_offset( Vec3Zero() ),
+      rot_offsets( new Vec3[rot_offsets_len] ),
+      rot_offsets_index( 0 ),
+      filtered_q0( Vec3Zero() ),
+      filtered_q1( Vec3Zero() ),
+      lpf_q0( Vec3Zero() ),
+      lpf_q1( Vec3Zero() ),
+      filter_coef( 0.96f ),
+      lpf_coef( 0.995f ),
+      first_magnify( 1.0f ),
+      max_gain( 0.0f )
+{
+    for( int i = 0; i < rot_offsets_len; i++ )
+        rot_offsets[i] = Vec3Zero();
 }
 
+OnlinePatternGenerator::OnlinePatternGenerator()
+    : gen(0),
+      m_pstate( new State() ),
+      m_frame( 0 ), m_modify_frame( -1 ),
+      m_generator( 0.001f, 0.50, 0.095f ),
+      m_x_step( 0.0f ), m_y_step( 0.0f ),
+      m_modify_thre( FLT_MAX ),
+      m_command( new JoyCommand )
+{
+    // スレッド起動
+    if ( pthread_create( &m_thread, NULL, func, this ) ){
+        // スレッド生成に失敗
+        throw std::runtime_error( "::OnlinePatternGenerator failed to pthread_create" );
+    }
+};
+
+OnlinePatternGenerator::~OnlinePatternGenerator(){
+    m_waitcond.signal( true );
+    if ( pthread_join ( m_thread, NULL ) ) {
+        // スレッドのjoinに失敗
+        throw std::runtime_error( "::~OnlinePatternGenerator failed to pthread_join" );
+    }
+};
+#endif
 void OnlinePatternGenerator::signal_filter( Vec3 &state, const Vec3 input )
 {
     state = Vec3(m_pstate->filter_coef)*state + Vec3(1.0f-m_pstate->filter_coef)*input;
