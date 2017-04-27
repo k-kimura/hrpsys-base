@@ -60,13 +60,20 @@ inline float deg2rad(const float a){
 }
 
 /* IIKMethod, BodyIKMethod LinkIKParam are from ikfk_controller.h.cpp */
-struct LzeroIKParam{
-        static const int D = 80*1000; // um
-        static const int A = 300*1000; // um
-        static const int B = 300*1000; // um
-        static const int d = 104500; // um
-        static const int sensorZ = (int)((39.5E-3-12.5E-3)*1.0E6); // um センサ高さ
-};
+#if defined(ROBOT)
+#if (ROBOT=="URATALEG")||(ROBOT=="L0")
+typedef LzeroIKParam LegIKParam;
+#define LEG_IK_TYPE IK_LEG_TYPE_A
+#elif ROBOT=="L1"
+typedef LoneIKParam LegIKParam;
+#define LEG_IK_TYPE IK_LEG_TYPE_B
+#else
+#error "Undefined ROBOT TYPE."
+#endif
+#else
+#error "Definition of ROBOT is unavailable."
+#endif /* if defined(ROBOT)*/
+
 
 class IIKMethod : public Aligned<16>
 {
@@ -110,7 +117,7 @@ public:
                 const Mat3 footl_R = rotateMat3<1>( c[0], s[0] );
                 const Mat3 footr_R = rotateMat3<1>( c[1], s[1] );
                 Vec3 body_pos = InitialBody_p + ref_pos;
-                ik_legLR<LegIKParam,IK_LEG_TYPE_A>(
+                ik_legLR<LegIKParam,LEG_IK_TYPE>(
                                      body_R, body_pos,
                                      footl_R, footl_pos,
                                      footr_R, footr_pos,
