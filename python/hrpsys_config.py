@@ -158,7 +158,7 @@ def euler_from_matrix(matrix, axes='sxyz'):
 
 # class for configure hrpsys RTCs and ports
 #   In order to specify robot-dependent code, please inherit this HrpsysConfigurator
-class HrpsysConfigurator:
+class HrpsysConfigurator(object):
 
     # RobotHardware
     rh = None
@@ -257,6 +257,16 @@ class HrpsysConfigurator:
     rfu = None
     rfu_svc = None
     rfu_version = None
+
+    # Acceleration Filter
+    acf = None
+    acf_svc = None
+    acf_version = None
+
+    # ObjectContactTurnaroundDetector
+    octd = None
+    octd_svc = None
+    octd_version = None
 
     # rtm manager
     ms = None
@@ -387,6 +397,7 @@ class HrpsysConfigurator:
             connectPorts(self.seq.port("qRef"), self.st.port("qRefSeq"))
             connectPorts(self.abc.port("walkingStates"), self.st.port("walkingStates"))
             connectPorts(self.abc.port("sbpCogOffset"), self.st.port("sbpCogOffset"))
+            connectPorts(self.abc.port("toeheelRatio"), self.st.port("toeheelRatio"))
             if self.es:
                 connectPorts(self.st.port("emergencySignal"), self.es.port("emergencySignal"))
             connectPorts(self.st.port("emergencySignal"), self.abc.port("emergencySignal"))
@@ -475,7 +486,14 @@ class HrpsysConfigurator:
         if self.co:
             connectPorts(self.rh.port("q"), self.co.port("qCurrent"))
             connectPorts(self.rh.port("servoState"), self.co.port("servoStateIn"))
-
+        # connection for octd
+        if self.octd:
+            connectPorts(self.rh.port("q"), self.octd.port("qCurrent"))
+            if self.kf:
+                connectPorts(self.kf.port("rpy"), self.octd.port("rpy"))
+            if self.rmfo:
+                for sen in filter(lambda x: x.type == "Force", self.sensors):
+                    connectPorts(self.rmfo.port("off_" + sen.name), self.octd.port(sen.name))
 
         # connection for gc
         if self.gc:
@@ -518,10 +536,11 @@ class HrpsysConfigurator:
         if self.el:
             connectPorts(self.rh.port("q"), self.el.port("qCurrent"))
 
-        # connection for co
+        # connection for es
         if self.es:
             connectPorts(self.rh.port("servoState"), self.es.port("servoStateIn"))
 
+        # connection for bp
         if self.bp:
             if self.tl:
                 connectPorts(self.tl.port("beepCommand"), self.bp.port("beepCommand"))
@@ -531,6 +550,20 @@ class HrpsysConfigurator:
                 connectPorts(self.el.port("beepCommand"), self.bp.port("beepCommand"))
             if self.co:
                 connectPorts(self.co.port("beepCommand"), self.bp.port("beepCommand"))
+
+        # connection for acf
+        if self.acf:
+            #   currently use first acc and rate sensors for acf
+            s_acc = filter(lambda s: s.type == 'Acceleration', self.sensors)
+            if (len(s_acc) > 0) and self.rh.port(s_acc[0].name) != None:
+                connectPorts(self.rh.port(s_acc[0].name), self.acf.port('accIn'))
+            s_rate = filter(lambda s: s.type == 'RateGyro', self.sensors)
+            if (len(s_rate) > 0) and self.rh.port(s_rate[0].name) != None:
+                connectPorts(self.rh.port(s_rate[0].name), self.acf.port("rateIn"))
+            if self.kf:
+                connectPorts(self.kf.port("rpy"), self.acf.port("rpyIn"))
+            if self.abc:
+                connectPorts(self.abc.port("basePosOut"), self.acf.port("posIn"))
 
     def activateComps(self):
         '''!@brief
@@ -705,6 +738,7 @@ class HrpsysConfigurator:
             ['kf', "KalmanFilter"],
             ['vs', "VirtualForceSensor"],
             ['rmfo', "RemoveForceSensorLinkOffset"],
+            ['octd', "ObjectContactTurnaroundDetector"],
             ['es', "EmergencyStopper"],
             ['rfu', "ReferenceForceUpdater"],
             ['ic', "ImpedanceController"],
@@ -717,6 +751,7 @@ class HrpsysConfigurator:
             ['el', "SoftErrorLimiter"],
             ['tl', "ThermoLimiter"],
             ['bp', "Beeper"],
+            ['acf', "AccelerationFilter"],
             ['log', "DataLogger"]
             ]
 
@@ -1015,6 +1050,8 @@ class HrpsysConfigurator:
         @param jname str: name of joint
         @param angle float: In degree.
         @param tm float: Time to complete.
+        @rtype bool
+        @return False upon any problem during execution.
         '''
         radangle = angle / 180.0 * math.pi
         return self.seq_svc.setJointAngle(jname, radangle, tm)
@@ -1030,6 +1067,8 @@ class HrpsysConfigurator:
         \endverbatim
         @param angles list of float: In degree.
         @param tm float: Time to complete.
+        @rtype bool
+        @return False upon any problem during execution.
         '''
         ret = []
         for angle in angles:
@@ -1053,6 +1092,8 @@ class HrpsysConfigurator:
         @param tm float: Time to complete.
         @param wait bool: If true, all other subsequent commands wait until
                           the movement commanded by this method call finishes.
+        @rtype bool
+        @return False upon any problem during execution.
         '''
         angles = [x / 180.0 * math.pi for x in pose]
         ret = self.seq_svc.setJointAnglesOfGroup(gname, angles, tm)
@@ -1071,6 +1112,8 @@ class HrpsysConfigurator:
         \endverbatim
         @param sequential list of angles in float: In rad
         @param tm sequential list of time in float: Time to complete, In Second
+        @rtype bool
+        @return False upon any problem during execution.
         '''
         for angles in angless:
             for i in range(len(angles)):
@@ -1089,6 +1132,8 @@ class HrpsysConfigurator:
         @param gname str: Name of the joint group.
         @param sequential list of angles in float: In rad
         @param tm sequential list of time in float: Time to complete, In Second
+        @rtype bool
+        @return False upon any problem during execution.
         '''
         for angles in angless:
             for i in range(len(angles)):
@@ -1163,7 +1208,7 @@ class HrpsysConfigurator:
 
     def getCurrentPose(self, lname=None, frame_name=None):
         '''!@brief
-        Returns the current physical pose of the specified joint.
+        Returns the current physical pose of the specified joint in the joint space.
         cf. getReferencePose that returns commanded value.
 
         eg.
@@ -1216,7 +1261,7 @@ class HrpsysConfigurator:
 
     def getCurrentPosition(self, lname=None, frame_name=None):
         '''!@brief
-        Returns the current physical position of the specified joint.
+        Returns the current physical position of the specified joint in Cartesian space.
         cf. getReferencePosition that returns commanded value.
 
         eg.
@@ -1284,7 +1329,7 @@ class HrpsysConfigurator:
 
     def getReferencePose(self, lname, frame_name=None):
         '''!@brief
-        Returns the current commanded pose of the specified joint.
+        Returns the current commanded pose of the specified joint in the joint space.
         cf. getCurrentPose that returns physical pose.
 
         @type lname: str
@@ -1316,7 +1361,7 @@ class HrpsysConfigurator:
 
     def getReferencePosition(self, lname, frame_name=None):
         '''!@brief
-        Returns the current commanded position of the specified joint.
+        Returns the current commanded position of the specified joint in Cartesian space.
         cf. getCurrentPosition that returns physical value.
 
         @type lname: str
@@ -1635,7 +1680,7 @@ dr=0, dp=0, dw=0, tm=10, wait=True):
         Get actual states of the robot that includes current reference joint angles and joint torques.
         @return: This returns actual states of the robot, which is defined in
         RobotHardware.idl
-        (https://github.com/fkanehiro/hrpsys-base/blob/master/idl/RobotHardwareService.idl#L33)
+        (found at https://github.com/fkanehiro/hrpsys-base/blob/3fd7671de5129101a4ade3f98e2eac39fd6b26c0/idl/RobotHardwareService.idl#L32_L57 as of version 315.11.0)
         \verbatim
             /**
              * @brief status of the robot
@@ -2091,6 +2136,23 @@ dr=0, dp=0, dw=0, tm=10, wait=True):
         @param overwrite_fs_idx : Index to be overwritten. overwrite_fs_idx is used only in walking.
         '''
         self.abc_svc.setFootStepsWithParam(footstep, stepparams, overwrite_fs_idx)
+
+    def clearJointAngles(self):
+        '''!@brief
+        Cancels the commanded sequence of joint angle, by overwriting the command by the values of instant the method was invoked.
+        Note that this only cancels the queue once. Icoming commands after this method is called will be processed as usual.
+        @return bool
+        '''
+        return self.seq_svc.clearJointAngles()
+
+    def clearJointAnglesOfGroup(self, gname):
+        '''!@brief
+        Cancels the commanded sequence of joint angle for the specified joint group, by overwriting the command by the values of instant the method was invoked.
+        Note that this only cancels the queue once. Icoming commands after this method is called will be processed as usual.
+        @param gname: Name of the joint group.
+        @return bool
+        '''
+        return self.seq_svc.clearJointAngles(gname)
 
     # ##
     # ## initialize

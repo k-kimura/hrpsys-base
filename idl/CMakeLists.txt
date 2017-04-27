@@ -29,6 +29,8 @@ set(idl_files
   TendonJointControllerService.idl
   PushRecoverService.idl
   ReferenceForceUpdaterService.idl
+  AccelerationFilterService.idl
+  ObjectContactTurnaroundDetectorService.idl
   )
 
 set(openhrp_idl_files

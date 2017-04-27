@@ -173,6 +173,16 @@ module OpenHRP
       sequence< SupportPolygonVertices > eefm_support_polygon_vertices_sequence;
       /// Use force difference control or each limb force control. True by default.
       boolean eefm_use_force_difference_control;
+      /// Use damping control for swing leg.
+      boolean eefm_use_swing_damping;
+      /// Swing damping control force threshold [N]
+      double eefm_swing_damping_force_thre;
+      /// Swing damping control moment threshold [Nm]
+      double eefm_swing_damping_moment_thre;
+      /// Rotation damping gain for swing leg [Nm/(rad/s)] (r,p,y)
+      DblArray3 eefm_swing_rot_damping_gain;
+      /// Position damping gain for swing leg [N/(m/s)] (x,y,z)
+      DblArray3 eefm_swing_pos_damping_gain;
       /// Sequence of all end-effector force/moment distribution weight
       sequence<sequence<double, 6> > eefm_ee_forcemoment_distribution_weight;
       // common
@@ -209,6 +219,16 @@ module OpenHRP
       boolean is_estop_while_walking;
       /// Sequence for all end-effectors' ik limb parameters
       sequence<IKLimbParameters> ik_limb_parameters;
+      /// Whether change root link height for avoiding limb stretch
+      boolean use_limb_stretch_avoidance;
+      /// Limb stretch avoidance time constant [s]
+      double limb_stretch_avoidance_time_const;
+      /// Root link height change limitation for avoiding limb stretch [m/s] (lower, upper)
+      DblArray2 limb_stretch_avoidance_vlimit;
+      /// Sequence of limb length margin from max limb length [m]
+      sequence<double> limb_length_margin;
+      /// Detection time whether is in air [s]
+      double detection_time_to_air;
     };
 
     /**

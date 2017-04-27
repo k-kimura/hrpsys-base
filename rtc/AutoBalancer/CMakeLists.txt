@@ -1,4 +1,4 @@
-set(comp_sources AutoBalancer.cpp AutoBalancerService_impl.cpp ../ImpedanceController/JointPathEx.cpp ../ImpedanceController/RatsMatrix.cpp ../SequencePlayer/interpolator.cpp PreviewController.cpp GaitGenerator.cpp)
+set(comp_sources AutoBalancer.cpp AutoBalancerService_impl.cpp ../ImpedanceController/JointPathEx.cpp ../ImpedanceController/RatsMatrix.cpp ../SequencePlayer/interpolator.cpp PreviewController.cpp GaitGenerator.cpp ../TorqueFilter/IIRFilter.cpp)
 set(libs hrpModel-3.1 hrpCollision-3.1 hrpUtil-3.1 hrpsysBaseStub)
 add_library(AutoBalancer SHARED ${comp_sources})
 target_link_libraries(AutoBalancer ${libs})
@@ -34,6 +34,7 @@ add_test(testGaitGeneratorTest12 testGaitGenerator --test12 --use-gnuplot false)
 add_test(testGaitGeneratorTest13 testGaitGenerator --test13 --use-gnuplot false)
 add_test(testGaitGeneratorTest14 testGaitGenerator --test14 --use-gnuplot false)
 add_test(testGaitGeneratorTest15 testGaitGenerator --test15 --use-gnuplot false)
+add_test(testGaitGeneratorTest16 testGaitGenerator --test16 --use-gnuplot false)
 
 install(TARGETS ${target}
   RUNTIME DESTINATION bin

@@ -113,6 +113,10 @@ bool robot::loadGain()
         strm >> default_dgain[i];
     }
     strm.close();
+    // Print loaded gain
+    std::cerr << "[RobotHardware] loadGain" << std::endl;
+    for (unsigned int i=0; i<numJoints(); i++) {                                                                                                                                               std::cerr << "[RobotHardware]   " << joint(i)->name << ", pgain = " << default_pgain[i] << ", dgain = " << default_dgain[i] << std::endl;
+    }
     return true;
 }
 
@@ -641,7 +645,7 @@ bool robot::checkEmergency(emg_reason &o_reason, int &o_id)
 
 bool robot::setServoGainPercentage(const char *i_jname, double i_percentage)
 {
-    if ( i_percentage < 0 && 100 < i_percentage ) {
+    if ( i_percentage < 0 || 100 < i_percentage ) {
         std::cerr << "[RobotHardware] Invalid percentage " <<  i_percentage << "[%] for setServoGainPercentage. Percentage should be in (0, 100)[%]." << std::endl;
         return false;
     }
