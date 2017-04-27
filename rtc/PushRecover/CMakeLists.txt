@@ -24,7 +24,8 @@ SET(CMAKE_CXX_FLAGS "-O3 -fPIC -g -ip -fp-model fast=2 -fp-speculation=fast -fom
 set(BODY_LINK_DIR /home/leus/prog/projects/body_link)
 else()
 SET(CMAKE_CXX_COMPILER "gcc")
-SET(CMAKE_CXX_FLAGS "-O3 -fPIC -g -fomit-frame-pointer -msse4 -pthread -march=native -fno-math-errno -mfpmath=sse -ffast-math -std=c++0x -U__GXX_EXPERIMENTAL_CXX0X__ -DROBOT=${ROBOT_NUM}")
+SET(CFLAGS_EIGEN "-DNDEBUG -DEIGEN_NO_DEBUG -DEIGEN_FAST_MATH -DEIGEN_MAX_ALIGN_BYTES=32")
+SET(CMAKE_CXX_FLAGS "-O3 -fPIC -g -fomit-frame-pointer -msse4 -pthread -march=native -fno-math-errno -mfpmath=sse -ffast-math -std=c++0x -U__GXX_EXPERIMENTAL_CXX0X__ -DROBOT=${ROBOT_NUM} ${CFLAGS_EIGEN}")
 set(BODY_LINK_DIR /home/leus/prog/projects/body_link_gcc)
 endif()
 
