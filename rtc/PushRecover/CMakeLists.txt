@@ -34,7 +34,7 @@ include_directories(${BODY_LINK_DIR}/include ${LIBDIRECT_DIR}/include ${PROJECT_
 link_directories(${BODY_LINK_DIR}/lib)
 
 set(comp_sources PushRecover.cpp PushRecoverService_impl.cpp ReactivePatternGenerator.cpp Vec3e.cpp ../SequencePlayer/interpolator.cpp ../ImpedanceController/RatsMatrix.cpp)
-set(libs hrpModel-3.1 hrpUtil-3.1 hrpsysBaseStub body_link pthread rt)
+set(libs hrpModel-3.1 hrpUtil-3.1 hrpsysBaseStub body_link pthread m rt stdc++)
 add_library(PushRecover SHARED ${comp_sources})
 target_link_libraries(PushRecover ${libs})
 set_target_properties(PushRecover PROPERTIES PREFIX "")
@@ -42,11 +42,14 @@ set_target_properties(PushRecover PROPERTIES PREFIX "")
 #add_executable(PushRecoverComp PushRecoverComp.cpp ${comp_sources})
 #target_link_libraries(PushRecoverComp ${libs})
 
-add_executable(test_PushRecoverComp test_PushRecoverComp.cpp ${comp_sources})
-target_link_libraries(test_PushRecoverComp ${libs})
+#add_executable(test_PushRecoverComp test_PushRecoverComp.cpp ${comp_sources})
+#target_link_libraries(test_PushRecoverComp ${libs})
+
+add_executable(test_Vec3e test_Vec3e.cpp ${comp_sources})
+target_link_libraries(test_Vec3e ${libs})
 
 #set(target PushRecover PushRecoverComp)
-set(target PushRecover)
+set(target PushRecover test_Vec3e)
 
 install(TARGETS ${target}
   RUNTIME DESTINATION bin CONFIGURATIONS Release Debug

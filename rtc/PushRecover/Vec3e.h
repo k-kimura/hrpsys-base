@@ -1,3 +1,4 @@
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef _VEC3E_H_
 #define _VEC3E_H_
 
@@ -20,6 +21,7 @@ namespace hrp
         };
         Vector3e(Vector3 v) : Vector3(v) {
         };
+        Vector3e(Vec3e v);
         Vector3e(double x, double y, double z) : Vector3(x,y,z) {
         };
         operator Vec3e();
@@ -52,18 +54,21 @@ public:
 #elif defined(__GNUC__)
 class Vec3e : public Vec3 {
 public:
-  Vec3e() : Vec3(0.0f, 0.0f, 0.0f) {
-  };
-  Vec3e(Vec3 v) : Vec3(v) {
-  };
-  Vec3e(float x, float y, float z) : Vec3(x,y,z) {
-  };
-  operator hrp::Vector3e();
-  template<typename U>
-  Vec3e& operator=(const U &v){
-    *this = v;
-    return *this;
-  };
+    Vec3e() : Vec3(0.0f, 0.0f, 0.0f) {
+    };
+    Vec3e(Vec3 v) : Vec3(v) {
+    };
+    Vec3e(float x, float y, float z) : Vec3(x,y,z) {
+    };
+    Vec3e(hrp::Vector3e v) : Vec3((float)v[0],(float)v[1],(float)v[2]){
+        //std::cout << "calling Vec3e(hrp::Vector3e) constructor" << std::endl;
+    };
+    operator hrp::Vector3e();
+    template<typename U>
+    Vec3e& operator=(const U &v){
+        *this = Vec3e(v);
+        return *this;
+    };
 };
 #else
 #error "Vec3e Error"

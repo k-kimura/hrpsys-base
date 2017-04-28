@@ -19,11 +19,11 @@ void MyModuleInit(RTC::Manager* manager)
 
     // Create a component
     comp = manager->createComponent("PushRecover");
-    
+
     return;
 }
 
-void test1(CORBA::ORB_var *corbaORB);
+int test1(CORBA::ORB_var *corbaORB);
 
 int main (int argc, char** argv)
 {
@@ -52,7 +52,7 @@ int main (int argc, char** argv)
 
     CORBA::ORB_var orb;
     orb = CORBA::ORB_init(argc, argv);
-    test1(&orb);
+    //test1(&orb);
 
     std::cout << "Sleep(5)" << std::endl;
     sleep(5);
@@ -63,15 +63,15 @@ int main (int argc, char** argv)
     return 0;
 };
 
-void test1(CORBA::ORB_var *corbaORB){
+int test1(CORBA::ORB_var *corbaORB){
     //ネームサービスオブジェクト生成
-    CorbaNaming corbaNaming(*corbaORB, "gan:15005");
-    
+    CorbaNaming corbaNaming(*corbaORB, "localhost:15005");
+
     CorbaConsumer<RTC::RTObject> pr0;
     CORBA::Object_ptr object_pr;
     std::cout << corbaNaming.getNameServer() << std::endl;
     try{
-        object_pr = corbaNaming.resolve("pr0.rtc");
+        object_pr = corbaNaming.resolve("PushRecover0.rtc");
     }catch(CosNaming::NamingContext::NotFound e){
         std::cerr << __func__ << "() notfound" << std::endl;
         return -1;
@@ -83,7 +83,7 @@ void test1(CORBA::ORB_var *corbaORB){
 
     {
         RTC::ReturnCode_t ret;
-        ExecutionContextList_var ExecutionContextList = rrhc0->get_owned_contexts();
+        ExecutionContextList_var ExecutionContextList = pr0->get_owned_contexts();
         ret = ExecutionContextList[0]->activate_component(RTObject::_duplicate(pr0._ptr()));
         if(ret==RTC::RTC_OK){
             std::cout << __func__ << ": activated PR." << std::endl;
@@ -91,5 +91,5 @@ void test1(CORBA::ORB_var *corbaORB){
             std::cerr << __func__ << ": failded to activated PR." << std::endl;
         }
     }
-
+    return 0;
 };

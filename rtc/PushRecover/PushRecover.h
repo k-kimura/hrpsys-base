@@ -1,4 +1,4 @@
-// -*- C++ -*-
+// -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 /*!
  * @file  PushRecover.h
  * @brief null component

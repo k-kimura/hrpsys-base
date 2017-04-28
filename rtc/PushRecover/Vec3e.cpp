@@ -14,7 +14,11 @@ namespace hrp
         return Vec3e((float)x(),(float)y(),(float)z());
     };
 #elif defined(__GNUC__)
+    Vector3e::Vector3e(Vec3e v) : Vector3((double)v[0],(double)v[1],(double)v[2]) {
+        //std::cout << "calling vec3e constructor" << std::endl;
+    };
     Vector3e::operator Vec3e() {
+        //std::cout << "calling cast operator" << std::endl;
         return Vec3e((float)x(),(float)y(),(float)z());
     };
 #else

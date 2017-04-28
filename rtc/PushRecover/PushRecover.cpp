@@ -15,6 +15,14 @@
 
 #include <boost/static_assert.hpp>
 
+#define print_traj(v) \
+    std::cout << #v << ".p= [" << (v.p).transpose() << "]" << std::endl;\
+    std::cout << #v << ".body_p= [" << (v.body_p).transpose() << "]" << std::endl;\
+    std::cout << #v << ".footl_p= [" << (v.footl_p).transpose() << "]" << std::endl;\
+    std::cout << #v << ".footr_p= [" << (v.footr_p).transpose() << "]" << std::endl;\
+    std::cout << #v << ".dp= [" << (v.dp).transpose() << "]" << std::endl;\
+    std::cout << #v << ".body_dp= [" << (v.body_dp).transpose() << "]" << std::endl
+
 typedef coil::Guard<coil::Mutex> Guard;
 
 // Module specification
@@ -79,7 +87,9 @@ PushRecover::PushRecover(RTC::Manager* manager)
     m_pIKMethod          = new BodyIKMethod( 0.0f, Zc );
 #endif
     //slogger = boost::shared_ptr<SimpleLogger>(new SimpleLogger());
+#ifdef USE_DATALOG
     slogger = new SimpleLogger();
+#endif
 }
 
 
@@ -97,7 +107,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   // <rtc-template block="bind_config">
   // Bind variables and configuration variable
   bindParameter("debugLevel", m_debugLevel, "0");
-
+  std::cout << "[" << m_profile.instance_name << "] onInitialize() 1, debugLevel=" << m_debugLevel << std::endl;
   // </rtc-template>
 
   // Registration: InPort/OutPort/Service
@@ -134,16 +144,18 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   m_PushRecoverServicePort.registerProvider("service0", "PushRecoverService", m_service0);
 
   // Set service consumers to Ports
-
+  std::cout << "[" << m_profile.instance_name << "] onInitialize() 2" << std::endl;
   // Set CORBA Service Ports
   addPort(m_PushRecoverServicePort);
 
+  std::cout << "[" << m_profile.instance_name << "] onInitialize() 3" << std::endl;
   // </rtc-template>
 #if 1
   RTC::Properties& prop = getProperties();
   coil::stringTo(m_dt, prop["dt"].c_str());
   m_dt_i = 1.0/m_dt;
 
+  std::cout << "[" << m_profile.instance_name << "] onInitialize() 4" << std::endl;
   RTC::Manager& rtcManager = RTC::Manager::instance();
   std::string nameServer = rtcManager.getConfig()["corba.nameservers"];
   int comPos = nameServer.find(",");
@@ -165,7 +177,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       return RTC::RTC_ERROR;
   }
 #endif
-
+  std::cout << "[" << m_profile.instance_name << "] onInitialize() 5" << std::endl;
   /* Start Setting Force Sensor Port */
   // Setting for wrench data ports (real + virtual)
   std::vector<std::string> fsensor_names;
@@ -174,7 +186,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   for (unsigned int i=0; i<npforce; i++){
       fsensor_names.push_back(m_robot->sensor(hrp::Sensor::FORCE, i)->name);
   }
-
+  std::cout << "[" << m_profile.instance_name << "] onInitialize() 6" << std::endl;
   //   add ports for all force sensors
   int nforce  = npforce;
   m_force.resize(nforce);
@@ -387,6 +399,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   }else{
       return RTC::RTC_OK;
   }
+  std::cout << "[" << m_profile.instance_name << "] onInitialize() Finished." << std::endl;
 }
 
 
@@ -397,7 +410,9 @@ RTC::ReturnCode_t PushRecover::onFinalize()
     delete prev_ref_q;
     delete transition_interpolator;
     delete m_pIKMethod;
+#ifdef USE_DATALOG
     delete slogger;
+#endif
     return RTC::RTC_OK;
 }
 
@@ -556,12 +571,21 @@ void PushRecover::setTargetDataWithInterpolation(void){
     } else {
         /* Interpolation is not currently working */
         if(current_control_state == PR_TRANSITION_TO_READY){
+#ifdef DEBUG_HOGE
+            std::cout << "PR_TRANSITION_TO_READY finished." << std::endl;
+#endif
             current_control_state = PR_READY;
             transition_interpolator_ratio = 1.0; /* use controller output */
 
             /* Initialize PR trajectory generator related values */
             trajectoryReset();
+#ifdef DEBUG_HOGE
+            std::cout << "trajectoryReset() finished." << std::endl;
+#endif
             stpf.reset();
+#ifdef DEBUG_HOGE
+            std::cout << "stpf.reset() finished." << std::endl;
+#endif
 
             /* Set Initial Base Frame Reference Position */
             m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
@@ -572,6 +596,9 @@ void PushRecover::setTargetDataWithInterpolation(void){
             for ( int i = 0; i < m_robot->numJoints(); i++ ) {
                 m_robot->joint(i)->q = ready_joint_angle[i];
             }
+#ifdef DEBUG_HOGE
+            std::cout << "PR_TRANSITION_TO_READY completed." << std::endl;
+#endif
         }else if(current_control_state == PR_TRANSITION_TO_IDLE){
             transition_interpolator_ratio = 0.0; /* use input as output */
             current_control_state = PR_IDLE;
@@ -1006,7 +1033,9 @@ bool PushRecover::updateToCurrentRobotPose(void){
     calcFootOriginCoords(act_foot_origin_pos, act_foot_origin_rot);
 
     {
+#ifdef USE_DATALOG
         dlog.act_foot_origin_pos = CONV_HRPVEC3(act_foot_origin_pos);
+#endif
     }
 
     // cog
@@ -1168,10 +1197,20 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
-    if(loop%1000==0) std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "controlBodyCompliance()" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+    if(loop%1000==0){
+#if ROBOT==0
+        std::cout << "[pr] ROBOT=URATALEG TYPE\n";
+#endif
+#if ROBOT==1
+        std::cout << "[pr] ROBOT=L1 TYPE\n";
+#endif
+        std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "controlBodyCompliance()" << MAKE_CHAR_COLOR_DEFAULT << (is_enable?"[ENABLED]":"[DISABLED]") << std::endl;
+    }
     for(int i = 0; i<2; i++){
         u = k[0] * (rel_act_zmp(i) - prev_rel_ref_zmp(i)) + k[1] * (ref_basePos_modif(i) - 0.0f);
-        if(loop%1000==0) std::cout << "[pr] zmp_diff=[" << rel_act_zmp(i) << " - " << prev_rel_ref_zmp(i) << "]" << std::endl;
+        if(loop%1000==0){
+            std::cout << "[pr] zmp_diff=[" << rel_act_zmp(i) << " - " << prev_rel_ref_zmp(i) << "]" << std::endl;
+        }
         double prev_dx = bodyComplianceContext[i].prev_u;
         //act_cogvel;も使う？
         if(u > prev_dx + maxdd){
@@ -1192,8 +1231,10 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
     }
 #endif
 
-    if(loop%1000==0) std::cout << "[pr] u=[" << bodyComplianceContext[0].prev_u << ", " << bodyComplianceContext[1].prev_u << "]" << std::endl;
-    if(loop%1000==0) std::cout << "[pr] modif=[" << ref_basePos_modif[0] << ", " << ref_basePos_modif[1] << "]" << std::endl;
+    if(loop%1000==0){
+        std::cout << "[pr] u=[" << bodyComplianceContext[0].prev_u << ", " << bodyComplianceContext[1].prev_u << "]" << std::endl;
+        std::cout << "[pr] modif=[" << ref_basePos_modif[0] << ", " << ref_basePos_modif[1] << "]" << std::endl;
+    }
 
     /* smoothing by filter */
     //ref_zmp_modif     = ref_zmp_modif_filter->passFilter(ref_zmp_modif);
@@ -1236,6 +1277,12 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   struct timeval tv;
   gettimeofday(&tv,NULL);
 
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY onexecute started." << std::endl;
+  }
+#endif
+
   if (loop%10000==0){
       std::cout << "[" << m_profile.instance_name<< "] onExecute(" << ec_id << ")" << std::endl;
       //std::cout << "[" << m_profile.instance_name<< "] m_dt=(" << m_dt << ")" << std::endl;
@@ -1265,8 +1312,14 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   }
 
   /* zero clear dlog */
+#ifdef USE_DATALOG
   memset(&dlog,0,sizeof(SimpleLogger::DataLog));
-
+#endif
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY before updateinput." << std::endl;
+  }
+#endif
   /* check dataport input */
   {
       bool shw_msg_flag = loop%500==0?true:false;
@@ -1275,33 +1328,64 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       updateInputData(false);
   }
   /* End of checking dataport input */
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after updateinput." << std::endl;
+  }
+#endif
 
   Guard guard(m_mutex);
 
   /* Check if Emergency Stop Flag is active */
   start_RWG_flag = checkEmergencyFlag();
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after checkemergency." << std::endl;
+  }
+#endif
 
   /* calculate actual zmp, cog, cogvel, poture from joint_angle, force, rpy */
   bool on_ground = updateToCurrentRobotPose();
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after updatetocurrentrobotpose." << std::endl;
+  }
+#endif
 
   /* calculate estimated cogvel from imu rate */
   updateEstimatedInputData();
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after updateestimateinputdata." << std::endl;
+  }
+#endif
 
 
   {
+#ifdef USE_DATALOG
       dlog.act_zmp      = CONV_HRPVEC3(act_zmp);
       dlog.rel_act_zmp  = CONV_HRPVEC3(rel_act_zmp);
       dlog.act_cog      = CONV_HRPVEC3(act_cog);
       dlog.act_root_pos = CONV_HRPVEC3(act_root_pos);
       dlog.act_contact_state[0] = (float)((uint32_t)ee_params[ee_index_map["lleg"]].act_contact_state);
       dlog.act_contact_state[1] = (float)((uint32_t)ee_params[ee_index_map["rleg"]].act_contact_state);
+#endif
   }
 
   // TODO set modified ref_basePos_modif and ref_zmp_modif
   {
+#if 1
       const bool do_body_compliance = ((current_control_state==PR_READY)||(current_control_state==PR_BUSY))?true:false;
+#else
+      const bool do_body_compliance = false;
+#endif
       controlBodyCompliance(do_body_compliance);
   }
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after bodycompliance." << std::endl;
+  }
+#endif
 
   if(current_control_state==PR_READY || current_control_state==PR_BUSY){
       const double threshold  = 70;
@@ -1309,6 +1393,12 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
       /* check the state */
       const bool  checkBodyPosflag = checkBodyPosMergin(threshold2, loop, on_ground & (pushDetector_state==PD_ENABLE));
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after checkbodyposmergin." << std::endl;
+  }
+#endif
+
 
 #if 0
       const float diff_x = act_root_pos(0) - ref_basePos(0);
@@ -1381,11 +1471,21 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       /* Get reference trajectory */
       TrajectoryElement<Vec3e> ref_traj;
       {
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after ref_traj." << std::endl;
+  }
+#endif
           Vec3 sf_pref;
           Vec3 sf_body_p;
           Vec3 sf_footl_p;
           Vec3 sf_footr_p;
           ITrajectoryGenerator* gen = stpf.getReady();
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after stpf.getready." << std::endl;
+  }
+#endif
           if(current_control_state == PR_BUSY && gen!=0){
               rate_matcher.incrementFrame();
               gen->getTrajectoryFrame(rate_matcher.getConvertedFrame(),
@@ -1398,7 +1498,17 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               ref_traj.footl_p = sf_footl_p;
               ref_traj.footr_p = sf_footr_p;
           }else{
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY before ref_traj copy." << std::endl;
+  }
+#endif
               ref_traj = prev_ref_traj;  /* keep current trajectory state */
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY after ref_traj copy." << std::endl;
+  }
+#endif
           }
 #if 1
           if(DEBUGP){
@@ -1415,10 +1525,20 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       }
 
       /* calc the trajectory velocity dp and body_dp */
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY ref_traj.dp before." << std::endl;
+  }
+#endif
       {
           ref_traj.dp      = (ref_traj.p      - ((Vec3e)prev_ref_traj.p))      * m_dt_i;
           ref_traj.body_dp = (ref_traj.body_p - ((Vec3e)prev_ref_traj.body_p)) * m_dt_i;
       }
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY ref_traj.dp after." << std::endl;
+  }
+#endif
       prev_ref_traj = ref_traj;
 
 
@@ -1580,12 +1700,14 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
       /* Save log */
       {
+#ifdef USE_DATALOG
           dlog.sf_pref          = CONV_VEC3(ref_traj.p);
           dlog.sf_body_p        = CONV_VEC3(ref_traj.body_p);
           dlog.sf_footl_p       = CONV_VEC3(ref_traj.footl_p);
           dlog.sf_footr_p       = CONV_VEC3(ref_traj.footr_p);
           dlog.ref_traj_dp      = CONV_VEC3(ref_traj.dp);
           dlog.ref_traj_body_dp = CONV_VEC3(ref_traj.body_dp);
+#endif
       }
 
       const unsigned int cf = rate_matcher.getCurrentFrame();
@@ -1739,9 +1861,16 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   /*==================================================*/
   setTargetDataWithInterpolation();
 
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY before setTargetDataWithInterpolation() after." << std::endl;
+  }
+#endif
+
   /* Save log */
   if(true){
   //if(false){
+#ifdef USE_DATALOG
       dlog.frame      = (float)rate_matcher.getCurrentFrame();
       dlog.loop       = (float)loop;
       dlog.sectime   = ((float)(tv.tv_sec-stv.tv_sec)) + ((float)(tv.tv_usec - stv.tv_usec)/1000000.0f);
@@ -1778,7 +1907,13 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #endif
 
       slogger->dump(&dlog);
+#endif
   }
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY before setOutpuctData." << std::endl;
+  }
+#endif
 
   /*==================================================*/
   /* Set Target Angle Vector and publish from outport */
@@ -1787,6 +1922,12 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   const bool shw_debug_msg_outputdata = ((loop%1000==0) || ((loop%20==0) && (current_control_state == PR_TRANSITION_TO_READY || current_control_state == PR_TRANSITION_TO_IDLE)));
   //setOutputData(shw_debug_msg_outputdata);
   setOutputData(false);
+
+#ifdef DEBUG_HOGE
+  if(current_control_state==PR_READY){
+          std::cout << "PR_READY onexecute almost finish." << std::endl;
+  }
+#endif
 
   loop ++;
   return RTC::RTC_OK;
@@ -1952,6 +2093,7 @@ bool PushRecover::startLogging(void){
     std::cout << "[" << m_profile.instance_name << "] " << __func__ << std::endl;
 
     //Guard guard(m_mutex);
+#ifdef USE_DATALOG
     if(!slogger->isRunning()){
         if(slogger->startLogging(true)){
             dlog_save_flag = true;
@@ -1968,6 +2110,9 @@ bool PushRecover::startLogging(void){
         result = false;
     }
     return result;
+#else
+    return true;
+#endif /* USE_DATALOG */
 }
 
 bool PushRecover::stopLogging(void){
