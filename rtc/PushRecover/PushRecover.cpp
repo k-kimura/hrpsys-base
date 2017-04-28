@@ -68,7 +68,7 @@ PushRecover::PushRecover(RTC::Manager* manager)
       rate_matcher(500,1000),
       ee_params(2), /* Default number of End Effector is 2 */
 // </rtc-template>
-    m_debugLevel(0)
+      m_debugLevel(0)
 {
     m_service0.pushrecover(this);
     emergencyStopReqFlag = false;
@@ -1400,8 +1400,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           }else{
               ref_traj = prev_ref_traj;  /* keep current trajectory state */
           }
-#if 0
-          if(loop%1000==0){
+#if 1
+          if(DEBUGP){
               const unsigned int cf  = rate_matcher.getCurrentFrame();
               const unsigned int cfc = rate_matcher.getConvertedFrame();
               std::cout << "[pr] cf=[" << cf << "], cfc=[" << cfc << "]";
@@ -1434,10 +1434,10 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                                                 traj_body_init[1] + ref_traj.body_p[1],
                                                 traj_body_init[2] + InitialLfoot_p[2] + ref_traj.body_p[2]);
           m_robot->rootLink()->p += ref_basePos_modif;
-#if 0
-          if(loop%1000==0)printf("[pr] todo pos\n");
-          PRINTVEC3(act_world_root_pos,(loop%500==0));
-          PRINTVEC3(m_robot->rootLink()->p,(loop%500==0));
+#if 1
+          if(DEBUGP)printf("[pr] todo pos\n");
+          PRINTVEC3(act_world_root_pos,DEBUGP);
+          PRINTVEC3(m_robot->rootLink()->p,DEBUGP);
 #endif
           /* set body_p to m_robot loot link Rotation */
           m_robot->rootLink()->R = input_baseRot; /* TODO */
@@ -1482,6 +1482,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                                                             foot_r_pitch,
                                                             target_joint_angle );
           }else if(current_control_state == PR_READY){
+              if(DEBUGP){
+                  std::cout << "[PR_READY] calcik()" << std::endl;
+              }
               _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                             body_p_default_offset + ref_traj.body_p + basePos_modif - vbasePos_modif_at_start,
 #if 0
@@ -1494,6 +1497,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                                                             foot_l_pitch,
                                                             foot_r_pitch,
                                                             target_joint_angle );
+              if(DEBUGP){
+                  std::cout << "[PR_READY] calcik() Finished" << std::endl;
+              }
           }
 
           m_robot->calcForwardKinematics(); /* FK on target joint angle */
@@ -1532,6 +1538,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       {
           /* TODO */
           if(current_control_state == PR_BUSY){
+              if(DEBUGP){
+                  std::cout << "[PR_BUSY] set current walkking status" << std::endl;
+              }
               m_contactStates.data[ee_index_map["rleg"]] = (abs(ref_traj.footr_p[2])<0.001)?true:false;
               m_contactStates.data[ee_index_map["lleg"]] = (abs(ref_traj.footl_p[2])<0.001)?true:false;
               m_walkingStates.data = true;
@@ -1539,6 +1548,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               //m_controlSwingSupportTime.data[ee_index_map["rleg"]] = 1.0;
               //m_controlSwingSupportTime.data[ee_index_map["lleg"]] = 1.0;
           }else if(current_control_state == PR_READY){
+              if(DEBUGP){
+                  std::cout << "[PR_READY] set current walkking status" << std::endl;
+              }
               /* set current walking status */
               m_contactStates.data[ee_index_map["rleg"]] = true;
               m_contactStates.data[ee_index_map["lleg"]] = true;

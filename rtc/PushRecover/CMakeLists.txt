@@ -42,6 +42,9 @@ set_target_properties(PushRecover PROPERTIES PREFIX "")
 #add_executable(PushRecoverComp PushRecoverComp.cpp ${comp_sources})
 #target_link_libraries(PushRecoverComp ${libs})
 
+add_executable(test_PushRecoverComp test_PushRecoverComp.cpp ${comp_sources})
+target_link_libraries(test_PushRecoverComp ${libs})
+
 #set(target PushRecover PushRecoverComp)
 set(target PushRecover)
 
