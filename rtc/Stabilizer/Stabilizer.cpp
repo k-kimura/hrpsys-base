@@ -295,6 +295,8 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
       act_ee_p.push_back(hrp::Vector3::Zero());
       act_ee_R.push_back(hrp::Matrix33::Identity());
       ref_el_p.push_back(hrp::Vector3::Zero());
+      ref_el_vel.push_back(hrp::Vector3::Zero());
+      prev_ref_el_p.push_back(hrp::Vector3::Zero());
       act_el_p.push_back(hrp::Vector3::Zero());
       act_el_vel.push_back(hrp::Vector3::Zero());
       prev_act_el_p.push_back(hrp::Vector3::Zero());
@@ -843,7 +845,6 @@ void Stabilizer::getActualParameters ()
     } else {
       act_cogvel = (act_cog - prev_act_cog)/dt;
     }
-    prev_act_foot_origin_rot = foot_origin_rot;
     act_cogvel = act_cogvel_filter->passFilter(act_cogvel);
     prev_act_cog = act_cog;
     hrp::Matrix33 act_base_R_vel = (act_base_R - prev_act_base_R) / dt;
@@ -862,7 +863,11 @@ void Stabilizer::getActualParameters ()
       act_ee_R[i] = foot_origin_rot.transpose() * (target->R * stikp[i].localR);
       act_el_p[i] = foot_origin_rot.transpose() * (target->p - foot_origin_pos);
       act_el_R[i] = foot_origin_rot.transpose() * target->R;
-      act_el_vel[i] = (act_el_p[i] - prev_act_el_p[i]) / dt;
+      if (ref_contact_states != prev_ref_contact_states) {
+          act_el_vel[i] = (foot_origin_rot.transpose() * prev_act_foot_origin_rot) * act_el_vel[i];
+      } else {
+          act_el_vel[i] = (act_el_p[i] - prev_act_el_p[i]) / dt;
+      }
       act_el_vel[i] = act_el_vel_filter[i]->passFilter(act_el_vel[i]);
       prev_act_el_p[i] = act_el_p[i];
       hrp::Matrix33 act_el_R_vel = (act_el_R[i] - prev_act_el_R[i]) / dt;
@@ -873,6 +878,7 @@ void Stabilizer::getActualParameters ()
       act_el_omega[i] = act_el_omega_filter[i]->passFilter(act_el_omega[i]);
       prev_act_el_R[i] = act_el_R[i];
     }
+    prev_act_foot_origin_rot = foot_origin_rot;
     // capture point
     act_cp = act_cog + act_cogvel / std::sqrt(eefm_gravitational_acceleration / (act_cog - act_zmp)(2));
     rel_act_cp = hrp::Vector3(act_cp(0), act_cp(1), act_zmp(2));
@@ -1221,15 +1227,21 @@ void Stabilizer::getTargetParameters ()
     } else {
       ref_cogvel = (ref_cog - prev_ref_cog)/dt;
     }
-    prev_ref_foot_origin_rot = foot_origin_rot;
     for (size_t i = 0; i < stikp.size(); i++) {
       stikp[i].target_ee_diff_p = foot_origin_rot.transpose() * (target_ee_p[i] - foot_origin_pos);
       stikp[i].target_ee_diff_r = foot_origin_rot.transpose() * target_ee_R[i];
 
       hrp::Link* target = m_robot->link(stikp[i].target_name);
       ref_el_p[i] = foot_origin_rot.transpose() * (target->p - foot_origin_pos);
+      if (ref_contact_states != prev_ref_contact_states) {
+          ref_el_vel[i] = (foot_origin_rot.transpose() * prev_ref_foot_origin_rot) * ref_el_vel[i];
+      } else {
+          ref_el_vel[i] = (ref_el_p[i] - prev_ref_el_p[i]) / dt;
+      }
+      prev_ref_el_p[i] = ref_el_p[i];
       ref_el_R[i] = foot_origin_rot.transpose() * target->R;
     }
+    prev_ref_foot_origin_rot = foot_origin_rot;
     target_foot_origin_rot = foot_origin_rot;
     // capture point
     ref_cp = ref_cog + ref_cogvel / std::sqrt(eefm_gravitational_acceleration / (ref_cog - ref_zmp)(2));
@@ -2784,7 +2796,7 @@ void Stabilizer::torqueST()
     enable_joint.erase(std::unique(enable_joint.begin(), enable_joint.end()), enable_joint.end());
     hrp::Matrix33 Kpp = hrp::Matrix33::Identity() * 450;
     Kpp(2, 2) *= 2;
-    hrp::Matrix33 Kpd = ((Kpp.array() * 2 * m_robot->totalMass()).sqrt() * 0.8).matrix();
+    hrp::Matrix33 Kpd = ((Kpp.array() * 2 * m_robot->totalMass()).sqrt() * 1.6).matrix();
     hrp::Matrix33 Krp = hrp::Matrix33::Identity() * 500;
     hrp::Matrix33 Krd = hrp::Matrix33::Identity() * 50;
     generateForce(foot_origin_rot, Kpp, Kpd, Krp, Krd, f_ga, tau_ga);
@@ -2853,7 +2865,7 @@ void Stabilizer::generateForce(const hrp::Matrix33& foot_origin_rot, const hrp::
 
     //calc f_ga
     //world frame
-    f_ga = m_robot->totalMass() * g - Kpp * foot_origin_rot * (act_cog - ref_cog) - Kpd * foot_origin_rot * act_cogvel;
+    f_ga = m_robot->totalMass() * g - Kpp * foot_origin_rot * (act_cog - ref_cog) - Kpd * foot_origin_rot * (act_cogvel - ref_cogvel);
     //foot origin frame
     f_ga = foot_origin_rot.transpose() * f_ga;
 
@@ -2874,7 +2886,7 @@ void Stabilizer::generateForce(const hrp::Matrix33& foot_origin_rot, const hrp::
 
 void Stabilizer::generateSwingFootForce(const hrp::Matrix33& Kpp, const hrp::Matrix33& Kpd, const hrp::Matrix33 Krp, const hrp::Matrix33 Krd, hrp::Vector3& f_foot, hrp::Vector3& tau_foot, size_t i)
 {
-    f_foot = act_el_R[i].transpose() * Kpp * (act_el_p[i] - ref_el_p[i]) + act_el_R[i].transpose() * Kpd * act_el_vel[i];
+    f_foot = act_el_R[i].transpose() * Kpp * (act_el_p[i] - ref_el_p[i]) + act_el_R[i].transpose() * Kpd * (act_el_vel[i] - ref_el_vel[i]);
     Eigen::Quaternion<double> q(ref_el_R[i].transpose() * act_el_R[i]);
     hrp::Vector3 e = q.vec();
     double d = q.w();
