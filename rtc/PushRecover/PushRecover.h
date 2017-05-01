@@ -273,6 +273,7 @@ private:
     std::map<std::string, hrp::Vector3> abs_forces, abs_moments, abs_ref_forces, abs_ref_moments;
     hrp::BodyPtr m_robot;
     unsigned int m_debugLevel;
+    unsigned int m_simmode;
     bool emergencyStopReqFlag;
     int loop;
 

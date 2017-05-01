@@ -41,6 +41,7 @@ static const char* pushrecover_spec[] =
     "lang_type",         "compile",
     // Configuration variables
     "conf.default.debugLevel", "0",
+    "conf.default.simmode", "0",
     ""
   };
 // </rtc-template>
@@ -76,6 +77,7 @@ PushRecover::PushRecover(RTC::Manager* manager)
       rate_matcher(500,1000),
       ee_params(2), /* Default number of End Effector is 2 */
 // </rtc-template>
+      m_simmode(0),
       m_debugLevel(0)
 {
     m_service0.pushrecover(this);
@@ -108,6 +110,8 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   // Bind variables and configuration variable
   bindParameter("debugLevel", m_debugLevel, "0");
   std::cout << "[" << m_profile.instance_name << "] onInitialize() 1, debugLevel=" << m_debugLevel << std::endl;
+  bindParameter("simmode", m_simmode, "0");
+  std::cout << "[" << m_profile.instance_name << "] onInitialize() 1, simmode=" << m_simmode << std::endl;
   // </rtc-template>
 
   // Registration: InPort/OutPort/Service
@@ -1205,6 +1209,7 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
         std::cout << "[pr] ROBOT=L1 TYPE\n";
 #endif
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "controlBodyCompliance()" << MAKE_CHAR_COLOR_DEFAULT << (is_enable?"[ENABLED]":"[DISABLED]") << std::endl;
+        std::cout << "[pr] simmode=" << m_simmode << std::endl;
     }
     for(int i = 0; i<2; i++){
         u = k[0] * (rel_act_zmp(i) - prev_rel_ref_zmp(i)) + k[1] * (ref_basePos_modif(i) - 0.0f);
@@ -1346,6 +1351,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
   /* calculate actual zmp, cog, cogvel, poture from joint_angle, force, rpy */
   bool on_ground = updateToCurrentRobotPose();
+  if(m_simmode>0){
+      on_ground = true;
+  }
 #ifdef DEBUG_HOGE
   if(current_control_state==PR_READY){
           std::cout << "PR_READY after updatetocurrentrobotpose." << std::endl;
@@ -1375,7 +1383,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   // TODO set modified ref_basePos_modif and ref_zmp_modif
   {
 #if 1
-      const bool do_body_compliance = ((current_control_state==PR_READY)||(current_control_state==PR_BUSY))?true:false;
+      const bool do_body_compliance = (((current_control_state==PR_READY)||(current_control_state==PR_BUSY))&&(m_simmode==0))?true:false;
 #else
       const bool do_body_compliance = false;
 #endif
