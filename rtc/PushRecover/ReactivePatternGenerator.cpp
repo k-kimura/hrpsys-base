@@ -40,7 +40,8 @@ void* ReactivePatternGenerator::func(void* arg){
     const int traj_len = 300;
     const float swing_height = 0.04f;
 
-    typedef DPrefModifier<2> Modifier;
+    //typedef DPrefModifier<2> Modifier;
+    typedef DPrefTimeModifier<6,20> Modifier;
 
     //template<int dpref_len,
     //         int opt_traj_len,  //最適化をかける長さ
@@ -88,6 +89,7 @@ void* ReactivePatternGenerator::func(void* arg){
 
         if( rwg_lfirst.eval_value < rwg_rfirst.eval_value ){
             self->gen = &rwg_lfirst;
+#define DEBUG_STEP_FORWARD
 #ifdef DEBUG_STEP_FORWARD
             std::cout << "Gen Left First. Eval=" << rwg_lfirst.eval_value << std::endl;
 #endif
