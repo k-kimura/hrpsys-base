@@ -1417,6 +1417,36 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #endif
       //const float diff_z = act_root_pos(2) - (Zc - InitialLfoot_p[2]); /* TODO 効果の検証 */
       const float diff_z = act_root_pos(2) - Zc; /* TODO 効果の検証 */
+      if(m_simmode>0){
+          if(loop%1000==0){
+              std::cout << "[pr] SIMMODE WARNING!!\nref_basePos_modif and act_cogvel is force replaced by zero.\n";
+          }
+          switch(m_simmode){
+          case 1:
+              ref_basePos_modif = hrp::Vector3::Zero();
+              act_cogvel = hrp::Vector3::Zero();
+              break;
+          case 2: /* step forward */
+              ref_basePos_modif = hrp::Vector3(0.05f,0.0f,0.0f);
+              act_cogvel = hrp::Vector3(0.1f,0.0f,0.0f);
+              break;
+          case 3: /* step left */
+              ref_basePos_modif = hrp::Vector3(0.0f,0.05f,0.0f);
+              act_cogvel = hrp::Vector3(0.0f,0.2f,0.0f);
+              break;
+          case 4: /* step back right */
+              ref_basePos_modif = hrp::Vector3(-0.05f,-0.05f,0.0f);
+              act_cogvel = hrp::Vector3(-0.1f,-0.1f,0.0f);
+              break;
+          case 5: /* step back right */
+              ref_basePos_modif = hrp::Vector3(-0.01f,-0.05f,0.0f);
+              act_cogvel = hrp::Vector3(-0.05f,-0.1f,0.0f);
+              break;
+          default:
+              ref_basePos_modif = hrp::Vector3::Zero();
+              act_cogvel = hrp::Vector3::Zero();
+          }
+      }/* End of simmode setting dummy basePos modification and velocity */
       const Vec3 x0[] = {
 #if 0
           Vec3( ref_zmp_modif(0), ref_zmp_modif(1), 0.0f ),
@@ -1632,11 +1662,25 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
           m_robot->calcForwardKinematics(); /* FK on target joint angle */
 
+#if ROBOT==0
           /* set target_joint_angle */
           for(int i=0;i < 12; i++){
               m_robot->joint(i)->q = target_joint_angle[i];  /* rad to rad */
               ready_joint_angle[i] = target_joint_angle[i];
           }
+#elif ROBOT==1
+          /* set target_joint_angle */
+          for(int i=0;i < 6; i++){
+              /* m_robot of L1 starts from right leg. */
+              m_robot->joint(i)->q   = target_joint_angle[i+6];  /* rad to rad */
+              m_robot->joint(i+6)->q = target_joint_angle[i];  /* rad to rad */
+              /* ready_joint_angle is the same alignment. */
+              ready_joint_angle[i]   = target_joint_angle[i];
+              ready_joint_angle[i+6] = target_joint_angle[i+6];
+          }
+#else
+#error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"
+#endif
       }
 
       { /* set reference force */
