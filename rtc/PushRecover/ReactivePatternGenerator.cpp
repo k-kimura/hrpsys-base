@@ -23,8 +23,13 @@ void* ReactivePatternGenerator::func(void* arg){
     // きめうっちんぐ軌道
     const int supports_step_lfirst[] = {-1, 1,-1,0};
     const int supports_step_rfirst[] = { 1,-1, 1,0};
+#if 1
+    const float x_range = 0.3f;
+    const float ystep   = 0.1f;
+#else
     const float x_range = 0.5f;
     const float ystep = 0.095f;
+#endif
     const Vec3 dpref_base_lfirst[] = {
         Vec3(-x_range, ystep*2,0.0f),
         Vec3(-x_range,-ystep*2,0.0f),
@@ -34,17 +39,26 @@ void* ReactivePatternGenerator::func(void* arg){
         Vec3(-x_range, ystep*2,0.0f),
         Vec3( 0.0f, -ystep,0.0f) };
 #if 1
+    const int traj_len = 300;
+    const int dpref_step_n[] = { 49, 189, 289 };
+    const Vec3 dpref_gain_lfirst[] = { Vec3(2.0f*x_range,-5.1f,0.0f) };
+    const Vec3 dpref_gain_rfirst[] = { Vec3(2.0f*x_range, 5.1f,0.0f) };
+#elif 0
     const int traj_len = 400;
     const int dpref_step_n[] = { 79, 229, 349 };
-#elif 1
+    const Vec3 dpref_gain_lfirst[] = { Vec3(2.0f*x_range,-0.1f,0.0f) };
+    const Vec3 dpref_gain_rfirst[] = { Vec3(2.0f*x_range, 0.1f,0.0f) };
+#elif 0
     const int traj_len = 400;
     const int dpref_step_n[] = { 79, 159, 329 };
+    const Vec3 dpref_gain_lfirst[] = { Vec3(2.0f*x_range,-0.1f,0.0f) };
+    const Vec3 dpref_gain_rfirst[] = { Vec3(2.0f*x_range, 0.1f,0.0f) };
 #else
     const int traj_len = 300;
     const int dpref_step_n[] = { 49, 169, 289 };
-#endif
     const Vec3 dpref_gain_lfirst[] = { Vec3(2.0f*x_range,-0.1f,0.0f) };
     const Vec3 dpref_gain_rfirst[] = { Vec3(2.0f*x_range, 0.1f,0.0f) };
+#endif
     const int dpref_len = sizeof(dpref_base_lfirst)/sizeof(Vec3);
     const float swing_height = 0.04f;
 
