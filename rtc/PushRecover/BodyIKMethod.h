@@ -57,12 +57,13 @@ const static Vec3 traj_body_init( -0.04f, 0.0f, Zc - InitialLfoot_p[2]);
 #endif
 #elif ROBOT==1
 /* default joint angle for Zc = 0.620 */
-const static float Zc = 0.620;
+//const static float Zc = 0.620;
+const static float Zc = 0.800;
 /* ready_jointangle must be initialized to be radian */
 static float ready_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.5952, -32.9614, 0.027092,
                                        5.686155e-06,  -0.026751, -39.6337, 72.5952, -32.9614, 0.026727
 };
-const static Vec3 traj_body_init( 0.0f, 0.0f, Zc - InitialLfoot_p[2]);
+const static Vec3 traj_body_init( -0.04f, 0.0f, Zc - InitialLfoot_p[2]);
 #else
 #error "Undefined ROBOT TYPE."
 #endif

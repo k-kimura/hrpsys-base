@@ -33,11 +33,19 @@ void* ReactivePatternGenerator::func(void* arg){
         Vec3(-x_range,-ystep*2,0.0f),
         Vec3(-x_range, ystep*2,0.0f),
         Vec3( 0.0f, -ystep,0.0f) };
+#if 1
+    const int traj_len = 400;
+    const int dpref_step_n[] = { 79, 229, 349 };
+#elif 1
+    const int traj_len = 400;
+    const int dpref_step_n[] = { 79, 159, 329 };
+#else
+    const int traj_len = 300;
     const int dpref_step_n[] = { 49, 169, 289 };
+#endif
     const Vec3 dpref_gain_lfirst[] = { Vec3(2.0f*x_range,-0.1f,0.0f) };
     const Vec3 dpref_gain_rfirst[] = { Vec3(2.0f*x_range, 0.1f,0.0f) };
     const int dpref_len = sizeof(dpref_base_lfirst)/sizeof(Vec3);
-    const int traj_len = 300;
     const float swing_height = 0.04f;
 
     //typedef DPrefModifier<2> Modifier;
