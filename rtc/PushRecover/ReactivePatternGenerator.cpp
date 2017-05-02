@@ -128,7 +128,7 @@ void* ReactivePatternGenerator::func(void* arg){
             }
 #endif
             self->is_ready = i + 1;
-            std::cout << "[ReactivePatternGenerator] "<< MAKE_CHAR_COLOR_BLUE << "is_ready=" << self->is_ready << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+            //std::cout << "[ReactivePatternGenerator] "<< MAKE_CHAR_COLOR_BLUE << "is_ready=" << self->is_ready << MAKE_CHAR_COLOR_DEFAULT << std::endl;
         }
     } /* End of while(true) */
 
