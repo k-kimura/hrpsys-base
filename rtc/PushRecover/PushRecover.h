@@ -374,10 +374,12 @@ private:
     /* ============================================== */
     bool checkEmergencyFlag(void);
 
-
+#define USE_DATALOG
     //boost::shared_ptr<SimpleLogger> slogger;
+#ifdef USE_DATALOG
     SimpleLogger *slogger;
     SimpleLogger::DataLog  dlog;
+#endif
     bool                   dlog_save_flag;
     struct timeval         stv; /* time of OnInitialized */
 };

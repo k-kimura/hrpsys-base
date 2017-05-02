@@ -1959,6 +1959,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #endif
 
       slogger->dump(&dlog);
+      //slogger->push(&dlog);
 #endif
   }
 #ifdef DEBUG_HOGE
