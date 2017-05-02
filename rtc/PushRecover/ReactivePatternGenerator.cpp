@@ -62,8 +62,8 @@ void* ReactivePatternGenerator::func(void* arg){
     const int dpref_len = sizeof(dpref_base_lfirst)/sizeof(Vec3);
     const float swing_height = 0.04f;
 
-    //typedef DPrefModifier<2> Modifier;
-    typedef DPrefTimeModifier<6,20> Modifier;
+    typedef DPrefModifier<2> Modifier;
+    //typedef DPrefTimeModifier<6,20> Modifier;
 
     //template<int dpref_len,
     //         int opt_traj_len,  //最適化をかける長さ
