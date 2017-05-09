@@ -126,8 +126,8 @@ namespace RTC
             if (dt > period_sec*nsubstep){
   	        m_profile.timeover++; 
 #ifdef NDEBUG
-                fprintf(stderr, "[hrpEC][%d.%6.6d] Timeover: processing time = %4.2f[ms]\n",
-                        tv.tv_sec, tv.tv_usec, dt*1e3);
+                // fprintf(stderr, "[hrpEC][%d.%6.6d] Timeover: processing time = %4.2f[ms]\n",
+                //         tv.tv_sec, tv.tv_usec, dt*1e3);
                 // Update rtc_names only when rtcs length change.
                 if (processes.size() != rtc_names.size()){
                     rtc_names.clear();
@@ -140,7 +140,7 @@ namespace RTC
                         rtc_names.push_back(std::string(rtc->get_component_profile()->instance_name));
                     }
                 }
-                printRTCProcessingTime(processes);
+                //printRTCProcessingTime(processes);
 #endif
             }
 

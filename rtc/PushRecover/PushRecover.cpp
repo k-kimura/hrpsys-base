@@ -1028,10 +1028,14 @@ bool PushRecover::updateToCurrentRobotPose(void){
     m_robot->rootLink()->R = act_Rs * (senR.transpose() * m_robot->rootLink()->R);
     m_robot->calcForwardKinematics(); /* FK on actual joint angle */
     act_base_rpy = hrp::rpyFromRot(m_robot->rootLink()->R);
-
+#if 0
     if(loop%1000==0){
-        std::cout << "[PR::updateToCurrentRobotPose]\n" << "senR=\n" << senR << "\nact_Rs=\n" << act_Rs << "\nrootLink()->R=\n" << m_robot->rootLink()->R << "\nact_base_rpy=" << act_base_rpy.transpose() << std::endl;
+        std::cout << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+        std::cout << "[PR::updateToCurrentRobotPose]\n" << "senR=\n" << senR << "\nact_Rs=\n" << act_Rs << "\nrootLink()->R=\n" << m_robot->rootLink()->R << "\nact_base_rpy=" << act_base_rpy.transpose() << "\nrpy=[" << m_rpy.data.r << ", " << m_rpy.data.p << ", " << m_rpy.data.y << "]" << std::endl;
+        std::cout << "sen->localR=\n"<<sen->localR << "\nsen->link->R=\n"<<sen->link->R << std::endl;
+        std::cout << "sen->localp=\n"<<sen->localPos << "\nsen->link->R=\n"<<sen->link->R << std::endl;
     }
+#endif
     // world_force_ps, world_force_ms
     calcWorldForceVector();
 
@@ -1207,7 +1211,6 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
-#if 0
     if(loop%1000==0){
 #if ROBOT==0
         std::cout << "[pr] ROBOT=URATALEG TYPE\n";
@@ -1218,14 +1221,11 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "controlBodyCompliance()" << MAKE_CHAR_COLOR_DEFAULT << (is_enable?"[ENABLED]":"[DISABLED]") << std::endl;
         std::cout << "[pr] simmode=" << m_simmode << std::endl;
     }
-#endif
     for(int i = 0; i<2; i++){
         u = k[0] * (rel_act_zmp(i) - prev_rel_ref_zmp(i)) + k[1] * (ref_basePos_modif(i) - 0.0f);
-#if 0
         if(loop%1000==0){
             std::cout << "[pr] zmp_diff=[" << rel_act_zmp(i) << " - " << prev_rel_ref_zmp(i) << "]" << std::endl;
         }
-#endif
         double prev_dx = bodyComplianceContext[i].prev_u;
         //act_cogvel;も使う？
         if(u > prev_dx + maxdd){
@@ -1245,7 +1245,7 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
         }
     }
 #endif
-#if 0
+#if 1
     if(loop%1000==0){
         std::cout << "[pr] u=[" << bodyComplianceContext[0].prev_u << ", " << bodyComplianceContext[1].prev_u << "]" << std::endl;
         std::cout << "[pr] modif=[" << ref_basePos_modif[0] << ", " << ref_basePos_modif[1] << "]" << std::endl;
@@ -1835,7 +1835,6 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
   m_robot->calcForwardKinematics(); /* FK on target joint angle */
   ref_cog = m_robot->calcCM();
-
 #if 0
   if(loop%4000==1) std::cout << CLEAR_CONSOLE << std::endl;
   if(loop%100==1){
