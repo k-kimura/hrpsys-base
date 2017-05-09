@@ -4,6 +4,7 @@
 #include <boost/circular_buffer.hpp>
 #include <coil/Guard.h>
 
+#define MOVE_CURSOLN(x)         "\x1b["<< #x <<";0H"
 #define CLEAR_CONSOLE           "\x1b[2J"
 #define MOVE_CURSOL             "\x1b[2;0H"
 #define MAKE_CHAR_DEFAULT       "\x1b[0m"

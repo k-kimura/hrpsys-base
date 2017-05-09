@@ -20,6 +20,7 @@ void* ReactivePatternGenerator::func(void* arg){
     }
 #endif
 
+#if STEP_NUM==3
     // きめうっちんぐ軌道
     const int supports_step_lfirst[] = {-1, 1,-1,0};
     const int supports_step_rfirst[] = { 1,-1, 1,0};
@@ -75,7 +76,50 @@ void* ReactivePatternGenerator::func(void* arg){
     typedef ReactiveWalkGenerator<dpref_len, traj_len, 5000, 20,
                                   FastFootTrajectoryGenerator<SWING_TABLE_SIZE>::FootTrajectoryAccel,
                                   FootAccelEvaluator, Modifier > RWG;
+#elif STEP_NUM==5
+    const int dpref_len = 5;
+    const int supports_step_lfirst[] = {-1, 1,-1, 1,-1, 0};
+    const int supports_step_rfirst[] = { 1,-1, 1,-1, 1, 0};
+    const float x_range = 0.3f;
+    const float ystep   = 0.1f;
+    const Vec3 dpref_base_lfirst[dpref_len] = {
+        Vec3(-x_range, ystep*2,0.0f),
+        Vec3(-x_range,-ystep*2,0.0f),
+        Vec3(-0.7f*x_range, ystep*2,0.0f),
+        Vec3(-0.5f*x_range,-ystep*2,0.0f),
+        Vec3( 0.0f, ystep,0.0f) };
+    const Vec3 dpref_base_rfirst[dpref_len] = {
+        Vec3(-x_range,-ystep*2,0.0f),
+        Vec3(-x_range, ystep*2,0.0f),
+        Vec3(-0.7f*x_range,-ystep*2,0.0f),
+        Vec3(-0.5f*x_range, ystep*2,0.0f),
+        Vec3( 0.0f, -ystep,0.0f) };
+    const int traj_len = 500;
+    const int dpref_step_n[] = { 49, 149, 239, 329, 419 };
+    /* 1歩目のゲインを小さくしておく */
+    const float dpref_gain_ystep = ystep * 1.5f;
+    const Vec3 dpref_gain_lfirst[] = {
+        Vec3(3.0f*x_range,-0.000f*dpref_gain_ystep,0.0f),
+        Vec3(3.0f*x_range, dpref_gain_ystep,0.0f),
+        Vec3(1.0f*x_range,-dpref_gain_ystep,0.0f),
+        Vec3(0.1f*x_range, 0.0f,0.0f),
+        Vec3(0.1f*x_range, 0.0f,0.0f)
+    };
+    const Vec3 dpref_gain_rfirst[] = {
+        Vec3(3.0f*x_range, 0.000f*dpref_gain_ystep,0.0f),
+        Vec3(3.0f*x_range,-dpref_gain_ystep,0.0f),
+        Vec3(1.0f*x_range, dpref_gain_ystep,0.0f),
+        Vec3(0.1f*x_range, 0.0f,0.0f),
+        Vec3(0.1f*x_range, 0.0f,0.0f)
+    };
+    const float swing_height = 0.04f;
 
+    //typedef DPrefModifier<2> Modifier;
+    typedef DPrefTimeModifier<3*3,60> Modifier;
+    typedef ReactiveWalkGenerator<dpref_len, traj_len, 5000, 20,
+                                  FastFootTrajectoryGenerator<SWING_TABLE_SIZE>::FootTrajectoryAccel,
+                                  FootAccelEvaluator, Modifier > RWG;
+#endif
     _CRT_ALIGN(64) LinkParam link_param( m, c, I );
 
     // パラメータ
@@ -134,7 +178,7 @@ void* ReactivePatternGenerator::func(void* arg){
 
         std::cout << "[ReactivePatternGenerator] L_first=[" << rwg_lfirst.eval_value << "], R_first=[" << rwg_rfirst.eval_value << "]" << std::endl;
 
-        for( int i = 0; i < 5; i++ ){
+        for( int i = 0; i < 15; i++ ){
             /* template<bool dump> void iterateOnce( const int offset, const int calc_len, const double feedback_gain ) */
 #if defined(__INTEL_COMPILER)||defined(__ICC)
             if( rwg_lfirst.eval_value < rwg_rfirst.eval_value ){

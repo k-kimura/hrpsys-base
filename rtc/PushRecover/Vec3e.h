@@ -2,7 +2,7 @@
 #ifndef _VEC3E_H_
 #define _VEC3E_H_
 
-#include <reactive_walk_generator.h>
+#include "link_kinematics.h"
 #include <hrpUtil/EigenTypes.h>
 
 /* Eigen typeのベクトルhrp::Vector3と intrinsic typeのベクトルVec3=QzVec3=F32Vecとの間の相互変換を提供するための拡張型ベクトルクラス */

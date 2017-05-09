@@ -1,15 +1,17 @@
 // -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __ReactivePatternGenerator_h__
 #define __ReactivePatternGenerator_h__
+#include "BodyIKMethod.h"
 #include <reactive_walk_generator.h>
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 //#include "realtime_task.h"
 #include <pthread.h>
-#include "BodyIKMethod.h"
 #include "SimpleLogger.h" /* for make_char_color macro */
 #include "PThreadWaitcond.h"
 #include "PatternGenerator.h"
+
+#define STEP_NUM 5
 
 class ReactivePatternGenerator : public IPatternGenerator {
     pthread_t m_thread; /* Reactive Walk Generatorは専用スレッドにて実効する */

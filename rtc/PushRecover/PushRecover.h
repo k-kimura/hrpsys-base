@@ -34,9 +34,9 @@
 #include "Vec3e.h"
 #endif
 
+#include "BodyIKMethod.h"
 #include "ReactivePatternGenerator.h"
 //#include "OnlinePatternGenerator.h"
-#include "BodyIKMethod.h"
 #include "interpolator.h"  /* from hrpsys/rtc/SequencePlayer */
 #include "FrameRateMatcher.h"
 #include "SimpleLogger.h"

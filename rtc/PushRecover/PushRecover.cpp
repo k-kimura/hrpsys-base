@@ -74,6 +74,7 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_walkingStatesOut("walkingStatesOut", m_walkingStates),
       m_sbpCogOffsetOut("sbpCogOffsetOut", m_sbpCogOffset),
       m_PushRecoverServicePort("PushRecoverService"),
+      //rate_matcher(500,1000),
       rate_matcher(500,1000),
       ee_params(2), /* Default number of End Effector is 2 */
 // </rtc-template>
@@ -1135,6 +1136,7 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
         const float diff_z = (act_root_pos(2) - Zc) * 1000.0;
 #endif
         const double diff  = sqrt(diff2);
+#if 0
         std::cout << "[pr] diff=" << diff << "[mm]" << std::endl;
         std::cout << "[pr] diffv=[" << diff_x << ", " << diff_y << ", " << diff_z << "]" << std::endl;
         std::cout << "[pr] foots_contact_state=";
@@ -1157,6 +1159,7 @@ bool PushRecover::checkBodyPosMergin(const double threshold2, const int loop, co
         PRINTVEC3(rel_act_zmp, true);
         PRINTVEC3(prev_rel_ref_zmp, true);
         PRINTVEC3(act_cogvel, true);
+#endif
     }
 
 #if 0 /* Circular Area */
@@ -1201,6 +1204,7 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
     const double maxdd = 0.5*m_dt; /* 0.5m/sec^2 */
     const double maxmodif = 0.1;
 #if 1
+#if 0
     if(loop%1000==0){
 #if ROBOT==0
         std::cout << "[pr] ROBOT=URATALEG TYPE\n";
@@ -1211,11 +1215,14 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "controlBodyCompliance()" << MAKE_CHAR_COLOR_DEFAULT << (is_enable?"[ENABLED]":"[DISABLED]") << std::endl;
         std::cout << "[pr] simmode=" << m_simmode << std::endl;
     }
+#endif
     for(int i = 0; i<2; i++){
         u = k[0] * (rel_act_zmp(i) - prev_rel_ref_zmp(i)) + k[1] * (ref_basePos_modif(i) - 0.0f);
+#if 0
         if(loop%1000==0){
             std::cout << "[pr] zmp_diff=[" << rel_act_zmp(i) << " - " << prev_rel_ref_zmp(i) << "]" << std::endl;
         }
+#endif
         double prev_dx = bodyComplianceContext[i].prev_u;
         //act_cogvel;も使う？
         if(u > prev_dx + maxdd){
@@ -1235,12 +1242,12 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
         }
     }
 #endif
-
+#if 0
     if(loop%1000==0){
         std::cout << "[pr] u=[" << bodyComplianceContext[0].prev_u << ", " << bodyComplianceContext[1].prev_u << "]" << std::endl;
         std::cout << "[pr] modif=[" << ref_basePos_modif[0] << ", " << ref_basePos_modif[1] << "]" << std::endl;
     }
-
+#endif
     /* smoothing by filter */
     //ref_zmp_modif     = ref_zmp_modif_filter->passFilter(ref_zmp_modif);
     ref_zmp_modif     = hrp::Vector3(0.0f, 0.0f, 0.0f);
@@ -1418,9 +1425,11 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       //const float diff_z = act_root_pos(2) - (Zc - InitialLfoot_p[2]); /* TODO 効果の検証 */
       const float diff_z = act_root_pos(2) - Zc; /* TODO 効果の検証 */
       if(m_simmode>0){
+#if 0
           if(loop%1000==0){
               std::cout << "[pr] SIMMODE WARNING!!\nref_basePos_modif and act_cogvel is force replaced by zero.\n";
           }
+#endif
           switch(m_simmode){
           case 1:
               ref_basePos_modif = hrp::Vector3::Zero();
@@ -1441,6 +1450,22 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           case 5: /* step back right */
               ref_basePos_modif = hrp::Vector3(-0.01f,-0.05f,0.0f);
               act_cogvel = hrp::Vector3(-0.05f,-0.1f,0.0f);
+              break;
+          case 6: /* step back right */
+              ref_basePos_modif = hrp::Vector3(-0.0f,-0.0f,0.0f);
+              act_cogvel = hrp::Vector3(-0.05f,-0.1f,0.0f);
+              break;
+          case 7: /* step back right */
+              ref_basePos_modif = hrp::Vector3(-0.0f,-0.0f,0.0f);
+              act_cogvel = hrp::Vector3(-0.1f,-0.01f,0.0f);
+              break;
+          case 8: /* step back right */
+              ref_basePos_modif = hrp::Vector3(0.0f,0.0f,0.0f);
+              act_cogvel = hrp::Vector3(0.05f,0.10f,0.0f);
+              break;
+          case 9: /* step back right */
+              ref_basePos_modif = hrp::Vector3(0.0f,0.0f,0.0f);
+              act_cogvel = hrp::Vector3(0.30f,0.01f,0.0f);
               break;
           default:
               ref_basePos_modif = hrp::Vector3::Zero();
@@ -1592,7 +1617,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                                                 traj_body_init[1] + ref_traj.body_p[1],
                                                 traj_body_init[2] + InitialLfoot_p[2] + ref_traj.body_p[2]);
           m_robot->rootLink()->p += ref_basePos_modif;
-#if 1
+#if 0
           if(DEBUGP)printf("[pr] todo pos\n");
           PRINTVEC3(act_world_root_pos,DEBUGP);
           PRINTVEC3(m_robot->rootLink()->p,DEBUGP);
@@ -1764,7 +1789,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
       const unsigned int cf = rate_matcher.getCurrentFrame();
       if(cf==1){
-#if 1
+#if 0
           std::cout << "[" << m_profile.instance_name << "]";
           PRINTVEC3(ref_traj.p, true);
           std::cout << "[" << m_profile.instance_name << "]";
@@ -1773,9 +1798,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           PRINTVEC3(ref_traj.footl_p, true);
           std::cout << "[" << m_profile.instance_name << "]";
           PRINTVEC3(ref_traj.footr_p, true);
-#endif
           std::cout << "[" << m_profile.instance_name << "] body_p_@_start=" << body_p_at_start << std::endl;
           std::cout << "[" << m_profile.instance_name << "] rootLink_p=" << m_robot->rootLink()->p << std::endl;
+#endif
       }
 
       /* Finally set rootlink pos to world */
@@ -1808,25 +1833,25 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   m_robot->calcForwardKinematics(); /* FK on target joint angle */
   ref_cog = m_robot->calcCM();
 
-#if 0
-  if(loop%12000==250) std::cout << CLEAR_CONSOLE << std::endl;
-  if(loop%300==1){
+#if 1
+  if(loop%4000==1) std::cout << CLEAR_CONSOLE << std::endl;
+  if(loop%100==1){
       //std::cout << CLEAR_CONSOLE << MOVE_CURSOL << std::endl;
-      std::cout << MOVE_CURSOL << std::endl;
-      std::cout << "[pr] " << MAKE_CHAR_COLOR_GREEN << "SHOW STATE"<< MAKE_CHAR_COLOR_DEFAULT << std::endl;
-      std::cout << "[" << m_profile.instance_name << "] rootLink_p=[";
+          //std::cout << MOVE_CURSOL << std::endl;
+      std::cout << MOVE_CURSOLN(0) <<  "[pr] " << MAKE_CHAR_COLOR_GREEN << "SHOW STATE"<< MAKE_CHAR_COLOR_DEFAULT << std::endl;
+      std::cout << MOVE_CURSOLN(1) << "[" << m_profile.instance_name << "] rootLink_p=[";
       printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_robot->rootLink()->p(0), m_robot->rootLink()->p(1), m_robot->rootLink()->p(2));
-      std::cout << "[" << m_profile.instance_name << "] act_zmp=[";
+      std::cout << MOVE_CURSOLN(2) << "[" << m_profile.instance_name << "] act_zmp=[";
       printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", act_zmp(0), act_zmp(1), act_zmp(2));
-      std::cout << "[" << m_profile.instance_name << "] rel_act_zmp=[";
+      std::cout << MOVE_CURSOLN(3) << "[" << m_profile.instance_name << "] rel_act_zmp=[";
       printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", rel_act_zmp(0), rel_act_zmp(1), rel_act_zmp(2));
-      std::cout << "[" << m_profile.instance_name << "] rel_ref_zmp=[";
+      std::cout << MOVE_CURSOLN(4) << "[" << m_profile.instance_name << "] rel_ref_zmp=[";
       printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", rel_ref_zmp(0), rel_ref_zmp(1), rel_ref_zmp(2));
-      std::cout << "[" << m_profile.instance_name << "] ref_fource[0]=[";
+      std::cout << MOVE_CURSOLN(5) << "[" << m_profile.instance_name << "] ref_fource[0]=[";
       printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", ref_force[0](0), ref_force[0](1), ref_force[0](2));
-      std::cout << "[" << m_profile.instance_name << "] ref_fource[1]=[";
+      std::cout << MOVE_CURSOLN(6) << "[" << m_profile.instance_name << "] ref_fource[1]=[";
       printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", ref_force[1](0), ref_force[1](1), ref_force[1](2));
-      std::cout << "[" << m_profile.instance_name << "] act_rtp=[";
+      std::cout << MOVE_CURSOLN(7) << "[" << m_profile.instance_name << "] act_rtp=[";
       printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", act_root_pos(0), act_root_pos(1), act_root_pos(2));
       std::cout << "[" << m_profile.instance_name << "] act_cog=[";
       printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", act_cog(0), act_cog(1), act_cog(2));
