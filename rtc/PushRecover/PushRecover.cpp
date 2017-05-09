@@ -1023,12 +1023,15 @@ bool PushRecover::updateToCurrentRobotPose(void){
 
     /* calc current robot root Posture */
     hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
-    hrp::Matrix33 senR = sen->link->R * sen->localR;
-    hrp::Matrix33 act_Rs(hrp::rotFromRpy(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y));
+    const hrp::Matrix33 senR = sen->link->R * sen->localR;
+    const hrp::Matrix33 act_Rs(hrp::rotFromRpy(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y));
     m_robot->rootLink()->R = act_Rs * (senR.transpose() * m_robot->rootLink()->R);
     m_robot->calcForwardKinematics(); /* FK on actual joint angle */
     act_base_rpy = hrp::rpyFromRot(m_robot->rootLink()->R);
 
+    if(loop%1000==0){
+        std::cout << "[PR::updateToCurrentRobotPose]\n" << "senR=\n" << senR << "\nact_Rs=\n" << act_Rs << "\nrootLink()->R=\n" << m_robot->rootLink()->R << "\nact_base_rpy=" << act_base_rpy.transpose() << std::endl;
+    }
     // world_force_ps, world_force_ms
     calcWorldForceVector();
 
@@ -1833,7 +1836,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   m_robot->calcForwardKinematics(); /* FK on target joint angle */
   ref_cog = m_robot->calcCM();
 
-#if 1
+#if 0
   if(loop%4000==1) std::cout << CLEAR_CONSOLE << std::endl;
   if(loop%100==1){
       //std::cout << CLEAR_CONSOLE << MOVE_CURSOL << std::endl;
