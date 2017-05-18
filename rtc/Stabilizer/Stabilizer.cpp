@@ -2936,7 +2936,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     hrp::dmatrix friction;
     hrp::dvector upperFrictionLimit;
     hrp::dvector lowerFrictionLimit;
-    size_t friction_dim = makeFrictionConstraint(ee_num, 0.9, true, friction, upperFrictionLimit, lowerFrictionLimit);
+    size_t friction_dim = makeFrictionConstraint(enable_ee, 0.9, friction, upperFrictionLimit, lowerFrictionLimit);
 
     //cop constraint
     hrp::dmatrix cop;
@@ -3028,7 +3028,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         std::cerr << "[" << m_profile.instance_name << "] end efector force and friction limit" << std::endl;
         for (size_t i = 0; i < ee_num; i++) {
             std::string axis1[6] = {"fx", "fy", "fz", "tx", "ty", "tz"};
-            std::string axis2[4] = {"x lower", "x upper", "y lower", "y upper"};
+            std::string axis2[6] = {"x lower", "x upper", "y lower", "y upper", "tau z lower", "tau z upper"};
             for (size_t j = 0; j < 6; j++){
                 if (tmp1(j, i) > 0)
                     std::cerr << "[" << m_profile.instance_name << "]     ee("
@@ -3037,7 +3037,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
                     std::cerr << "[" << m_profile.instance_name << "]     ee("
                               << i << ")." << axis1[j] << " upper limit" << std::endl;
             }
-            for (size_t j = 0; j < 4; j++){
+            for (size_t j = 0; j < 6; j++){
                 if (tmp3(j, i) > 0)
                     std::cerr << "[" << m_profile.instance_name << "]     friction("
                               << i << ")." << axis2[j] << " limit" << std::endl;
@@ -3059,33 +3059,32 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     }
 }
 
-size_t Stabilizer::makeFrictionConstraint(size_t num, double coef, bool enable_tau, hrp::dmatrix& const_matrix, hrp::dvector& upper_limit, hrp::dvector& lower_limit)
+size_t Stabilizer::makeFrictionConstraint(const std::vector<int>& enable_ee, double coef, hrp::dmatrix& const_matrix, hrp::dvector& upper_limit, hrp::dvector& lower_limit)
 {
-    size_t dim = enable_tau ? 6 : 3;
-    const_matrix = hrp::dmatrix::Zero(4 * num, dim * num);
-    for (size_t i = 0; i < num; i++){
-        const_matrix.block(i * 4, i * dim, 4, 3)
-            << 1, 0,  coef,
-            1, 0, -coef,
-            0, 1,  coef,
-            0, 1, -coef;
-        if (enable_tau) {
-            const_matrix.block(i * 4, i * dim + 3, 4, 3) = hrp::dmatrix::Zero(4, 3);
+    size_t ee_num = enable_ee.size();
+    const_matrix = hrp::dmatrix::Zero(6 * ee_num, 6 * ee_num);
+    for (size_t i = 0; i < ee_num; i++){
+        double x1, x2, y1, y2;
+        x1 = szd->get_leg_front_margin();
+        x2 = szd->get_leg_rear_margin();
+        if (stikp[enable_ee[i]].ee_name == "rleg") {
+            y1 = szd->get_leg_inside_margin();
+            y2 = szd->get_leg_outside_margin();
+        } else {
+            y1 = szd->get_leg_outside_margin();
+            y2 = szd->get_leg_outside_margin();
         }
+        const_matrix.block(i * 6, i * 6, 6, 6)
+            << 1, 0,  coef, 0, 0, 0,
+            -1, 0, coef, 0, 0, 0,
+            0,  1, coef, 0, 0, 0,
+            0, -1, coef, 0, 0, 0,
+            0.5*(y1-y2), 0.5*(x2-x1), 0.5*coef*(x1+x2+y1+y2), 0, 0,  1,
+            0.5*(y2-y1), 0.5*(x1-x2), 0.5*coef*(x1+x2+y1+y2), 0, 0, -1;
     }
-    upper_limit = hrp::dvector(4 * num);
-    lower_limit = hrp::dvector(4 * num);
-    for (size_t i = 0; i < num; i++) {
-        upper_limit(0 + 4 * i) =  1e10; //Fx +
-        upper_limit(1 + 4 * i) =     0; //Fx -
-        upper_limit(2 + 4 * i) =  1e10; //Fy +
-        upper_limit(3 + 4 * i) =     0; //Fy -
-        lower_limit(0 + 4 * i) =     0;
-        lower_limit(1 + 4 * i) = -1e10;
-        lower_limit(2 + 4 * i) =     0;
-        lower_limit(3 + 4 * i) = -1e10;
-    }
-    return 4 * num;
+    upper_limit = hrp::dvector::Ones(6 * ee_num) * 1e10;
+    lower_limit = hrp::dvector::Zero(6 * ee_num);
+    return 6 * ee_num;
 }
 
 void Stabilizer::makeJointTorqueLimit(size_t num, const std::vector<int>& enable_joint, double pgain[], double dgain[], hrp::dvector& upper_limit, hrp::dvector& lower_limit)
