@@ -22,6 +22,31 @@ module OpenHRP
           double dx_gain_1;
       };
 
+      struct OnlineWalkParam
+      {
+          double filter_fp;
+          double lpf_fp;
+          double modify_rot_gain_x;
+          double modify_rot_gain_y;
+
+          long owpg_step_time;
+          long owpg_step_margin;
+          long owpg_iterate_num;
+          double owpg_feedback_gain;
+          double owpg_zmp_modify_x_max;
+          double owpg_zmp_modify_y_max;
+          double owpg_xstep_max;
+          double owpg_ystep_max;
+          double owpg_rot_offset_threshold_x;
+          double owpg_rot_offset_threshold_y;
+          double owpg_rot_offset_gain_x;
+          double owpg_rot_offset_gain_y;
+
+          boolean enable;
+          long    datal;
+          double  dataf;
+      };
+
       boolean dummy(in double a);
 
       /**
@@ -86,5 +111,19 @@ module OpenHRP
        * @return true if set successfully, false otherwise
        */
       boolean getPushDetectParam(out PushDetectParam o_param);
+
+      /**
+       * @brief Set Push Detect Param
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean setOnlineWalkParam(in OnlineWalkParam i_param);
+
+      /**
+       * @brief Get Push Detect Param
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean getOnlineWalkParam(out OnlineWalkParam o_param);
   };
 };

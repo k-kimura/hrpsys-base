@@ -66,3 +66,13 @@ CORBA::Boolean PushRecoverService_impl::getPushDetectParam(OpenHRP::PushRecoverS
 {
   return m_pushrecover->getPushDetectParam(o_param);
 };
+
+CORBA::Boolean PushRecoverService_impl::setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWalkParam& i_param)
+{
+  return m_pushrecover->setOnlineWalkParam(i_param);
+};
+
+CORBA::Boolean PushRecoverService_impl::getOnlineWalkParam(OpenHRP::PushRecoverService::OnlineWalkParam& o_param)
+{
+  return m_pushrecover->getOnlineWalkParam(o_param);
+};

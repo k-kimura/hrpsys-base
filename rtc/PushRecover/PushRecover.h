@@ -32,11 +32,13 @@
 #if defined(__GNUC__)
 #include "link_kinematics.h"
 #include "Vec3e.h"
+#else
+#error "hoge"
 #endif
 
 #include "BodyIKMethod.h"
 #include "ReactivePatternGenerator.h"
-//#include "OnlinePatternGenerator.h"
+#include "OnlinePatternGenerator.h"
 #include "interpolator.h"  /* from hrpsys/rtc/SequencePlayer */
 #include "FrameRateMatcher.h"
 #include "SimpleLogger.h"
@@ -59,6 +61,8 @@
 // </rtc-template>
 
 using namespace RTC;
+
+#define DEBUGP(x) ((m_debugLevel==1 && loop%x==0) || m_debugLevel > 1 )
 
 /**
    \brief sample RT component which has one data input port and one data output port
@@ -130,6 +134,8 @@ public:
 
     enum PushRecoveryState {PR_IDLE, PR_READY, PR_BUSY, PR_TRANSITION_TO_READY, PR_TRANSITION_TO_IDLE};
     enum PushDetectorState {PD_DISABLE=0, PD_ENABLE=1};
+    enum PR_CONTACT_STATE  {BOTH_FOOTS, RFOOT, LFOOT, ON_AIR};
+    enum EE_INDEX_LEGS     {EE_INDEX_LEFT=0, EE_INDEX_RIGHT=1};
 
     /* Assert emergencyStopReqFlag = true from service port */
     bool assertEmergencyStop(void);
@@ -160,6 +166,10 @@ public:
     bool setPushDetectParam(const OpenHRP::PushRecoverService::PushDetectParam& i_param);
     bool getPushDetectParam(OpenHRP::PushRecoverService::PushDetectParam& o_param);
 
+    /* OnlineWalkParam Service function */
+    bool setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWalkParam& i_param);
+    bool getOnlineWalkParam(OpenHRP::PushRecoverService::OnlineWalkParam& o_param);
+
     template<class T>
     struct TrajectoryElement {
         T p;
@@ -189,6 +199,106 @@ public:
         };
     };
 
+    struct ModifyTrajectoryContext {
+        Vec3 rot;
+        Vec3 rot_offset;
+        Vec3 filtered_rot;
+        Vec3 lpf_rot;
+        Vec3 hpf_rot;
+        float foot_roll_gain;
+        float transition_gain;
+        float transition_gain_diff;
+        bool  transition_state;
+        OpenHRP::PushRecoverService::OnlineWalkParam onlineWalkParam;
+        ModifyTrajectoryContext() :
+            rot( Vec3Zero() ),
+            rot_offset( Vec3Zero() ),
+            filtered_rot( Vec3Zero() ),
+            foot_roll_gain(0.0f),
+            lpf_rot( Vec3Zero() ),
+            hpf_rot( Vec3Zero() ),
+            transition_gain( 0.0f ),
+            transition_gain_diff( 0.002f ),
+            transition_state( true )
+        {
+            onlineWalkParam.filter_fp = 0.95;
+            onlineWalkParam.lpf_fp    = 0.9995;
+            onlineWalkParam.modify_rot_gain_x = 0.0;
+            onlineWalkParam.modify_rot_gain_y  = 0.0;
+
+            onlineWalkParam.owpg_step_time     = 1000;
+            onlineWalkParam.owpg_step_margin   = 300;
+            onlineWalkParam.owpg_iterate_num   = 2;
+            onlineWalkParam.owpg_feedback_gain = 1.0;
+
+            onlineWalkParam.owpg_zmp_modify_x_max = 0.08f;
+            onlineWalkParam.owpg_zmp_modify_y_max = 0.01f;
+            onlineWalkParam.owpg_xstep_max = 0.50f;
+            onlineWalkParam.owpg_ystep_max = 0.20f;
+            onlineWalkParam.owpg_rot_offset_threshold_x = 3.0f*S_PI/180.0f*0.62f;
+            onlineWalkParam.owpg_rot_offset_threshold_y = 3.0f*S_PI/180.0f*0.62f;
+            onlineWalkParam.owpg_rot_offset_gain_x = 0.0f;
+            onlineWalkParam.owpg_rot_offset_gain_y = 0.5f;
+            onlineWalkParam.enable = false;
+            onlineWalkParam.datal  = 0;
+            onlineWalkParam.dataf  = 0.0;
+        };
+        void reset(){
+            rot = Vec3Zero();
+            rot_offset = Vec3Zero();
+            filtered_rot = Vec3Zero();
+            lpf_rot = Vec3Zero();
+            hpf_rot = Vec3Zero();
+            transition_gain = 0.0f;
+            transition_state = true;
+        };
+        void copyWalkParam( OnlinePatternGenerator *p_owpg ) const{
+            OnlinePatternGenerator::WalkParam wp;
+            wp.step_time     = p_owpg->convMsecToFrame( onlineWalkParam.owpg_step_time );
+            wp.step_margin   = p_owpg->convMsecToFrame( onlineWalkParam.owpg_step_margin );
+            wp.iterate_num   = onlineWalkParam.owpg_iterate_num;
+            wp.feedback_gain = onlineWalkParam.owpg_feedback_gain;
+
+            wp.zmp_modify_x_max = onlineWalkParam.owpg_zmp_modify_x_max;
+            wp.zmp_modify_y_max = onlineWalkParam.owpg_zmp_modify_y_max;
+            wp.xstep_max        = onlineWalkParam.owpg_xstep_max;
+            wp.ystep_max        = onlineWalkParam.owpg_ystep_max;
+            wp.rot_offset_threshold_x = onlineWalkParam.owpg_rot_offset_threshold_x;
+            wp.rot_offset_threshold_y = onlineWalkParam.owpg_rot_offset_threshold_y;
+            wp.rot_offset_gain_x = onlineWalkParam.owpg_rot_offset_gain_x;
+            wp.rot_offset_gain_y = onlineWalkParam.owpg_rot_offset_gain_y;
+
+            p_owpg->setWalkParam(wp);
+            p_owpg->modifyFilterParam( onlineWalkParam.filter_fp,
+                                       onlineWalkParam.lpf_fp
+                                       );
+        };
+        void copyWalkParam( OpenHRP::PushRecoverService::OnlineWalkParam *o_param ) const{
+            o_param->owpg_step_time      = onlineWalkParam.owpg_step_time;
+            o_param->owpg_step_margin    = onlineWalkParam.owpg_step_margin;
+            o_param->owpg_iterate_num    = onlineWalkParam.owpg_iterate_num;
+            o_param->owpg_feedback_gain  = onlineWalkParam.owpg_feedback_gain;
+
+            o_param->filter_fp           = onlineWalkParam.filter_fp;
+            o_param->lpf_fp              = onlineWalkParam.lpf_fp;
+            o_param->modify_rot_gain_x   = onlineWalkParam.modify_rot_gain_x;
+            o_param->modify_rot_gain_y   = onlineWalkParam.modify_rot_gain_y;
+
+            o_param->owpg_zmp_modify_x_max = onlineWalkParam.owpg_zmp_modify_x_max;
+            o_param->owpg_zmp_modify_y_max = onlineWalkParam.owpg_zmp_modify_y_max;
+            o_param->owpg_xstep_max = onlineWalkParam.owpg_xstep_max;
+            o_param->owpg_ystep_max = onlineWalkParam.owpg_ystep_max;
+            o_param->owpg_rot_offset_threshold_x = onlineWalkParam.owpg_rot_offset_threshold_x;
+            o_param->owpg_rot_offset_threshold_y = onlineWalkParam.owpg_rot_offset_threshold_y;
+            o_param->owpg_rot_offset_gain_x = onlineWalkParam.owpg_rot_offset_gain_x;
+            o_param->owpg_rot_offset_gain_y = onlineWalkParam.owpg_rot_offset_gain_y;
+
+            o_param->enable = onlineWalkParam.enable;
+            o_param->datal = onlineWalkParam.datal;
+            o_param->dataf = onlineWalkParam.dataf;
+        };
+    };
+
 protected:
     // Configuration variable declaration
     // <rtc-template block="config_declare">
@@ -208,6 +318,9 @@ protected:
     TimedDoubleSeq  m_controlSwingSupportTime;
     TimedBoolean    m_walkingStates;
     TimedPoint3D    m_sbpCogOffset;
+
+    TimedFloatSeq   m_joyaxes;
+    TimedBooleanSeq m_joybuttons;
     // </rtc-template>
 
     // DataInPort declaration
@@ -227,6 +340,9 @@ protected:
     RTC::InPort<RTC::TimedDoubleSeq> m_controlSwingSupportTimeIn;
     RTC::InPort<RTC::TimedBoolean> m_walkingStatesIn;
     RTC::InPort<RTC::TimedPoint3D> m_sbpCogOffsetIn;
+
+    RTC::InPort<RTC::TimedFloatSeq>   m_joyaxesIn;
+    RTC::InPort<RTC::TimedBooleanSeq> m_joybuttonsIn;
     // </rtc-template>
 
     // DataOutPort declaration
@@ -274,6 +390,7 @@ private:
     hrp::BodyPtr m_robot;
     unsigned int m_debugLevel;
     unsigned int m_simmode;
+    unsigned int m_generator_select;
     bool emergencyStopReqFlag;
     int loop;
 
@@ -282,39 +399,56 @@ private:
     OpenHRP::PushRecoverService::PushDetectParam pushDetectParam;
 
     /* Input data buffer */
-    hrp::Vector3 input_zmp, input_basePos;
+    hrp::Vector3  input_zmp, input_basePos;
     hrp::Matrix33 input_baseRot;
 
     /* Actual Data calced from input data */
     boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > act_cogvel_filter;
-    hrp::Vector3  act_zmp,       prev_act_zmp;
-    hrp::Vector3  rel_act_zmp,   prev_rel_act_zmp;
-    hrp::Vector3  act_root_pos,  prev_act_root_pos;
-    hrp::Vector3  act_world_root_pos;
-    hrp::Vector3  act_cog,       prev_act_cog;
-    hrp::Vector3  act_cogvel,    prev_act_cogvel;
+    hrp::Vector3  m_act_zmp,       prev_act_zmp;
+    hrp::Vector3  m_rel_act_zmp;
+    hrp::Vector3  m_act_root_pos,    m_prev_act_root_pos;
+    hrp::Vector3  m_act_world_root_pos;
+    hrp::Vector3  m_act_cog,         m_prev_act_cog;
+    hrp::Vector3  m_act_cogvel,      m_prev_act_cogvel;
     hrp::Vector3  act_base_rpy;
-    hrp::Matrix33 prev_act_foot_origin_rot;
+    hrp::Matrix33 m_prev_act_foot_origin_rot;
     double        prev_act_force_z[2]; /* previous force z used in calcZMP */
 
     /* Estimated state data */
-    hrp::Vector3 est_cogvel;
+    hrp::Vector3 m_est_cogvel_from_rpy;
+
+    /* Joystick WatchDog Timer */
+    struct JoyState {
+        bool enabled;
+        int  wdt;
+        JoyCommand prev_command;
+        JoyState() :
+            enabled(false), wdt(0) {};
+        void reset(void) {
+            enabled = false;
+            wdt = 0;
+            prev_command.x = 0.0;
+            prev_command.y = 0.0;
+        };
+    };
+    JoyState m_joystate;
 
     /* Reference Data buffer */
-    double        *ref_q,   *prev_ref_q;
-    hrp::Vector3  rel_ref_zmp, prev_rel_ref_zmp; // ref zmp in base frame
+    //double        *ref_q,   *prev_ref_q;
+    double        ref_q[12],   prev_ref_q[12];
+    hrp::Vector3  m_rel_ref_zmp, m_prev_rel_ref_zmp; // ref zmp in base frame
     boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > ref_zmp_modif_filter;
     boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > ref_basePos_modif_filter;
-    hrp::Vector3  ref_zmp, ref_basePos, prev_ref_zmp, prev_ref_basePos, ref_zmp_modif, ref_basePos_modif;
+    hrp::Vector3  m_ref_zmp, ref_basePos, prev_ref_zmp, m_prev_ref_basePos, ref_zmp_modif, m_ref_basePos_modif;
     hrp::Matrix33     ref_baseRot;
     hrp::Vector3      prev_imu_sensor_pos, prev_imu_sensor_vel;
     hrp::Vector3      ref_cog;
     hrp::Vector3      ref_force[2];
-    TrajectoryElement<hrp::Vector3e>  prev_ref_traj;
+    TrajectoryElement<hrp::Vector3e>  m_prev_ref_traj;
 
     interpolator *transition_interpolator;
     double transition_interpolator_ratio;
-    PushRecoveryState current_control_state;
+    PushRecoveryState m_current_control_state;
 
     /* indexed robot model parts names */
     struct EElinkParam {
@@ -326,20 +460,26 @@ private:
         hrp::Matrix33 ee_localR;
         bool          act_contact_state;
     };
-    enum PR_CONTACT_STATE {BOTH_FOOTS, RFOOT, LFOOT, ON_AIR};
-    PR_CONTACT_STATE foots_contact_states, prev_foots_contact_states;
+    PR_CONTACT_STATE m_foots_contact_states, m_prev_foots_contact_states;
     std::map<std::string, size_t> ee_index_map;
+    int ee_index_lr[2];
     std::vector<EElinkParam> ee_params;
     hrp::Vector3 world_sensor_ps[2];
     hrp::Vector3 world_force_ps[2];
     hrp::Vector3 world_force_ms[2];
 
     IIKMethod* m_pIKMethod;
-    hrp::Vector3 body_p_at_start, body_p_diff_at_start;
-    hrp::Vector3 basePos_modif_at_start;
+    hrp::Vector3 m_body_p_at_start, m_body_p_diff_at_start, m_footl_p_at_start, m_footr_p_at_start;
+    hrp::Vector3 m_basePos_modif_at_start;
     FrameRateMatcher rate_matcher;
 
     ReactivePatternGenerator stpf;
+    OnlinePatternGenerator   m_owpg;
+    BodyControlContext ctx, cty;
+    PatternState m_owpg_state;
+    ControlState m_owpg_cstate;
+    bool m_prev_owpg_isComplete;
+    ModifyTrajectoryContext m_modify_rot_context;
 
     struct ControlBodyComplianceContext {
         double prev_u;
@@ -347,22 +487,28 @@ private:
     ControlBodyComplianceContext bodyComplianceContext[2];
 
     void updateInputData(const bool shw_msg_flag = false);
-    void updateEstimatedInputData(void);
+    hrp::Vector3 updateEstimatedInputData(void);
     void updateEstimatedOutputData(void);
     void setTargetDataWithInterpolation(void);
     void setOutputData(const bool shw_msg_flag = false);
 
     bool calcWorldForceVector(void);
-    void calcFootOriginCoords (hrp::Vector3& foot_origin_pos,
-                               hrp::Matrix33& foot_origin_rot);
-    bool calcZMP(hrp::Vector3& ret_zmp, const double zmp_z);
-    bool calcActCoGVel(const hrp::Vector3 act_foot_origin_pos,
-                       const hrp::Matrix33 act_foot_origin_rot);
-    bool calcActRootPos(const hrp::Vector3 act_foot_origin_pos,
-                       const hrp::Matrix33 act_foot_origin_rot);
+    PR_CONTACT_STATE calcFootOriginCoords (hrp::Vector3& foot_origin_pos,
+                                           hrp::Matrix33& foot_origin_rot) const;
+    bool calcZMP(hrp::Vector3& ret_zmp, const double zmp_z) const;
+    hrp::Vector3 calcRelActZMP(const hrp::Vector3& foot_zmp, const hrp::Vector3& root_pos, const hrp::Matrix33 root_R) const{
+        // convert absolute (in st) -> root-link relative
+        return root_R.transpose() * (foot_zmp - root_pos);
+    };
+    hrp::Vector3 calcActCoG_CoGVel(const hrp::Vector3 act_foot_origin_pos,
+                                   const hrp::Matrix33 act_foot_origin_rot,
+                                   hrp::Vector3& act_cog) const;
+    hrp::Vector3 calcActRootPos(const hrp::Vector3 act_foot_origin_pos, const hrp::Matrix33 act_foot_origin_rot) const {
+        return act_foot_origin_rot.transpose() * (-act_foot_origin_pos);
+    };
     bool updateToCurrentRobotPose(void);
     bool checkJointVelocity(void);
-    bool checkBodyPosMergin(const double threshold2, const int loop, const bool mask = false);
+    bool checkBodyPosMergin(const double threshold2, const int loop, const bool mask = false) const;
     bool controlBodyCompliance(bool is_enable);
     void trajectoryReset(void);
     /* ============================================== */
@@ -373,7 +519,6 @@ private:
     /*     EmergencyStopReqFlagはfalseになおす。       */
     /* ============================================== */
     bool checkEmergencyFlag(void);
-
 #define USE_DATALOG
     //boost::shared_ptr<SimpleLogger> slogger;
 #ifdef USE_DATALOG
@@ -382,6 +527,584 @@ private:
 #endif
     bool                   dlog_save_flag;
     struct timeval         stv; /* time of OnInitialized */
+
+    inline void executeActiveStateExtractTrajectory(const bool suppress_pr,
+                                                    const bool on_ground,
+                                                    const hrp::Vector3 &ref_basePos_modif,
+                                                    TrajectoryElement<Vec3e> &ref_traj);
+    inline void executeActiveStateExtractTrajectoryOnline(const bool on_ground,
+                                                          const hrp::Vector3 &ref_basePos_modif,
+                                                          TrajectoryElement<Vec3e> &ref_traj);
+    inline void modifyTrajectoryRot(const bool enable_modify, const bool on_ground,
+                                    ModifyTrajectoryContext &context,
+                                    TrajectoryElement<Vec3e> &ref_traj) const;
+    inline void updateRefPos_ZMP(const TrajectoryElement<Vec3e> &ref_traj,
+                                 const hrp::Vector3 &ref_basePos_modif,
+                                 hrp::Vector3 &act_world_root_pos);
+    inline void updateRotContext( const Vec3 rpy,
+                                  ModifyTrajectoryContext &context ) const;
+    inline void executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e> &ref_traj,
+                                                 const hrp::Vector3 &ref_basePos_modif);
+    inline void selectSimmodeControlValue(const int mode, hrp::Vector3 &basepos_modif, hrp::Vector3 &basepos_vel);
+    inline void extractSwingSupportTime(double* time){
+        const F64vec2 tv = m_owpg.getSwingSupportTime(0);
+        time[0] = tv[0];
+        time[1] = tv[1];
+    };
+    inline void interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, OnlinePatternGenerator* p_owpg) const;
+    void printMembers(const int cycle);
+};
+
+
+void PushRecover::executeActiveStateExtractTrajectory(const bool suppress_pr, const bool on_ground, const hrp::Vector3 &ref_basePos_modif, TrajectoryElement<Vec3e> &ref_traj){
+    const double threshold  = 70;
+    const double threshold2 = (threshold*threshold);
+
+    /* check the state */
+    const bool checkBodyPosflag = checkBodyPosMergin(threshold2, loop, on_ground & (pushDetector_state==PD_ENABLE));
+    /* Check if Emergency Stop Flag is active */
+    const bool emergency_flag = checkEmergencyFlag();
+
+    const bool invoke_pr = (emergency_flag || checkBodyPosflag) && !suppress_pr;
+
+    const float diff_x = m_act_root_pos(0) - m_prev_ref_basePos(0);
+    const float diff_y = m_act_root_pos(1) - m_prev_ref_basePos(1);
+    const float diff_z = m_act_root_pos(2) - Zc; /* TODO 効果の検証 */
+
+    /* x0[3] = [ p0, x0, Dx0] */
+    const Vec3 x0[] = {
+        Vec3(0.0f, 0.0, 0.0f),
+        Vec3( pushDetectParam.x_gain_0 * ref_basePos_modif(0), pushDetectParam.x_gain_1 * ref_basePos_modif(1), 0.0f ),
+        Vec3( (float)(pushDetectParam.dx_gain_0 * m_act_cogvel(0)), -(float)(pushDetectParam.dx_gain_1 * m_act_cogvel(1)), 0.0f)
+    };
+
+
+    /* TODO set rootLink position default value */
+    m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]) + ref_basePos_modif;
+    /* save current reference rootlink position for checkBodyPosMergin */
+    m_prev_ref_basePos = m_robot->rootLink()->p;
+
+    //m_robot->rootLink()->p = m_act_root_pos;にはならない．ここは理想的なposを入れる
+    /* set body_p to m_robot loot link Rotation */
+    //m_robot->rootLink()->R = input_baseRot; /* TODO */
+    m_robot->rootLink()->R = hrp::Matrix33::Identity(); /* TODO */
+
+    if(invoke_pr){
+        std::cout << "[" << m_profile.instance_name << "] " << MAKE_CHAR_COLOR_RED << "Calling ReactivePatternGenerator start" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
+        /* Save Current base position */
+        m_body_p_at_start = m_act_world_root_pos;
+        m_body_p_diff_at_start = hrp::Vector3( diff_x, diff_y, diff_z );
+        m_basePos_modif_at_start = hrp::Vector3(pushDetectParam.x_gain_0 * ref_basePos_modif(0),
+                                                pushDetectParam.x_gain_1 * ref_basePos_modif(1),
+                                                ref_basePos_modif(2)
+                                                );
+        stpf.start(x0);
+        rate_matcher.setCurrentFrame(0);
+        m_current_control_state = PR_BUSY;
+    }
+
+    /* Get reference trajectory */
+    {
+        Vec3 sf_pref;
+        Vec3 sf_body_p;
+        Vec3 sf_footl_p;
+        Vec3 sf_footr_p;
+        ITrajectoryGenerator* gen = stpf.getReady();
+        if(m_current_control_state == PR_BUSY && gen!=0){
+            rate_matcher.incrementFrame();
+            gen->getTrajectoryFrame(rate_matcher.getConvertedFrame(),
+                                    sf_pref,
+                                    sf_body_p,
+                                    sf_footl_p,
+                                    sf_footr_p );
+            ref_traj.p       = sf_pref;
+            ref_traj.body_p  = sf_body_p;
+            ref_traj.footl_p = sf_footl_p;
+            ref_traj.footr_p = sf_footr_p;
+        }else{
+            ref_traj = m_prev_ref_traj;  /* keep current trajectory state */
+        }
+    }
+
+    /* calc the trajectory velocity dp and body_dp */
+    {
+        ref_traj.dp      = (ref_traj.p      - ((Vec3e)m_prev_ref_traj.p))      * m_dt_i;
+        ref_traj.body_dp = (ref_traj.body_p - ((Vec3e)m_prev_ref_traj.body_p)) * m_dt_i;
+    }
+    m_prev_ref_traj = ref_traj;
+
+}; /* executeActiveStateExtractTrajectory */
+
+void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground,
+                                                            const hrp::Vector3 &ref_basePos_modif,
+                                                            TrajectoryElement<Vec3e> &ref_traj){
+    // const double threshold  = 70;
+    // const double threshold2 = (threshold*threshold);
+
+    // /* check the state */
+    // const bool checkBodyPosflag = checkBodyPosMergin(threshold2, loop, on_ground & (pushDetector_state==PD_ENABLE));
+
+    // /* Check if Emergency Stop Flag is active */
+    const bool emergency_flag = checkEmergencyFlag();
+    const bool invoke_pr = emergency_flag;
+
+    const float diff_x = m_act_root_pos(0) - m_prev_ref_basePos(0);
+    const float diff_y = m_act_root_pos(1) - m_prev_ref_basePos(1);
+    const float diff_z = m_act_root_pos(2) - Zc; /* TODO 効果の検証 */
+
+    /* x0[3] = [ p0, x0, Dx0] */
+    const Vec3 x0[] = {
+        Vec3(0.0f, 0.0, 0.0f),
+        Vec3( pushDetectParam.x_gain_0 * ref_basePos_modif(0), pushDetectParam.x_gain_1 * ref_basePos_modif(1), 0.0f ),
+        Vec3( (float)(pushDetectParam.dx_gain_0 * m_act_cogvel(0)), -(float)(pushDetectParam.dx_gain_1 * m_act_cogvel(1)), 0.0f)
+    };
+
+
+    /* TODO set rootLink position default value */
+    //m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]) + ref_basePos_modif;
+    m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
+    /* save current reference rootlink position for checkBodyPosMergin */
+    m_prev_ref_basePos = m_robot->rootLink()->p;
+
+    //m_robot->rootLink()->p = m_act_root_pos;にはならない．ここは理想的なposを入れる
+    /* set body_p to m_robot loot link Rotation */
+    //m_robot->rootLink()->R = input_baseRot; /* TODO */
+    m_robot->rootLink()->R = hrp::Matrix33::Identity(); /* TODO */
+
+    if(invoke_pr){
+        std::cout << "Pushed Steps" << std::endl;
+        {
+            const float ystep = InitialLfoot_p[1];
+            const int   step_time = m_modify_rot_context.onlineWalkParam.owpg_step_time;
+            OnlinePatternGenerator::StepCommandList steps;
+            switch(m_simmode){
+            case 0:
+                std::cout << "[pr] StopCommand" << std::endl;
+                break;
+            case 1:
+                std::cout << "[pr] DEMO Step" << std::endl;
+                std::cout << "[pr] Forward Step(Right first)" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(800), -1, Vec3(0.005f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(800),  1, Vec3(0.005f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(800), -1, Vec3(-0.005f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(800),  1, Vec3(-0.005f, +ystep*2 , 0.0f)) );
+                break;
+            case 2:
+                std::cout << "[pr] Forward Step(Right first)" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                break;
+            case 3:
+                std::cout << "[pr] Back Step(Right first)" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
+                break;
+            case 4:
+                std::cout << "[pr] Forward Step(Left first)" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                break;
+            case 5:
+                std::cout << "[pr] Back Step(Left first)" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
+                break;
+            case 6:
+                std::cout << "[pr] Left Step" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, 0.06+ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, 0.06-ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, 0.06+ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, 0.06-ystep*2 , 0.0f)) );
+                break;
+            case 7:
+                std::cout << "[pr] Right Step" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, -0.06-ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, -0.06+ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, -0.06-ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, -0.06+ystep*2 , 0.0f)) );
+                break;
+            case 8:
+                std::cout << "[pr] Fast Forward Step(Right first)" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                break;
+            default:
+                std::cout << "[pr] default step" << std::endl;
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+            }
+            if(steps.size()>0){
+                m_owpg.pushSteps( steps );
+            }
+        }
+    }
+
+    if(m_owpg.isComplete() == true && m_prev_owpg_isComplete == false){
+        m_body_p_at_start      += hrp::Vector3(m_owpg_state.body_p[0],
+                                               m_owpg_state.body_p[1],
+                                               m_owpg_state.body_p[2]);
+        m_body_p_diff_at_start += hrp::Vector3(m_owpg_state.p[0],
+                                               m_owpg_state.p[1],
+                                               m_owpg_state.p[2]);
+        m_footl_p_at_start     += hrp::Vector3(m_owpg_state.foot_l_p[0],
+                                               m_owpg_state.foot_l_p[1],
+                                               m_owpg_state.foot_l_p[2]);
+        m_footr_p_at_start     += hrp::Vector3(m_owpg_state.foot_r_p[0],
+                                               m_owpg_state.foot_r_p[1],
+                                               m_owpg_state.foot_r_p[2]);
+        rate_matcher.setCurrentFrame(0);
+    }
+    m_prev_owpg_isComplete = m_owpg.isComplete();
+
+    const int inc_frame = (int)(m_dt*1000);
+    // if(loop%500==0){
+    //     std::cout << "[PR] inc_frame=" << inc_frame << ", m_dt=" << m_dt << std::endl;
+    //     std::cout << "[PR] rpy=[" << m_rpy.data.r << ", " << m_rpy.data.p << ", " << m_rpy.data.y << "]" << std::endl;;
+    //     //std::cout << "[PR] body_p_at_start=" << m_body_p_at_start.transpose() << std::endl;
+    //     //std::cout << "[PR] body_p_diff_at_start=" << m_body_p_diff_at_start.transpose() << std::endl;
+    // }
+    {
+        const bool idle_state = m_simmode==0?false:true; /* TODO */
+        m_owpg.incrementFrameNoIdle2<LegIKParam,LEG_IK_TYPE>(inc_frame, m_owpg_state, m_owpg_cstate, idle_state);
+    }
+
+    ref_traj.p       = Vec3(m_owpg_state.p);
+    ref_traj.body_p  = Vec3(m_owpg_state.body_p);
+    ref_traj.footl_p = Vec3(m_owpg_state.foot_l_p);
+    ref_traj.footr_p = Vec3(m_owpg_state.foot_r_p);
+
+    {
+        //const Vec3 rot_rp  = Vec3(0.0f,0.0f,0.0f);
+        const Vec3 rot_rp  = Vec3(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y);
+        const Vec3 rate    = Vec3(0.0f,0.0f,0.0f);
+        const Vec3 zmp     = Vec3(m_ref_zmp[0], m_ref_zmp[1], m_ref_zmp[2]);
+        UpdateState ustate = { Vec3(m_prev_ref_traj.p[0],m_prev_ref_traj.p[1],m_prev_ref_traj.p[2]),
+                               zmp,
+                               Vec3(m_prev_ref_traj.body_p[0],m_prev_ref_traj.body_p[1],m_prev_ref_traj.body_p[2]),
+                               Vec3::Zero(),
+                               rot_rp,
+                               rate };
+        m_owpg.update(ustate);
+        m_owpg_cstate.pxstate->body_q[0] = m_owpg_state.body_p[0];
+        m_owpg_cstate.pystate->body_q[0] = m_owpg_state.body_p[1];
+        //m_owpg_cstate.pxstate->body_q[1] = m_owpg_state.body_p[0] - body_p_prev[0];
+        //m_owpg_cstate.pystate->body_q[1] = m_owpg_state.body_p[1] - body_p_prev[1];
+        /* TODO */
+        m_owpg_cstate.pxstate->body_q[1] = m_act_cogvel[0];
+        m_owpg_cstate.pystate->body_q[1] = m_act_cogvel[1];
+    }
+
+    /* calc the trajectory velocity dp and body_dp */
+    {
+        ref_traj.dp      = (ref_traj.p      - ((Vec3e)m_prev_ref_traj.p))      * m_dt_i;
+        ref_traj.body_dp = (ref_traj.body_p - ((Vec3e)m_prev_ref_traj.body_p)) * m_dt_i;
+    }
+    m_prev_ref_traj = ref_traj;
+
+}; /* executeActiveStateExtractTrajectorynline */
+
+
+void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e> &ref_traj,
+                                                   const hrp::Vector3 &ref_basePos_modif){
+    // 新しい target_joint_angleを計算
+    _MM_ALIGN16 float target_joint_angle[12];
+#if defined(__INTEL_COMPILER)||defined(__ICC)
+    _MM_ALIGN16 Mat3 body_R            = Mat3::identity();
+#elif defined(__GNUC__)
+    //TODO ここはIdentityを使うよりもKFからの姿勢を使うのが良いかも。
+#if 1
+    _MM_ALIGN16 float c[4],s[4];
+    bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.lpf_rot[0]*-0.900f,
+                                           m_modify_rot_context.lpf_rot[1]*-0.900f,
+                                           m_modify_rot_context.lpf_rot[2],
+                                           0.0f),
+                         (bodylink::v4sf*)s, (bodylink::v4sf*)c );
+
+    const Mat3 body_R                  = rotateMat3<1>( c[1], s[1] )*rotateMat3<0>( c[0], s[0] );
+#else
+    const Mat3 body_R                  = Mat3::Identity();
+#endif
+#endif
+    float foot_l_roll;
+    float foot_r_roll;
+    if(m_modify_rot_context.transition_state){
+        foot_l_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.transition_gain * m_modify_rot_context.foot_roll_gain;
+        foot_r_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.transition_gain * m_modify_rot_context.foot_roll_gain;
+    }else{
+        foot_l_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.foot_roll_gain;
+        foot_r_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.foot_roll_gain;
+    }
+    float foot_l_pitch;
+    float foot_r_pitch;
+    if(m_modify_rot_context.transition_state){
+        foot_l_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.transition_gain * m_modify_rot_context.foot_roll_gain;
+        foot_r_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.transition_gain * m_modify_rot_context.foot_roll_gain;
+    }else{
+        foot_l_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.foot_roll_gain;
+        foot_r_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.foot_roll_gain;
+    }
+    const Vec3 basePos_modif           = Vec3(ref_basePos_modif(0),
+                                              ref_basePos_modif(1),
+                                              ref_basePos_modif(2));
+    const Vec3 vbasePos_modif_at_start = Vec3(m_basePos_modif_at_start(0),
+                                              m_basePos_modif_at_start(1),
+                                              m_basePos_modif_at_start(2));
+#if 1
+    m_pIKMethod->calcik_r(body_R,
+                          body_p_default_offset + ref_traj.body_p,
+                          //body_p_default_offset + ref_traj.body_p + basePos_modif - vbasePos_modif_at_start,
+                          InitialLfoot_p + ref_traj.footl_p,
+                          InitialRfoot_p + ref_traj.footr_p,
+                          foot_l_pitch,
+                          foot_r_pitch,
+                          foot_l_roll,
+                          foot_r_roll,
+                          target_joint_angle );
+#else
+    m_pIKMethod->calcik(body_R,
+                        body_p_default_offset + ref_traj.body_p,
+                        //body_p_default_offset + ref_traj.body_p + basePos_modif - vbasePos_modif_at_start,
+                        InitialLfoot_p + ref_traj.footl_p,
+                        InitialRfoot_p + ref_traj.footr_p,
+                        foot_l_pitch,
+                        foot_r_pitch,
+                        target_joint_angle );
+#endif
+
+#if ROBOT==0
+    bool error_flag = false;
+    /* set target_joint_angle */
+    for(int i=0;i < 12; i++){
+        m_robot->joint(i)->q = target_joint_angle[i];  /* rad to rad */
+        g_ready_joint_angle[i] = target_joint_angle[i];
+
+        if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(std::isnan(m_robot->joint(i)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
+            std::cerr << "[PR] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
+            error_flag = true;
+        }
+    }
+    if(error_flag){
+        std::cerr << "[PR] body_p  =" << ref_traj.body_p.transpose() << std::endl;
+        std::cerr << "[PR] footl_p =" << ref_traj.footl_p.transpose() << std::endl;
+        std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
+    }
+#elif ROBOT==1
+    bool error_flag = false;
+    /* set target_joint_angle */
+    for(int i=0;i < 6; i++){
+        /* m_robot of L1 starts from right leg. */
+        m_robot->joint(i)->q   = target_joint_angle[i+6];  /* rad to rad */
+        m_robot->joint(i+6)->q = target_joint_angle[i];  /* rad to rad */
+        /* ready_joint_angle is the same alignment. */
+        g_ready_joint_angle[i]   = target_joint_angle[i];
+        g_ready_joint_angle[i+6] = target_joint_angle[i+6];
+        if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(std::isnan(m_robot->joint(i)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
+            std::cerr << "[PR] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
+            error_flag = true;
+        }
+        if((m_robot->joint(i+6)->q > 10.0)||(m_robot->joint(i+6)->q < -10.0)||(std::isnan(m_robot->joint(i+6)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
+            std::cerr << "[PR] joint(" << i+6 << ") = " << m_robot->joint(i+6)->q << std::endl;
+            error_flag = true;
+        }
+    }
+    if(error_flag){
+        std::cerr << "[PR] body_p  =" << ref_traj.body_p.transpose() << std::endl;
+        std::cerr << "[PR] footl_p =" << ref_traj.footl_p.transpose() << std::endl;
+        std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
+    }
+#else
+#error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"
+#endif
+}; /* executeActiveStateCalcJointAngle */
+
+void PushRecover::updateRefPos_ZMP(const TrajectoryElement<Vec3e> &ref_traj,
+                                   const hrp::Vector3 &ref_basePos_modif,
+                                   hrp::Vector3 &act_world_root_pos){
+    /* todo : check the continuity of act_world_root_pos */
+    /* calc body_p on world coords */
+    act_world_root_pos = hrp::Vector3(ref_traj.body_p[0] + m_body_p_at_start(0),
+                                      ref_traj.body_p[1] + m_body_p_at_start(1),
+                                      ref_traj.body_p[2] + m_body_p_at_start(2));
+    /* calc body_p on base frame coords */
+    hrp::Vector3 body_p = hrp::Vector3(traj_body_init[0] + ref_traj.body_p[0],
+                                       traj_body_init[1] + ref_traj.body_p[1],
+                                       traj_body_init[2] + InitialLfoot_p[2] + ref_traj.body_p[2]);
+    //body_p += ref_basePos_modif;
+
+    /* set body_p to m_robot loot link Rotation */
+    //m_robot->rootLink()->R = input_baseRot; /* TODO */
+    const hrp::Matrix33 body_R = hrp::Matrix33::Identity();
+
+    /* calc Reference ZMP relative to base_frame(Loot link)  */
+    const hrp::Vector3 default_zmp_offset(default_zmp_offset_l[0],default_zmp_offset_l[1],default_zmp_offset_l[2]);
+#if 1
+    m_ref_zmp     = hrp::Vector3(ref_traj.p[0],ref_traj.p[1],ref_traj.p[2]) + ref_zmp_modif + default_zmp_offset;
+#else
+    m_ref_zmp     = hrp::Vector3(ref_traj.p[0],ref_traj.p[1],ref_traj.p[2]);
+#endif
+    m_rel_ref_zmp = (body_R.transpose() * (m_ref_zmp - body_p)) - default_zmp_offset;
+}; /* updateRefPos_ZMP */
+
+void PushRecover::updateRotContext( const Vec3 rpy,
+                                    ModifyTrajectoryContext &context ) const{
+    context.rot = rpy;
+    m_owpg.signal_filter( context.filtered_rot, rpy ); /* 体幹姿勢の更新 */
+    m_owpg.lpf_filter( context.lpf_rot, rpy );     /* 体幹姿勢の更新 */
+
+    context.hpf_rot = context.filtered_rot - context.lpf_rot; /* High-Pass Filter */
+
+#ifdef DEBUG_HOGE
+    if(loop%500==0){
+        std::cout << "[pr] rot=[" << (context.rot.array()*(180.0f/S_PI)).transpose() << "]" << std::endl
+                  << "filtered_rot=[" << context.filtered_rot.transpose() << "]" << std::endl
+                  << "lpf_rot=[" << (context.lpf_rot.array()*(180.0f/S_PI)).transpose() << "]" << std::endl
+                  << "hpf_rot=[" <<  (context.hpf_rot.transpose() ) << "]"
+                  << std::endl;
+    }
+#endif
+
+#if 0
+    const float gain_x = context.onlineWalkParam.modify_rot_gain_x;
+    const float gain_y = context.onlineWalkParam.modify_rot_gain_y;
+    const Vec3 rot_offset(
+                          (context.filtered_rot[1]-context.lpf_rot[1]) * m_owpg.get_Zc() * gain_x,
+                          -(context.filtered_rot[0]-context.lpf_rot[0]) * m_owpg.get_Zc() * gain_y,
+                          //-(context.lpf_rot[0])* m_owpg.get_Zc() * gain_y,
+                          0.0f );
+    context.rot_offset = rot_offset;
+#endif
+#ifdef DEBUG_HOGE
+    if(loop%500==0){
+        std::cout << "rot_offset = " << context.rot_offset.transpose() << std::endl;
+        std::cout << " ========================= " << std::endl;
+    }
+#endif
+}; /* updateRotContext */
+
+void PushRecover::modifyTrajectoryRot(const bool enable_modify, const bool on_ground,
+                                      ModifyTrajectoryContext &context,
+                                      TrajectoryElement<Vec3e> &ref_traj) const{
+    const Vec3 v = Vec3(
+                        ref_traj.body_p[0] - ref_traj.p[0],
+                        ref_traj.body_p[1] - ref_traj.p[1],
+                        traj_body_init[2]
+                        );
+    _MM_ALIGN16 float c[4],s[4];
+    bodylink::sincos_ps( bodylink::F32vec4(context.hpf_rot[0],
+                                           context.hpf_rot[1],
+                                           context.hpf_rot[2], 0.0f),
+                         (bodylink::v4sf*)s, (bodylink::v4sf*)c );
+    const Mat3 body_R                  = rotateMat3<1>( c[1], s[1] )*rotateMat3<0>( c[0], s[0] );
+
+    const Vec3 rot_offset = body_R*v - v;
+    //context.rot_offset = rot_offset.array() * 0.900f;
+    context.rot_offset = Vec3Zero();
+
+#ifdef DEBUG_HOGE
+    if(loop%500==0){
+        std::cout << "rot_offset = " << rot_offset.transpose() << std::endl;
+        std::cout << " ========================= " << std::endl;
+    }
+#endif
+
+    if(enable_modify){
+        if( context.transition_state ){
+            // transition stateのときはrot_offsetを補間する
+            ref_traj.body_p = ref_traj.body_p - (Vec3e)(context.rot_offset.array() * context.transition_gain);
+            context.transition_gain += context.transition_gain_diff;
+            if( context.transition_gain > 1.0f ){
+                context.transition_state = false;
+            }
+        }else{
+            // transitionが終了している場合はそのままaddする
+            ref_traj.body_p = ref_traj.body_p - (Vec3e)(context.rot_offset);
+        }
+    }else{
+        // Disable状態でtransition stateをリセットする
+        context.transition_state = true;
+        context.transition_gain = 0.0f;
+    }
+}; /* modifyTrajectoryRot */
+
+
+void PushRecover::selectSimmodeControlValue(const int mode, hrp::Vector3 &basepos_modif, hrp::Vector3 &basepos_vel){
+    switch(mode){
+    case 1:
+        basepos_modif = hrp::Vector3::Zero();
+        basepos_vel   = hrp::Vector3::Zero();
+        break;
+    case 2: /* step forward */
+        basepos_modif = hrp::Vector3(0.05f,0.0f,0.0f);
+        basepos_vel = hrp::Vector3(0.1f,0.0f,0.0f);
+        break;
+    case 3: /* step left */
+        basepos_modif = hrp::Vector3(0.0f,0.05f,0.0f);
+        basepos_vel = hrp::Vector3(0.0f,0.2f,0.0f);
+        break;
+    case 4: /* step back right */
+        basepos_modif = hrp::Vector3(-0.05f,-0.05f,0.0f);
+        basepos_vel = hrp::Vector3(-0.1f,-0.1f,0.0f);
+        break;
+    case 5: /* step back right */
+        basepos_modif = hrp::Vector3(-0.01f,-0.05f,0.0f);
+        basepos_vel = hrp::Vector3(-0.05f,-0.1f,0.0f);
+        break;
+    case 6: /* step back right */
+        basepos_modif = hrp::Vector3(-0.0f,-0.0f,0.0f);
+        basepos_vel = hrp::Vector3(-0.05f,-0.1f,0.0f);
+        break;
+    case 7: /* step back right */
+        basepos_modif = hrp::Vector3(-0.0f,-0.0f,0.0f);
+        basepos_vel = hrp::Vector3(-0.1f,-0.01f,0.0f);
+        break;
+    case 8: /* step back right */
+        basepos_modif = hrp::Vector3(0.0f,0.0f,0.0f);
+        basepos_vel = hrp::Vector3(0.05f,0.10f,0.0f);
+        break;
+    case 9: /* step back right */
+        basepos_modif = hrp::Vector3(0.0f,0.0f,0.0f);
+        basepos_vel = hrp::Vector3(0.30f,0.01f,0.0f);
+        break;
+    default:
+        basepos_modif = hrp::Vector3::Zero();
+        basepos_vel = hrp::Vector3::Zero();
+    }
+};
+
+void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, OnlinePatternGenerator* p_owpg) const{
+    JoyCommand command;
+    if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){
+        jstate.enabled = true;
+    }else if( (buttons.data[2]==1) && (jstate.enabled==true) ){
+        jstate.enabled = false;
+    }
+
+    command.x = -axes.data[1];
+    command.y = axes.data[0];
+
+    if( jstate.enabled && loop%10==0 ){
+        p_owpg->command(command);
+    }
+
+    jstate.prev_command = command;
+
+#ifdef DEBUG_HOGE
+    if( loop%200==0 ){
+        std::cout << "[pr] joycommand [" << command.x << ", " << command.y << std::endl;
+    }
+#endif
 };
 
 extern "C"
@@ -389,15 +1112,6 @@ extern "C"
     void PushRecoverInit(RTC::Manager* manager);
 };
 
-// #define PRINTVEC3(v,f) if( f ){                \
-//     printf("%s=[", #v );       \
-//     for(int i=0;i<3;i++){\
-//         printf("%+3.3lf",(double) v##[i]);         \
-//         if(i!=2){printf(", ");}                 \
-//         else{printf("]\n");}                    \
-//     }                                           \
-//         }
 #define PRINTVEC3(v,f)
-//#undef PRINTVEC3
-//#define PRINTVEC3(v,f) printf("%s", #v )
+
 #endif // PUSHRECOVER_H

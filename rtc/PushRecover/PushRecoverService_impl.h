@@ -25,6 +25,8 @@ public:
     CORBA::Boolean disablePushDetect();
     CORBA::Boolean setPushDetectParam(const OpenHRP::PushRecoverService::PushDetectParam& i_param);
     CORBA::Boolean getPushDetectParam(OpenHRP::PushRecoverService::PushDetectParam_out o_param);
+    CORBA::Boolean setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWalkParam& i_param);
+    CORBA::Boolean getOnlineWalkParam(OpenHRP::PushRecoverService::OnlineWalkParam_out o_param);
     //
     void pushrecover(PushRecover *i_pushrecover);
 private:

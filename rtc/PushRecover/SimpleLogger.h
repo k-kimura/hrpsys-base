@@ -1,7 +1,7 @@
 // -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __SIMPLE_LOGGER_H__
 #define __SIMPLE_LOGGER_H__
-#include <boost/circular_buffer.hpp>
+//#include <boost/circular_buffer.hpp>
 #include <coil/Guard.h>
 
 #define MOVE_CURSOLN(x)         "\x1b["<< #x <<";0H"
@@ -82,19 +82,25 @@ public:
         V3      act_world_root_pos;
         V3      ref_traj_dp;
         V3      ref_traj_body_dp;
+        V3      rpy;
+        V3      filtered_rot;
+        V3      lpf_rot;
+        V3      rot_offset;
     }PACKING;
-private:
-    boost::circular_buffer<DataLog> buf;
+    //private:
+    //boost::circular_buffer<DataLog> buf;
+    bool logger_en;
+    FILE *fp;
+    char filename[256];
     typedef coil::Guard<coil::Mutex> Guard;
     coil::Mutex m_mutex;
-    FILE *fp;
-    bool logger_en;
-    char filename[256];
 public:
-    SimpleLogger() : buf(5000+200), logger_en(false) ,fp(NULL){
+    //SimpleLogger() : buf(5000+200), logger_en(false) ,fp(NULL){
+    SimpleLogger() : logger_en(false) ,fp(NULL){
         std::cout << MAKE_CHAR_COLOR_RED << "SimpleLogger()" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
     };
     ~SimpleLogger(){
+        std::cout << MAKE_CHAR_COLOR_RED << "~SimpleLogger()" << MAKE_CHAR_COLOR_DEFAULT << std::endl;
         stopLogging();
     };
     bool startLogging(bool time_append){
@@ -131,7 +137,7 @@ public:
     };
     bool push(const DataLog &din){
         Guard guard(m_mutex);
-        buf.push_back(din);
+        //buf.push_back(din);
         return logger_en;
     };
     /* DataLogがfloatだけで構成されていてpackされていることを仮定 */
@@ -148,10 +154,6 @@ public:
                 }
             }
         }
-    };
-private:
-    void dumpDataLog(const DataLog &din){
-        /* TODO */
     };
 };
 #else

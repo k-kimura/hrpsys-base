@@ -533,7 +533,12 @@ RTC::ReturnCode_t Stabilizer::onExecute(RTC::UniqueId ec_id)
   // std::cout << m_profile.instance_name<< ": onExecute(" << ec_id << ")" << std::endl;
 
   if (m_qRefIn.isNew()) {
-    m_qRefIn.read();
+      m_qRefIn.read();
+      for(int i=0;i<m_qRef.data.length();i++){
+          if((m_qRef.data[i] > 10.0)||(m_qRef.data[i] < -10.0)||(isnan(m_qRef.data[i]))){
+              std::cout << "[ST] m_qRefIn(" << i << ") = " << m_qRef.data[i] <<std::endl;
+          }
+      }
   }
   if (m_qCurrentIn.isNew()) {
     m_qCurrentIn.read();
@@ -636,6 +641,9 @@ RTC::ReturnCode_t Stabilizer::onExecute(RTC::UniqueId ec_id)
     if (is_legged_robot) {
       for ( int i = 0; i < m_robot->numJoints(); i++ ){
         m_qRef.data[i] = m_robot->joint(i)->q;
+        if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(isnan(m_robot->joint(i)->q))){
+            std::cout << "[ST] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
+        }
         //m_tau.data[i] = m_robot->joint(i)->u;
       }
       m_zmp.data.x = rel_act_zmp(0);
