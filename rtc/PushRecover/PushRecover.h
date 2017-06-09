@@ -204,11 +204,19 @@ public:
         Vec3 rot_offset;
         Vec3 filtered_rot;
         Vec3 lpf_rot;
+        Vec3 prev_lpf_rot;
+        Vec3 lpf_drot;
         Vec3 hpf_rot;
         float foot_roll_gain;
         float transition_gain;
         float transition_gain_diff;
         bool  transition_state;
+        enum FZ_TRANSITION_STATE_TYPE{FZ_TRANSITION_IDLE=0, FZ_TRANSITION_TO_READY=1, FZ_TRANSITION_TO_IDLE=2, FZ_TRANSITION_READY=3};
+        float fz_transition_gain;
+        float fz_transition_gain_diff;
+        int  fz_transition_state;
+        int fz_contact[2];
+        float fz_contact_z[2];
         OpenHRP::PushRecoverService::OnlineWalkParam onlineWalkParam;
         ModifyTrajectoryContext() :
             rot( Vec3Zero() ),
@@ -216,11 +224,20 @@ public:
             filtered_rot( Vec3Zero() ),
             foot_roll_gain(0.0f),
             lpf_rot( Vec3Zero() ),
+            prev_lpf_rot( Vec3Zero() ),
+            lpf_drot( Vec3Zero() ),
             hpf_rot( Vec3Zero() ),
             transition_gain( 0.0f ),
             transition_gain_diff( 0.002f ),
-            transition_state( true )
+            transition_state( true ),
+            fz_transition_gain( 0.0f ),
+            fz_transition_gain_diff( 0.002f ),
+            fz_transition_state( FZ_TRANSITION_IDLE )
         {
+            fz_contact[0] = 0;
+            fz_contact[1] = 0;
+            fz_contact_z[0] = 0.0f;
+            fz_contact_z[1] = 0.0f;
             onlineWalkParam.filter_fp = 0.95;
             onlineWalkParam.lpf_fp    = 0.9995;
             onlineWalkParam.modify_rot_gain_x = 0.0;
@@ -248,9 +265,17 @@ public:
             rot_offset = Vec3Zero();
             filtered_rot = Vec3Zero();
             lpf_rot = Vec3Zero();
+            prev_lpf_rot = Vec3Zero();
+            lpf_drot = Vec3Zero();
             hpf_rot = Vec3Zero();
             transition_gain = 0.0f;
             transition_state = true;
+            fz_transition_gain = 0.0f;
+            fz_transition_state = FZ_TRANSITION_IDLE;
+            fz_contact[0] = 0;
+            fz_contact[1] = 0;
+            fz_contact_z[0] = 0.0f;
+            fz_contact_z[1] = 0.0f;
         };
         void copyWalkParam( OnlinePatternGenerator *p_owpg ) const{
             OnlinePatternGenerator::WalkParam wp;
@@ -385,6 +410,7 @@ protected:
 private:
     double m_dt;
     double m_dt_i;
+    double m_mg, m_mg2; /* m_robot->totalMass() */
     coil::Mutex m_mutex;
     std::map<std::string, hrp::Vector3> abs_forces, abs_moments, abs_ref_forces, abs_ref_moments;
     hrp::BodyPtr m_robot;
@@ -406,13 +432,14 @@ private:
     boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > act_cogvel_filter;
     hrp::Vector3  m_act_zmp,       prev_act_zmp;
     hrp::Vector3  m_rel_act_zmp;
-    hrp::Vector3  m_act_root_pos,    m_prev_act_root_pos;
+    hrp::Vector3  m_act_root_pos,    m_prev_act_root_pos,   m_prev_act_root_pos_base;
+    hrp::Vector3  m_act_rootvel, m_prev_act_rootvel;
     hrp::Vector3  m_act_world_root_pos;
-    hrp::Vector3  m_act_cog,         m_prev_act_cog;
+    hrp::Vector3  m_act_cog,         m_prev_act_cog,    m_prev_act_cog_base;
     hrp::Vector3  m_act_cogvel,      m_prev_act_cogvel;
     hrp::Vector3  act_base_rpy;
     hrp::Matrix33 m_prev_act_foot_origin_rot;
-    double        prev_act_force_z[2]; /* previous force z used in calcZMP */
+    double        m_prev_act_force_z[2]; /* previous force z used in calcZMP */
 
     /* Estimated state data */
     hrp::Vector3 m_est_cogvel_from_rpy;
@@ -442,7 +469,7 @@ private:
     hrp::Vector3  m_ref_zmp, ref_basePos, prev_ref_zmp, m_prev_ref_basePos, ref_zmp_modif, m_ref_basePos_modif;
     hrp::Matrix33     ref_baseRot;
     hrp::Vector3      prev_imu_sensor_pos, prev_imu_sensor_vel;
-    hrp::Vector3      ref_cog;
+    hrp::Vector3      m_ref_cog, m_prev_ref_cog, m_ref_cogvel;
     hrp::Vector3      ref_force[2];
     TrajectoryElement<hrp::Vector3e>  m_prev_ref_traj;
 
@@ -500,12 +527,23 @@ private:
         // convert absolute (in st) -> root-link relative
         return root_R.transpose() * (foot_zmp - root_pos);
     };
+#if 0
     hrp::Vector3 calcActCoG_CoGVel(const hrp::Vector3 act_foot_origin_pos,
                                    const hrp::Matrix33 act_foot_origin_rot,
                                    hrp::Vector3& act_cog) const;
+#else
+    hrp::Vector3 calcActCoG_CoGVel(const hrp::Vector3 act_foot_origin_pos,
+                                   const hrp::Matrix33 act_foot_origin_rot,
+                                   hrp::Vector3& act_cog,
+                                   hrp::Vector3& prev_act_cog_base) const;
+#endif
+#if 0
     hrp::Vector3 calcActRootPos(const hrp::Vector3 act_foot_origin_pos, const hrp::Matrix33 act_foot_origin_rot) const {
         return act_foot_origin_rot.transpose() * (-act_foot_origin_pos);
     };
+#else
+    hrp::Vector3 calcActRootPos(const hrp::Vector3 act_foot_origin_pos, const hrp::Matrix33 act_foot_origin_rot, hrp::Vector3& act_root_pos, hrp::Vector3& prev_act_root_base) const;
+#endif
     bool updateToCurrentRobotPose(void);
     bool checkJointVelocity(void);
     bool checkBodyPosMergin(const double threshold2, const int loop, const bool mask = false) const;
@@ -551,6 +589,7 @@ private:
         time[0] = tv[0];
         time[1] = tv[1];
     };
+    inline void modifyFootHeight(const bool on_ground, ModifyTrajectoryContext &context, TrajectoryElement<Vec3e> &ref_traj);
     inline void interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, OnlinePatternGenerator* p_owpg) const;
     void printMembers(const int cycle);
 };
@@ -684,10 +723,10 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
             case 1:
                 std::cout << "[pr] DEMO Step" << std::endl;
                 std::cout << "[pr] Forward Step(Right first)" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(800), -1, Vec3(0.005f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(800),  1, Vec3(0.005f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(800), -1, Vec3(-0.005f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(800),  1, Vec3(-0.005f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.005f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.005f, +ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.005f, -ystep*2 , 0.0f)) );
+                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.005f, +ystep*2 , 0.0f)) );
                 break;
             case 2:
                 std::cout << "[pr] Forward Step(Right first)" << std::endl;
@@ -738,6 +777,9 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
                 steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
                 steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
                 break;
+            case 9:
+                std::cout << "[pr] switched to idle mode" << std::endl;
+                break;
             default:
                 std::cout << "[pr] default step" << std::endl;
                 steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
@@ -777,7 +819,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     // }
     {
         const bool idle_state = m_simmode==0?false:true; /* TODO */
-        m_owpg.incrementFrameNoIdle2<LegIKParam,LEG_IK_TYPE>(inc_frame, m_owpg_state, m_owpg_cstate, idle_state);
+        m_owpg.incrementFrameNoIdle2<LegIKParam,LEG_IK_TYPE,0>(inc_frame, m_owpg_state, m_owpg_cstate, idle_state);
     }
 
     ref_traj.p       = Vec3(m_owpg_state.p);
@@ -826,6 +868,14 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     //TODO ここはIdentityを使うよりもKFからの姿勢を使うのが良いかも。
 #if 1
     _MM_ALIGN16 float c[4],s[4];
+    bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.rot_offset[0],
+                                           m_modify_rot_context.rot_offset[1],
+                                           m_modify_rot_context.rot_offset[2],
+                                           0.0f),
+                         (bodylink::v4sf*)s, (bodylink::v4sf*)c );
+    const Mat3 body_R                  = rotateMat3<1>( c[1], s[1] )*rotateMat3<0>( c[0], s[0] );
+#elif 0
+    _MM_ALIGN16 float c[4],s[4];
     bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.lpf_rot[0]*-0.900f,
                                            m_modify_rot_context.lpf_rot[1]*-0.900f,
                                            m_modify_rot_context.lpf_rot[2],
@@ -837,6 +887,14 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     const Mat3 body_R                  = Mat3::Identity();
 #endif
 #endif
+#if 1
+    float foot_l_roll, foot_r_roll;
+    float foot_l_pitch, foot_r_pitch;
+    //foot_l_roll = foot_r_roll = m_modify_rot_context.rot_offset[0];
+    //foot_l_pitch = foot_r_pitch = m_modify_rot_context.rot_offset[1];
+    foot_l_roll = foot_r_roll = 0.0f;
+    foot_l_pitch = foot_r_pitch = 0.0f;
+#else
     float foot_l_roll;
     float foot_r_roll;
     if(m_modify_rot_context.transition_state){
@@ -855,13 +913,14 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
         foot_l_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.foot_roll_gain;
         foot_r_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.foot_roll_gain;
     }
+#endif
     const Vec3 basePos_modif           = Vec3(ref_basePos_modif(0),
                                               ref_basePos_modif(1),
                                               ref_basePos_modif(2));
     const Vec3 vbasePos_modif_at_start = Vec3(m_basePos_modif_at_start(0),
                                               m_basePos_modif_at_start(1),
                                               m_basePos_modif_at_start(2));
-#if 1
+
     m_pIKMethod->calcik_r(body_R,
                           body_p_default_offset + ref_traj.body_p,
                           //body_p_default_offset + ref_traj.body_p + basePos_modif - vbasePos_modif_at_start,
@@ -872,36 +931,26 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
                           foot_l_roll,
                           foot_r_roll,
                           target_joint_angle );
-#else
-    m_pIKMethod->calcik(body_R,
-                        body_p_default_offset + ref_traj.body_p,
-                        //body_p_default_offset + ref_traj.body_p + basePos_modif - vbasePos_modif_at_start,
-                        InitialLfoot_p + ref_traj.footl_p,
-                        InitialRfoot_p + ref_traj.footr_p,
-                        foot_l_pitch,
-                        foot_r_pitch,
-                        target_joint_angle );
-#endif
 
 #if ROBOT==0
-    bool error_flag = false;
+    //bool error_flag = false;
     /* set target_joint_angle */
     for(int i=0;i < 12; i++){
         m_robot->joint(i)->q = target_joint_angle[i];  /* rad to rad */
         g_ready_joint_angle[i] = target_joint_angle[i];
 
-        if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(std::isnan(m_robot->joint(i)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
-            std::cerr << "[PR] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
-            error_flag = true;
-        }
+        // if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(std::isnan(m_robot->joint(i)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
+        //     std::cerr << "[PR] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
+        //     error_flag = true;
+        // }
     }
-    if(error_flag){
-        std::cerr << "[PR] body_p  =" << ref_traj.body_p.transpose() << std::endl;
-        std::cerr << "[PR] footl_p =" << ref_traj.footl_p.transpose() << std::endl;
-        std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
-    }
+    // if(error_flag){
+    //     std::cerr << "[PR] body_p  =" << ref_traj.body_p.transpose() << std::endl;
+    //     std::cerr << "[PR] footl_p =" << ref_traj.footl_p.transpose() << std::endl;
+    //     std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
+    // }
 #elif ROBOT==1
-    bool error_flag = false;
+    //    bool error_flag = false;
     /* set target_joint_angle */
     for(int i=0;i < 6; i++){
         /* m_robot of L1 starts from right leg. */
@@ -910,20 +959,20 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
         /* ready_joint_angle is the same alignment. */
         g_ready_joint_angle[i]   = target_joint_angle[i];
         g_ready_joint_angle[i+6] = target_joint_angle[i+6];
-        if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(std::isnan(m_robot->joint(i)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
-            std::cerr << "[PR] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
-            error_flag = true;
-        }
-        if((m_robot->joint(i+6)->q > 10.0)||(m_robot->joint(i+6)->q < -10.0)||(std::isnan(m_robot->joint(i+6)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
-            std::cerr << "[PR] joint(" << i+6 << ") = " << m_robot->joint(i+6)->q << std::endl;
-            error_flag = true;
-        }
+        // if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(std::isnan(m_robot->joint(i)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
+        //     std::cerr << "[PR] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
+        //     error_flag = true;
+        // }
+        // if((m_robot->joint(i+6)->q > 10.0)||(m_robot->joint(i+6)->q < -10.0)||(std::isnan(m_robot->joint(i+6)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
+        //     std::cerr << "[PR] joint(" << i+6 << ") = " << m_robot->joint(i+6)->q << std::endl;
+        //     error_flag = true;
+        // }
     }
-    if(error_flag){
-        std::cerr << "[PR] body_p  =" << ref_traj.body_p.transpose() << std::endl;
-        std::cerr << "[PR] footl_p =" << ref_traj.footl_p.transpose() << std::endl;
-        std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
-    }
+    // if(error_flag){
+    //     std::cerr << "[PR] body_p  =" << ref_traj.body_p.transpose() << std::endl;
+    //     std::cerr << "[PR] footl_p =" << ref_traj.footl_p.transpose() << std::endl;
+    //     std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
+    // }
 #else
 #error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"
 #endif
@@ -965,6 +1014,10 @@ void PushRecover::updateRotContext( const Vec3 rpy,
 
     context.hpf_rot = context.filtered_rot - context.lpf_rot; /* High-Pass Filter */
 
+    /* drot */
+    context.lpf_drot = context.lpf_rot - context.prev_lpf_rot;
+    context.prev_lpf_rot = context.lpf_rot;
+
 #ifdef DEBUG_HOGE
     if(loop%500==0){
         std::cout << "[pr] rot=[" << (context.rot.array()*(180.0f/S_PI)).transpose() << "]" << std::endl
@@ -974,25 +1027,59 @@ void PushRecover::updateRotContext( const Vec3 rpy,
                   << std::endl;
     }
 #endif
+}; /* updateRotContext */
 
+#if 1
+void PushRecover::modifyTrajectoryRot(const bool enable_modify, const bool on_ground,
+                                      ModifyTrajectoryContext &context,
+                                      TrajectoryElement<Vec3e> &ref_traj) const{
 #if 0
-    const float gain_x = context.onlineWalkParam.modify_rot_gain_x;
-    const float gain_y = context.onlineWalkParam.modify_rot_gain_y;
-    const Vec3 rot_offset(
-                          (context.filtered_rot[1]-context.lpf_rot[1]) * m_owpg.get_Zc() * gain_x,
-                          -(context.filtered_rot[0]-context.lpf_rot[0]) * m_owpg.get_Zc() * gain_y,
-                          //-(context.lpf_rot[0])* m_owpg.get_Zc() * gain_y,
-                          0.0f );
-    context.rot_offset = rot_offset;
+    const double alpha = 0.3000;
+    const double pgain = 1.0, dgain = 0.01*m_dt_i;
+#elif 1
+    /* TODO 負のゲインを試す */
+    const double alpha = 0.2500;
+    const double pgain = 0.6, dgain = 0.10*m_dt_i;
+#elif 0
+    const double alpha = 0.2500;
+    const double pgain = 0.4, dgain = 0.05*m_dt_i;
+#else
 #endif
+    //const Vec3 rot_offset = context.rot_offset.array()*alpha + (1.0-alpha)*(pgain * context.lpf_rot.array() + dgain * ((context.lpf_drot).array()));
+    const Vec3 rot_offset = Vec3::Zero();
+    const Vec3 rot_offset_dummy = context.rot_offset.array()*alpha + (1.0-alpha)*(pgain * context.lpf_rot.array() + dgain * ((context.lpf_drot).array()));
+
+
 #ifdef DEBUG_HOGE
     if(loop%500==0){
-        std::cout << "rot_offset = " << context.rot_offset.transpose() << std::endl;
+        //std::cout << "rot_offset = " << rot_offset.transpose() << std::endl;
+        std::cout << "rot_offset = " << rot_offset_dummy.transpose() << std::endl;
         std::cout << " ========================= " << std::endl;
     }
 #endif
-}; /* updateRotContext */
 
+    if(enable_modify){
+        if( context.transition_state ){
+            // transition stateのときはrot_offsetを補間する
+            //ref_traj.body_p = ref_traj.body_p - (Vec3e)(context.rot_offset.array() * context.transition_gain);
+            context.rot_offset = rot_offset.array() * context.transition_gain;
+
+            context.transition_gain += context.transition_gain_diff;
+            if( context.transition_gain > 1.0f ){
+                context.transition_state = false;
+            }
+        }else{
+            // transitionが終了している場合はそのままaddする
+            //ref_traj.body_p = ref_traj.body_p - (Vec3e)(context.rot_offset);
+            context.rot_offset = rot_offset;
+        }
+    }else{
+        // Disable状態でtransition stateをリセットする
+        context.transition_state = true;
+        context.transition_gain = 0.0f;
+    }
+}; /* modifyTrajectoryRot */
+#else
 void PushRecover::modifyTrajectoryRot(const bool enable_modify, const bool on_ground,
                                       ModifyTrajectoryContext &context,
                                       TrajectoryElement<Vec3e> &ref_traj) const{
@@ -1037,7 +1124,7 @@ void PushRecover::modifyTrajectoryRot(const bool enable_modify, const bool on_gr
         context.transition_gain = 0.0f;
     }
 }; /* modifyTrajectoryRot */
-
+#endif
 
 void PushRecover::selectSimmodeControlValue(const int mode, hrp::Vector3 &basepos_modif, hrp::Vector3 &basepos_vel){
     switch(mode){
@@ -1083,6 +1170,105 @@ void PushRecover::selectSimmodeControlValue(const int mode, hrp::Vector3 &basepo
     }
 };
 
+void PushRecover::modifyFootHeight(const bool on_ground, ModifyTrajectoryContext &context, TrajectoryElement<Vec3e> &ref_traj){
+    const double fz[2] = {
+        m_prev_act_force_z[ ee_index_lr[EE_INDEX_LEFT] ], //left
+        m_prev_act_force_z[ ee_index_lr[EE_INDEX_RIGHT] ] //right
+    };
+    const float foot_pz_ref[2] = {
+        ref_traj.footl_p[2],
+        ref_traj.footr_p[2]
+    };
+
+    for(int i=0;i<2;i++){
+        /* swing legである、または接地判定が空中である場合は接地判定を行う */
+        if(( foot_pz_ref[i] > 0.001f ) || (context.fz_contact[i]==0) ){
+            /* swing legの接地判定。 シュミットトリガー  */
+            if( context.fz_contact[i] == 1 ){
+                if( fz[i] < 10.0 ){
+                    context.fz_contact[i] = 0;
+                    if( foot_pz_ref[i] > context.fz_contact_z[i] ){
+                        context.fz_contact_z[i] = 0.0f;
+                    }
+                }
+            }else{
+                context.fz_contact_z[i] *= 0.98;
+                if( fz[i] > 14.0 ){
+                    context.fz_contact[i] = 1;
+                    context.fz_contact_z[i] = foot_pz_ref[i];
+#ifndef DEBUG_HOGE
+                    if(i==0){
+                        std::cerr << "[pr] " << PRED << "contact" << PGRE << "LEFT" << PDEF << std::endl;
+                    }else{
+                        std::cerr << "[pr] " << PRED << "contact" << PBLU << "RIGHT" << PDEF << std::endl;
+                    }
+#endif
+                }
+            }
+        }
+    }
+
+#define FOOT_Z_SELECT_MAX(x,y) ( (x)>(y)? (x) : (y) )
+    switch( context.fz_transition_state ){
+    case ModifyTrajectoryContext::FZ_TRANSITION_IDLE:
+        if(on_ground){
+            context.fz_transition_state = ModifyTrajectoryContext::FZ_TRANSITION_TO_READY;
+            std::cout << "[pr]" <<__func__ << "() " << PRED << "move to Ready" << PDEF << std::endl;
+        }
+        context.fz_contact_z[0] = 0.0f;
+        context.fz_contact_z[1] = 0.0f;
+        break;
+    case ModifyTrajectoryContext::FZ_TRANSITION_TO_READY:
+        if(on_ground){
+            context.fz_transition_gain += context.fz_transition_gain_diff;
+            if( context.fz_transition_gain >= 1.0f ){
+                context.fz_transition_gain = 1.0f;
+                context.fz_transition_state = ModifyTrajectoryContext::FZ_TRANSITION_READY;
+                std::cout << "[pr]" <<__func__ << "() " << PGRE << "Ready" << PDEF << std::endl;
+            }
+        }else{
+            /* on AIR に戻ったらIDLEに戻る */
+            context.fz_transition_state = ModifyTrajectoryContext::FZ_TRANSITION_TO_IDLE;
+        }
+        {
+            ref_traj.footl_p[2] = FOOT_Z_SELECT_MAX(ref_traj.footl_p[2], context.fz_contact_z[0]*context.fz_transition_gain);
+            ref_traj.footr_p[2] = FOOT_Z_SELECT_MAX(ref_traj.footr_p[2], context.fz_contact_z[1]*context.fz_transition_gain);
+        }
+        break;
+    case ModifyTrajectoryContext::FZ_TRANSITION_TO_IDLE:
+        if(on_ground){
+            /* on ground に戻ったらREADYに戻す */
+            context.fz_transition_state = ModifyTrajectoryContext::FZ_TRANSITION_TO_READY;
+        }else{
+            context.fz_transition_gain -= context.fz_transition_gain_diff;
+            if( context.fz_transition_gain <= 0.0f ){
+                context.fz_transition_gain = 0.0f;
+                context.fz_transition_state = ModifyTrajectoryContext::FZ_TRANSITION_IDLE;
+                std::cout << "[pr]" <<__func__ << "() " << PBLU << "IDLE" << PDEF << std::endl;
+            }
+        }
+        {
+            ref_traj.footl_p[2] = FOOT_Z_SELECT_MAX(ref_traj.footl_p[2], context.fz_contact_z[0]*context.fz_transition_gain);
+            ref_traj.footr_p[2] = FOOT_Z_SELECT_MAX(ref_traj.footr_p[2], context.fz_contact_z[1]*context.fz_transition_gain);
+        }
+        break;
+    case ModifyTrajectoryContext::FZ_TRANSITION_READY:
+        if(on_ground){
+
+        }else{
+            context.fz_transition_state = ModifyTrajectoryContext::FZ_TRANSITION_TO_IDLE;
+            std::cout << "[pr]" <<__func__ << "() " << PRED << "move to Idle" << PDEF << std::endl;
+        }
+        {
+            ref_traj.footl_p[2] = FOOT_Z_SELECT_MAX(ref_traj.footl_p[2], context.fz_contact_z[0]);
+            ref_traj.footr_p[2] = FOOT_Z_SELECT_MAX(ref_traj.footr_p[2], context.fz_contact_z[1]);
+        }
+        break;
+    default:
+        break;
+    }
+};
+
 void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, OnlinePatternGenerator* p_owpg) const{
     JoyCommand command;
     if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){
@@ -1092,7 +1278,7 @@ void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, con
     }
 
     command.x = -axes.data[1];
-    command.y = axes.data[0];
+    command.y = -axes.data[0];
 
     if( jstate.enabled && loop%10==0 ){
         p_owpg->command(command);

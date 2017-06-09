@@ -351,7 +351,8 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   BOOST_STATIC_ASSERT( __alignof__(BodyIKMethod) == 16 );
   m_pIKMethod          = new BodyIKMethod( 0.0f, Zc );
 #elif defined(__GNUC__)
-  m_pIKMethod          = new BodyIKMethod( 0.0f, Zc - g_CoG_offset[2] );
+  //m_pIKMethod          = new BodyIKMethod( 0.0f, Zc - g_CoG_offset[2] );
+  m_pIKMethod          = new BodyIKMethod( traj_body_init[0], traj_body_init[2] );
 #endif
   /* Initialize Default joint angle on PR_READY state */
   {
@@ -405,6 +406,10 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   prev_act_zmp      = hrp::Vector3::Zero();
   m_prev_act_root_pos = hrp::Vector3::Zero();
   m_prev_act_cog      = hrp::Vector3::Zero();
+  m_prev_act_cog_base = hrp::Vector3::Zero();
+  m_prev_ref_cog      = hrp::Vector3::Zero();
+  m_ref_cogvel        = hrp::Vector3::Zero();
+  m_prev_act_root_pos_base = hrp::Vector3::Zero();
   m_prev_act_cogvel   = hrp::Vector3::Zero();
   act_base_rpy      = hrp::Vector3::Zero();
   m_ref_zmp         = hrp::Vector3::Zero();
@@ -428,6 +433,9 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   pushDetectParam.x_gain_1                = 1.0;
   pushDetectParam.dx_gain_0               = 1.0;
   pushDetectParam.dx_gain_1               = 1.0;
+
+  m_mg  = m_robot->totalMass() * 9.80;
+  m_mg2 = m_robot->totalMass() * (9.80/2.0);
 
   loop = 1;
 
@@ -1006,10 +1014,10 @@ bool PushRecover::calcWorldForceVector(void){
         // ee-local total moment and total force at ee position
         /* センサ値をワールド座標からEndEffector座標に変換*/
 
-        prev_act_force_z[eei] = 0.85 * prev_act_force_z[eei] + 0.15 * nf(2); // filter, cut off 5[Hz]
+        m_prev_act_force_z[eei] = 0.85 * m_prev_act_force_z[eei] + 0.15 * nf(2); // filter, cut off 5[Hz]
 
         /* Determin contact state on each foot */
-        if (prev_act_force_z[eei] < contact_decision_threshold_foot) {
+        if (m_prev_act_force_z[eei] < contact_decision_threshold_foot) {
             ee_params[eei].act_contact_state = false; /* in the air */
         }else{
             ee_params[eei].act_contact_state = true; /* on ground */
@@ -1018,6 +1026,7 @@ bool PushRecover::calcWorldForceVector(void){
 }; /* end of PushRecover::calcWorldForceVector */
 
 /* Copied from Stabilizer.  */
+//#define DEBUG_HOGE
 PushRecover::PR_CONTACT_STATE PushRecover::calcFootOriginCoords (hrp::Vector3& foot_origin_pos, hrp::Matrix33& foot_origin_rot) const{
   PR_CONTACT_STATE con_state;
   rats::coordinates leg_c[2], tmpc;
@@ -1026,20 +1035,9 @@ PushRecover::PR_CONTACT_STATE PushRecover::calcFootOriginCoords (hrp::Vector3& f
   //const std::string legs_ee_name[2]={"lleg","rleg"};
   for (size_t i = 0; i < 2; i++) {
       /* EndEffector pos (足平中心位置) 具体的には (ROBOT).confを参照 */
-      //const int           eei = ee_index_map[legs_ee_name[i]];
       const int           eei = ee_index_lr[i];
       hrp::Link*       target = m_robot->link(ee_params[eei].ee_target);
       const hrp::Vector3  eep = target->p + target->R * ee_params[eei].ee_localp;
-
-#ifdef DEBUG_HOGE
-      if(loop%200==0){
-          std::cout << "target->R=\n" << target->R << std::endl << std::endl;
-          string lr = (i==0)?"Left":"Right";
-          std::cout << "target[" << lr << "]=" << (target->p).transpose() << std::endl;
-          std::cout << "offset[" << lr << "]=" << (target->R * ee_params[eei].ee_localp).transpose() << std::endl;
-          std::cout << "eep[" << lr << "]=" << eep.transpose() << std::endl;
-      }
-#endif
 
       leg_c[eei].pos = eep;
       hrp::Vector3 xv1(target->R * ex);
@@ -1049,6 +1047,21 @@ PushRecover::PR_CONTACT_STATE PushRecover::calcFootOriginCoords (hrp::Vector3& f
       leg_c[eei].rot(0,0) = xv1(0); leg_c[eei].rot(1,0) = xv1(1); leg_c[eei].rot(2,0) = xv1(2);
       leg_c[eei].rot(0,1) = yv1(0); leg_c[eei].rot(1,1) = yv1(1); leg_c[eei].rot(2,1) = yv1(2);
       leg_c[eei].rot(0,2) = ez(0); leg_c[eei].rot(1,2) = ez(1); leg_c[eei].rot(2,2) = ez(2);
+#ifdef DEBUG_HOGE
+      if(loop%1000==0){
+          if(i==0){
+              std::cout << "=========================" << std::endl;
+              std::cout << "[pr] calcFootOriginCoords" << std::endl;
+              std::cout << "m_robot->rootLink()->p =" << m_robot->rootLink()->p.transpose() << std::endl;
+          }
+          std::cout << "--target->R=\n" << target->R << std::endl;
+          string lr = (i==0)?"Left":"Right";
+          std::cout << "--target[" << lr << "]=" << (target->p).transpose() << std::endl;
+          std::cout << "--offset[" << lr << "]=" << (target->R * ee_params[eei].ee_localp).transpose() << std::endl;
+          std::cout << "--eep[" << lr << "]=" << eep.transpose() << std::endl;
+          std::cout << "--rot=\n" << leg_c[eei].rot << std::endl;
+      }
+#endif
   }
   if (ee_params[ee_index_lr[EE_INDEX_RIGHT]].act_contact_state &&
       ee_params[ee_index_lr[EE_INDEX_LEFT]].act_contact_state) {
@@ -1073,9 +1086,34 @@ PushRecover::PR_CONTACT_STATE PushRecover::calcFootOriginCoords (hrp::Vector3& f
       foot_origin_rot = tmpc.rot;
       con_state = ON_AIR;
   }
+#ifdef DEBUG_HOGE
+  if(loop%1000==0){
+      switch(con_state){
+      case BOTH_FOOTS:
+          std::cout << "--[\x1b[32mBOTH_FOOT\x1b[39m]" << std::endl;
+          break;
+      case RFOOT:
+          std::cout << "--[\x1b[34mRIGHT_FOOT\x1b[39m]" << std::endl;
+          break;
+      case LFOOT:
+          std::cout << "--[\x1b[33mLEFT_FOOT\x1b[39m]" << std::endl;
+          break;
+      case ON_AIR:
+          std::cout << "--[\x1b[31mON_AIR\x1b[39m]" << std::endl;
+          break;
+      default:
+          std::cout << "--aaaaaaaaaaaaaaaaaa" << std::endl;
+          break;
+      }
+      printf("--foot_pos=[%3.3lf, %3.3lf, %3.3lf]\n",(double)foot_origin_pos[0],(double)foot_origin_pos[1],(double)foot_origin_pos[2] );
+      std::cout << "--foot_rot=\n" << foot_origin_rot.transpose() << std::endl;
+      std::cout << std::endl;
+  }
+#endif
 
   return con_state;
 };
+#undef DEBUG_HOGE
 
 /* Copied from Stabilizer */
 /* ret_zmp is in world coords based on contacting foots */
@@ -1105,7 +1143,7 @@ bool PushRecover::calcZMP(hrp::Vector3& ret_zmp, const double zmp_z) const
         tmpzmpy += nf(2) * fsp(1) - (fsp(2) - zmp_z) * nf(1) + nm(0);
         tmpfz += nf(2); /* calc sum of force z */
 
-        tmpfz2 += prev_act_force_z[eei]; /* calc sum of filtered force z in EE coordinates */
+        tmpfz2 += m_prev_act_force_z[eei]; /* calc sum of filtered force z in EE coordinates */
     }
 
     if (tmpfz2 < contact_decision_threshold) {
@@ -1117,6 +1155,7 @@ bool PushRecover::calcZMP(hrp::Vector3& ret_zmp, const double zmp_z) const
     }
 };
 
+#if 0
 hrp::Vector3 PushRecover::calcActCoG_CoGVel(const hrp::Vector3 act_foot_origin_pos,
                                             const hrp::Matrix33 act_foot_origin_rot,
                                             hrp::Vector3& act_cog) const{
@@ -1132,6 +1171,58 @@ hrp::Vector3 PushRecover::calcActCoG_CoGVel(const hrp::Vector3 act_foot_origin_p
 
     return act_cogvel;
 };
+#else
+hrp::Vector3 PushRecover::calcActCoG_CoGVel(const hrp::Vector3 act_foot_origin_pos,
+                                            const hrp::Matrix33 act_foot_origin_rot,
+                                            hrp::Vector3& act_cog,
+                                            hrp::Vector3& prev_act_cog_base) const{
+    hrp::Vector3 act_cogvel, act_cog_base;
+    /* calcActCoG_Base */
+    act_cog_base = act_foot_origin_rot.transpose() * (m_robot->calcCM() - act_foot_origin_pos);
+    if (m_foots_contact_states != m_prev_foots_contact_states) {
+        //act_cogvel = (act_foot_origin_rot.transpose() * m_prev_act_foot_origin_rot) * act_cogvel;
+        act_cogvel = act_cogvel;
+    }else{
+        act_cogvel = (act_cog_base - prev_act_cog_base)/m_dt;
+    }
+
+    /* lowpass filter */
+    //const double g = 0.6838; /* Ts=0.008, dT=0.002, 99%filter */
+    const double g = 0.5358; /* Ts=0.012, dT=0.002, 99%filter */
+    act_cogvel = m_prev_act_cogvel.array() * (1.0 - g) + act_cogvel.array() * g;
+
+    act_cog = act_cog + act_cogvel * m_dt;
+    act_cog[2] = act_cog_base[2]; /* only root height use absolute value from act_foot_origin_pos */
+    prev_act_cog_base = act_cog_base;
+
+    return act_cogvel;
+};
+hrp::Vector3 PushRecover::calcActRootPos(const hrp::Vector3 act_foot_origin_pos, const hrp::Matrix33 act_foot_origin_rot,
+                                         hrp::Vector3& act_root_pos,
+                                         hrp::Vector3& prev_act_root_base) const{
+    hrp::Vector3 act_rootvel, act_root_base;
+    /* calcActRoot_Base */
+    act_root_base = act_foot_origin_rot.transpose() * (hrp::Vector3::Zero() - act_foot_origin_pos);
+    if (m_foots_contact_states != m_prev_foots_contact_states) {
+        //act_rootvel = (act_foot_origin_rot.transpose() * m_prev_act_foot_origin_rot) * act_rootvel;
+        act_rootvel = act_rootvel;
+    }else{
+        act_rootvel = (act_root_base - prev_act_root_base)/m_dt;
+    }
+
+    /* lowpass filter */
+    //const double g = 0.6838; /* Ts=0.008, dT=0.002, 99%filter */
+    const double g = 0.5358; /* Ts=0.012, dT=0.002, 99%filter */
+    act_rootvel = m_prev_act_rootvel.array() * (1.0 - g) + act_rootvel.array() * g;
+
+    const double act_root_z = act_root_pos[2] * (1.0-g) + act_root_base[2] * g;
+    act_root_pos = act_root_pos + act_rootvel * m_dt;
+    act_root_pos[2] = act_root_z; /* only root height use absolute value from act_foot_origin_pos */
+    prev_act_root_base = act_root_base;
+
+    return act_rootvel;
+};
+#endif
 
 bool PushRecover::updateToCurrentRobotPose(void){
     // update by current joint angles
@@ -1175,9 +1266,17 @@ bool PushRecover::updateToCurrentRobotPose(void){
     m_rel_act_zmp  = calcRelActZMP(m_act_zmp, m_robot->rootLink()->p, m_robot->rootLink()->R);
 
     // calculate cog and cogvel. The frame is relative to act_foot_origin_pos.
+#if 0
     m_act_cogvel = act_cogvel_filter->passFilter( calcActCoG_CoGVel(act_foot_origin_pos, act_foot_origin_rot, m_act_cog) );
+#else
+    m_act_cogvel = act_cogvel_filter->passFilter( calcActCoG_CoGVel(act_foot_origin_pos, act_foot_origin_rot, m_act_cog, m_prev_act_cog_base) );
+#endif
     // act_root_pos
+#if 0
     m_act_root_pos = calcActRootPos(act_foot_origin_pos, act_foot_origin_rot);
+#else
+    m_act_rootvel = calcActRootPos(act_foot_origin_pos, act_foot_origin_rot, m_act_root_pos, m_prev_act_root_pos_base);
+#endif
 
     /* save current values for next cycle */
     m_prev_act_foot_origin_rot    = act_foot_origin_rot;
@@ -1185,6 +1284,7 @@ bool PushRecover::updateToCurrentRobotPose(void){
     m_prev_act_cogvel             = m_act_cogvel;
     m_prev_foots_contact_states   = m_foots_contact_states;
     m_prev_act_root_pos           = m_act_root_pos;
+    m_prev_act_rootvel            = m_act_rootvel;
 
     return on_ground;
 }; /* updateToCurrentRobotPose */
@@ -1382,7 +1482,8 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
 void PushRecover::trajectoryReset(void){
     m_act_world_root_pos   = hrp::Vector3(traj_body_init[0],
                                           traj_body_init[1],
-                                          traj_body_init[2] + InitialLfoot_p[2]
+                                          //traj_body_init[2] + InitialLfoot_p[2]
+                                          traj_body_init[2]
                                           );
     m_body_p_at_start      = m_act_world_root_pos;
     m_body_p_diff_at_start = hrp::Vector3(0.0, 0.0, 0.0);
@@ -1425,6 +1526,18 @@ void PushRecover::trajectoryReset(void){
 
         m_joystate.reset();
     }
+
+    m_act_cog      = hrp::Vector3::Zero();
+    m_act_cogvel   = hrp::Vector3::Zero();
+    m_act_root_pos = hrp::Vector3::Zero();
+    m_act_rootvel  = hrp::Vector3::Zero();
+    m_prev_act_cog      = hrp::Vector3::Zero();
+    m_prev_act_cog_base = hrp::Vector3::Zero();
+    m_prev_act_root_pos_base = hrp::Vector3::Zero();
+    m_prev_act_cogvel   = hrp::Vector3::Zero();
+    m_prev_act_rootvel  = hrp::Vector3::Zero();
+    m_prev_ref_cog      = hrp::Vector3::Zero();
+    m_ref_cogvel   = hrp::Vector3::Zero();
 }; /* TrajectoryReset() */
 
 RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
@@ -1471,6 +1584,10 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
   {/* Mutex lock region */
       Guard guard(m_mutex);
+#ifdef USE_DATALOG
+      /* zero clear dlog */
+      memset(&dlog,0,sizeof(SimpleLogger::DataLog));
+#endif
 
       /* calculate actual zmp, cog, cogvel, poture from joint_angle, force, rpy */
       const bool on_ground = (updateToCurrentRobotPose() || m_simmode>0);
@@ -1481,9 +1598,6 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
 #ifdef USE_DATALOG
       {
-          /* zero clear dlog */
-          memset(&dlog,0,sizeof(SimpleLogger::DataLog));
-
           dlog.act_zmp        = CONV_HRPVEC3(m_act_zmp);
           dlog.rel_act_zmp    = CONV_HRPVEC3(m_rel_act_zmp);
           dlog.act_cog        = CONV_HRPVEC3(m_act_cog);
@@ -1537,6 +1651,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               modifyTrajectoryRot(enable_modify, on_ground,
                                   m_modify_rot_context,
                                   ref_traj);
+              modifyFootHeight(on_ground, m_modify_rot_context, ref_traj);
               break;
           default:
               ref_traj = m_prev_ref_traj;
@@ -1627,19 +1742,16 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                   double alpha = (m_ref_zmp - footr_p_ee).norm() / (footr_p_ee - footl_p_ee).norm();
                   if (alpha>1.0) alpha = 1.0;
                   if (alpha<0.0) alpha = 0.0;
-                  const double mg = m_robot->totalMass() * 9.80;
-                  ref_force[0](0) = alpha * mg;     /*ref_force right*/
-                  ref_force[1](0) = (1-alpha) * mg; /*ref_force left*/
+                  ref_force[0](0) = alpha * m_mg;     /*ref_force right*/
+                  ref_force[1](0) = (1-alpha) * m_mg; /*ref_force left*/
               }
 #elif 0
               if( m_contactStates.data[ee_index_lr[EE_INDEX_RIGHT]] && m_contactStates.data[ee_index_lr[EE_INDEX_LEFT]] ) {
-                  const double mg2 = m_robot->totalMass() * (9.80/2.0);
-                  ref_force[0](0) = mg2;
-                  ref_force[1](0) = mg2;
+                  ref_force[0](0) = m_mg2;
+                  ref_force[1](0) = m_mg2;
               }else{
-                  const double mg = m_robot->totalMass() * 9.80;
-                  ref_force[0](0) = m_contactStates.data[ee_index_lr[EE_INDEX_RIGHT]]?(mg):0.0;     /*ref_force right*/
-                  ref_force[1](0) = m_contactStates.data[ee_index_lr[EE_INDEX_LEFT]]?(mg):0.0;     /*ref_force left */
+                  ref_force[0](0) = m_contactStates.data[ee_index_lr[EE_INDEX_RIGHT]]?(m_mg):0.0;     /*ref_force right*/
+                  ref_force[1](0) = m_contactStates.data[ee_index_lr[EE_INDEX_LEFT]]?(m_mg):0.0;     /*ref_force left */
               }
 #else
               ref_force[0](0) = 0.0;
@@ -1673,7 +1785,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       }
 
       m_robot->calcForwardKinematics(); /* FK on target joint angle */
-      ref_cog = m_robot->calcCM();
+      m_prev_ref_cog = m_ref_cog;
+      m_ref_cog = m_robot->calcCM();
+      m_ref_cogvel = (m_ref_cog - m_prev_ref_cog)*m_dt_i;
 
       if(( m_current_control_state == PR_READY ) || ( m_current_control_state == PR_BUSY )){
           if( !checkJointVelocity() ){
@@ -1733,7 +1847,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       dlog.ref_zmp       = CONV_HRPVEC3(m_ref_zmp);
       dlog.rel_ref_zmp   = CONV_HRPVEC3(m_rel_ref_zmp);
       dlog.ref_base_pos  = CONV_HRPVEC3(ref_basePos);
-      dlog.ref_cog       = CONV_HRPVEC3(ref_cog);
+      dlog.ref_cog       = CONV_HRPVEC3(m_ref_cog);
       for(int i=0;i<6;i++){
           dlog.act_force_l[i] = (float)m_force[ee_index_lr[EE_INDEX_LEFT]].data[i];
           dlog.act_force_r[i] = (float)m_force[ee_index_lr[EE_INDEX_RIGHT]].data[i];
@@ -1796,7 +1910,7 @@ void PushRecover::printMembers(const int cycle){
         std::cout << "[" << m_profile.instance_name << "] act_cog=[";
         printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_act_cog(0), m_act_cog(1), m_act_cog(2));
         std::cout << "[" << m_profile.instance_name << "] ref_cog=[";
-        printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", ref_cog(0), ref_cog(1), ref_cog(2));
+        printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_ref_cog(0), m_ref_cog(1), m_ref_cog(2));
         std::cout << "[" << m_profile.instance_name << "] act_cogvel=[";
         printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_act_cogvel(0), m_act_cogvel(1), m_act_cogvel(2));
         std::cout << "[" << m_profile.instance_name << "] est_cogvel_from_rpy=[";
@@ -2106,6 +2220,8 @@ bool PushRecover::setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWa
     m_modify_rot_context.onlineWalkParam = i_param;
 
     m_modify_rot_context.foot_roll_gain = i_param.dataf;
+
+    m_owpg.modifyFirstMagnity( (0.001*i_param.datal) );
 
     std::cerr << "[" << m_profile.instance_name << "] filter_fp=" << m_modify_rot_context.onlineWalkParam.filter_fp << std::endl;
     std::cerr << "[" << m_profile.instance_name << "] lpf_fp=" << m_modify_rot_context.onlineWalkParam.lpf_fp << std::endl;

@@ -28,6 +28,11 @@
 #define MAKE_BACK_COLOR_WHITE   "\x1b[47m"
 #define MAKE_BACK_COLOR_DEFAULT "\x1b[49m"
 
+#define PRED MAKE_CHAR_COLOR_RED
+#define PGRE MAKE_CHAR_COLOR_GREEN
+#define PBLU MAKE_CHAR_COLOR_BLUE
+#define PDEF MAKE_CHAR_COLOR_DEFAULT
+
 #define PACKING __attribute__((__packed__))
 
 #if 1
