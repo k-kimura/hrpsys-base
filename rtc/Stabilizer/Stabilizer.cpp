@@ -413,6 +413,7 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   limb_stretch_avoidance_vlimit[1] = 50 * 1e-3 * dt; // upper limit
   root_rot_compensation_limit[0] = root_rot_compensation_limit[1] = deg2rad(90.0);
   detection_count_to_air = static_cast<int>(0.0 / dt);
+  segway_param = 0.0;
 
   // parameters for RUNST
   double ke = 0, tc = 0;
@@ -1060,6 +1061,12 @@ void Stabilizer::getActualParameters ()
             act_force.at(i) = sensor_force;
         }
       }
+
+      // sample control by segway_param
+      //   Additional Controller for Equation (16) and (17) in the paper [1]
+      std::cerr << "segway_param: " << segway_param << std::endl;
+      stikp[0].d_foot_rpy[1] = stikp[0].d_foot_rpy[1] + segway_param; // RLEG pitch angle modification
+      stikp[1].d_foot_rpy[1] = stikp[1].d_foot_rpy[1] + segway_param; // LLEG pitch angle modification
 
       if (eefm_use_force_difference_control) {
           // fxyz control
@@ -2366,6 +2373,16 @@ void Stabilizer::setParameter(const OpenHRP::StabilizerService::stParam& i_stp)
       }
       std::cerr << "]" << std::endl;
   }
+}
+
+void Stabilizer::getSegwayParameter(OpenHRP::StabilizerService::sgParam& i_sgp)
+{
+  i_sgp.segway_param = segway_param;
+}
+
+void Stabilizer::setSegwayParameter(const OpenHRP::StabilizerService::sgParam& i_sgp)
+{
+  segway_param = i_sgp.segway_param;
 }
 
 std::string Stabilizer::getStabilizerAlgorithmString (OpenHRP::StabilizerService::STAlgorithm _st_algorithm)

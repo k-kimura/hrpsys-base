@@ -240,6 +240,17 @@ module OpenHRP
     };
 
     /**
+     * @struct sgParam
+     * @brief Segway Parameters.
+     */
+    struct sgParam {
+      /// Segway control variable
+      double segway_param;
+      /// dummy
+      string dummy;
+    };
+
+    /**
      * @brief Get Stabilizer parameters.
      * @param i_param is output parameters
      * @return true if set successfully, false otherwise
@@ -252,6 +263,20 @@ module OpenHRP
      * @return true if set successfully, false otherwise
      */
     void setParameter(in stParam i_param);
+
+    /**
+     * @brief Get Segway parameters.
+     * @param i_param is output parameters
+     * @return true if set successfully, false otherwise
+     */
+    void getSegwayParameter(out sgParam i_param);
+
+    /**
+     * @brief Set Segway parameters.
+     * @param i_param is input parameters
+     * @return true if set successfully, false otherwise
+     */
+    void setSegwayParameter(in sgParam i_param);
 
     /**
      * @brief Start Stabilizer mode.

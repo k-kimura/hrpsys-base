@@ -25,6 +25,8 @@ public:
 	void stopStabilizer(void);
 	void getParameter(OpenHRP::StabilizerService::stParam_out i_param);
 	void setParameter(const OpenHRP::StabilizerService::stParam& i_param);
+	void getSegwayParameter(OpenHRP::StabilizerService::sgParam_out i_param);
+	void setSegwayParameter(const OpenHRP::StabilizerService::sgParam& i_param);
 	void stabilizer(Stabilizer *i_stabilizer);
 
 	bool dummy();
