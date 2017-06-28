@@ -85,7 +85,7 @@ public:
         else if (support_leg == BOTH) return (cp(1) <= (leg_outside_margin + offset - margin)) && (cp(1) >= (-1 * (leg_outside_margin + offset) + margin)) && (cp(0) <= (leg_front_margin - margin)) && (cp(0) >= (-1 * leg_rear_margin + margin));
         else return true;
     };
-    inline bool is_inside_support_polygon (Eigen::Vector2d& p, const std::vector<hrp::Vector3>& ee_pos, const std::vector <hrp::Matrix33>& ee_rot, const std::vector<std::string>& ee_name, const leg_type& support_leg, const std::vector<double>& tmp_margin = std::vector<double>(), const hrp::Vector3& offset = hrp::Vector3(0.0, 0.0, 0.0))
+    inline bool is_inside_support_polygon (Eigen::Vector2d& p, const std::vector<hrp::Vector3>& ee_pos, const std::vector <hrp::Matrix33>& ee_rot, const std::vector<std::string>& ee_name, const leg_type& support_leg, const std::vector<double>& tmp_margin = std::vector<double>(), const hrp::Vector3& offset = hrp::Vector3(0.0, 0.0, 0.0), bool calc_nearest_point = false)
     {
       if (ee_pos.size() == 0 || ee_rot.size() == 0 || ee_name.size() == 0 ) return true;
       size_t l_idx, r_idx;
@@ -127,11 +127,51 @@ public:
         convex_vertices = lleg_vertices;
       }
       // check whether p is inside support polygon
-      for (size_t i = 0; i < convex_vertices.size() - 1; i++) {
-        if (calcCrossProduct(p, convex_vertices[i + 1], convex_vertices[i]) < 0) return false;
+      if (!calc_nearest_point) {
+        for (size_t i = 0; i < convex_vertices.size() - 1; i++) {
+          if (calcCrossProduct(p, convex_vertices[i + 1], convex_vertices[i]) < 0) return false;
+        }
+        if (calcCrossProduct(p, convex_vertices.front(), convex_vertices.back()) < 0) return false;
+        return true;
       }
-      if (calcCrossProduct(p, convex_vertices.front(), convex_vertices.back()) < 0) return false;
-      return true;
+      // calc nearest point
+      bool is_inside = true;
+      double cur_nearest_dist, nearest_dist;
+      Eigen::Vector2d cur_nearest_point, nearest_point;
+      if (calcCrossProduct(p, convex_vertices.front(), convex_vertices.back()) < 0) { // is outside
+        if (calcProjectedPoint(cur_nearest_point, p, convex_vertices.front(), convex_vertices.back())) { // projected point is on line
+          p = cur_nearest_point;
+          return false;
+        } else { // projected point is not on line
+          nearest_dist = (cur_nearest_point - p).norm();
+          nearest_point = cur_nearest_point;
+        }
+        is_inside = false;
+      }
+      for (size_t i = 0; i < convex_vertices.size() - 1; i++) {
+        if (calcCrossProduct(p, convex_vertices[i + 1], convex_vertices[i]) < 0) { // is outside
+          if (calcProjectedPoint(cur_nearest_point, p, convex_vertices[i + 1], convex_vertices[i])) { // projected point is on line
+            p = cur_nearest_point;
+            return false;
+          } else { // projected point is not on line
+            cur_nearest_dist = (cur_nearest_point - p).norm();
+            if (is_inside || i == 0) { // first set
+              nearest_dist = cur_nearest_dist;
+              nearest_point = cur_nearest_point;
+            } else if (cur_nearest_dist < nearest_dist) { // update nearest candidate
+              nearest_dist = cur_nearest_dist;
+              nearest_point = cur_nearest_point;
+            }
+          }
+          is_inside = false;
+        }
+      }
+      if (is_inside) {
+          return true;
+        } else {
+          p = nearest_point;
+          return false;
+      }
     };
     void print_params (const std::string& str)
     {
@@ -794,8 +834,7 @@ public:
         if (printp) {
             for (size_t i = 0; i < ee_num; i++) {
                 std::cerr << "[" << print_str << "]   "
-                          << "ref_force  [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N]" << std::endl;
-                std::cerr << "[" << print_str << "]   "
+                          << "ref_force  [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N], "
                           << "ref_moment [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_moment[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[Nm]" << std::endl;
             }
         }
@@ -880,7 +919,6 @@ public:
             }
         }
         if (printp) {
-            std::cerr << "]" << std::endl;
             std::cerr << "[" << print_str << "]   newWmat(diag) = [";
             for (size_t j = 0; j < ee_num; j++) {
                 for (size_t i = 0; i < 6; i++) {
@@ -908,8 +946,7 @@ public:
         if (printp) {
             for (size_t i = 0; i < ee_num; i++) {
                 std::cerr << "[" << print_str << "]   "
-                          << "new_ref_force  [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N]" << std::endl;
-                std::cerr << "[" << print_str << "]   "
+                          << "new_ref_force  [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N], "
                           << "new_ref_moment [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_moment[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[Nm]" << std::endl;
             }
         }
@@ -1031,20 +1068,17 @@ public:
                       << "total_wrench " << total_wrench.format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N][Nm]" << std::endl;
             for (size_t i = 0; i < ee_num; i++) {
                 std::cerr << "[" << print_str << "]   "
-                          << "ref_force  [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N]" << std::endl;
-                std::cerr << "[" << print_str << "]   "
+                          << "ref_force  [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N], "
                           << "ref_moment [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_moment[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[Nm]" << std::endl;
             }
             for (size_t i = 0; i < ee_num; i++) {
 #ifdef FORCE_MOMENT_DIFF_CONTROL
                 std::cerr << "[" << print_str << "]   "
-                          << "dif_ref_force  [" << ee_name[i] << "] " << hrp::Vector3(hrp::Vector3(ret(6*i), ret(6*i+1), ret(6*i+2))).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N]" << std::endl;
-                std::cerr << "[" << print_str << "]   "
+                          << "dif_ref_force  [" << ee_name[i] << "] " << hrp::Vector3(hrp::Vector3(ret(6*i), ret(6*i+1), ret(6*i+2))).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N], "
                           << "dif_ref_moment [" << ee_name[i] << "] " << hrp::Vector3(hrp::Vector3(ret(6*i+3), ret(6*i+4), ret(6*i+5))).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[Nm]" << std::endl;
 #else
                 std::cerr << "[" << print_str << "]   "
-                          << "dif_ref_force  [" << ee_name[i] << "] " << hrp::Vector3(hrp::Vector3(ret(6*i), ret(6*i+1), ret(6*i+2))-ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N]" << std::endl;
-                std::cerr << "[" << print_str << "]   "
+                          << "dif_ref_force  [" << ee_name[i] << "] " << hrp::Vector3(hrp::Vector3(ret(6*i), ret(6*i+1), ret(6*i+2))-ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N], "
                           << "dif_ref_moment [" << ee_name[i] << "] " << hrp::Vector3(hrp::Vector3(ret(6*i+3), ret(6*i+4), ret(6*i+5))-ref_foot_moment[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[Nm]" << std::endl;
 #endif
             }
@@ -1061,8 +1095,7 @@ public:
         if (printp){
             for (size_t i = 0; i < ee_num; i++) {
                 std::cerr << "[" << print_str << "]   "
-                          << "new_ref_force  [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N]" << std::endl;
-                std::cerr << "[" << print_str << "]   "
+                          << "new_ref_force  [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_force[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[N], "
                           << "new_ref_moment [" << ee_name[i] << "] " << hrp::Vector3(ref_foot_moment[i]).format(Eigen::IOFormat(Eigen::StreamPrecision, 0, ", ", ", ", "", "", "[", "]")) << "[Nm]" << std::endl;
             }
         }
@@ -1071,6 +1104,28 @@ public:
   double calcCrossProduct(Eigen::Vector2d& a, Eigen::Vector2d& b, Eigen::Vector2d& o)
   {
     return (a(0) - o(0)) * (b(1) - o(1)) - (a(1) - o(1)) * (b(0) - o(0));
+  };
+
+  bool calcProjectedPoint(Eigen::Vector2d& ret, Eigen::Vector2d& target, Eigen::Vector2d& a, Eigen::Vector2d& b){
+    Eigen::Vector2d v1 = target - b;
+    Eigen::Vector2d v2 = a - b;
+    double v2_norm = v2.norm();
+    if ( v2_norm = 0 ) {
+        ret = a;
+        return false;
+    } else {
+        double ratio = v1.dot(v2) / (v2_norm * v2_norm);
+        if (ratio < 0){
+            ret = b;
+            return false;
+        } else if (ratio > 1){
+            ret = a;
+            return false;
+        } else {
+            ret = b + ratio * v2;
+            return true;
+        }
+    }
   };
 
   // assume that vertices are listed in clockwise order
