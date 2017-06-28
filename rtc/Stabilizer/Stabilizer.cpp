@@ -2800,9 +2800,9 @@ void Stabilizer::torqueST()
     hrp::Matrix33 Krp = hrp::Matrix33::Identity() * 500;
     hrp::Matrix33 Krd = hrp::Matrix33::Identity() * 50;
     generateForce(foot_origin_rot, Kpp, Kpd, Krp, Krd, f_ga, tau_ga);
-    hrp::dmatrix Gc1 = hrp::dmatrix::Zero(3, 6);
-    hrp::dmatrix Gc2 = hrp::dmatrix::Zero(3, 6);
-    hrp::dvector6 tmp_f;
+    std::vector<hrp::dmatrix> Gc1;
+    std::vector<hrp::dmatrix> Gc2;
+    std::vector<hrp::dvector6> tmp_f;
     hrp::Vector3 f_foot = hrp::Vector3::Zero();
     hrp::Vector3 tau_foot = hrp::Vector3::Zero();
     Kpp = hrp::Matrix33::Identity() * 500;
@@ -2811,16 +2811,22 @@ void Stabilizer::torqueST()
     Krd = hrp::Matrix33::Identity() * 10;
     for (size_t i = 0; i < act_el_p.size(); i++) {
         if (!ref_contact_states[i]) {
-            Gc1.block(0, 0, 3, 3) = act_el_R[i];
-            Gc2.block(0, 0, 3, 3) = hrp::hat(act_el_p[i] - act_cog) * act_ee_R[i];
-            Gc1.block(0, 3, 3, 3) = hrp::dmatrix::Zero(3, 3);
-            Gc2.block(0, 3, 3, 3) = act_el_R[i];
+            Gc1.push_back(hrp::dmatrix::Zero(3, 6));
+            Gc2.push_back(hrp::dmatrix::Zero(3, 6));
+            Gc1.back().block(0, 0, 3, 3) = act_el_R[i];
+            Gc2.back().block(0, 0, 3, 3) = hrp::hat(act_el_p[i] - act_cog) * act_ee_R[i];
+            Gc1.back().block(0, 3, 3, 3) = hrp::dmatrix::Zero(3, 3);
+            Gc2.back().block(0, 3, 3, 3) = act_el_R[i];
             generateSwingFootForce(Kpp, Kpd, Krp, Krd, f_foot, tau_foot, i);
+            tmp_f.push_back(hrp::dvector6::Zero());
+            tmp_f.back() << f_foot, tau_foot;
+            f_ga -= Gc1.back() * tmp_f.back();
+            tau_ga -= Gc2.back() * tmp_f.back();
         }
     }
-    tmp_f << f_foot, tau_foot;
     size_t k = 0;
-    distributeForce(f_ga-Gc1*tmp_f, tau_ga-Gc2*tmp_f, enable_ee, enable_joint, ee_force);
+    size_t l = 0;
+    distributeForce(f_ga, tau_ga, enable_ee, enable_joint, ee_force);
     for (size_t i = 0; i < act_el_p.size(); i++) {
         enable_ee2.push_back(i);
         hrp::JointPath jp(m_robot->rootLink(), m_robot->link(stikp[i].target_name));
@@ -2831,7 +2837,8 @@ void Stabilizer::torqueST()
             ee_force2.push_back(ee_force[k]);
             k++;
         } else {
-            ee_force2.push_back(tmp_f);
+            ee_force2.push_back(tmp_f[l]);
+            l++;
         }
     }
     std::sort(enable_joint2.begin(), enable_joint2.end());
@@ -2944,7 +2951,7 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     hrp::dvector lowerCopLimit;
     size_t cop_dim = makeCopConstraint(enable_ee, cop, upperCopLimit, lowerCopLimit);
 
-    size_t const_dim = friction_dim + tau_dim + cop_dim;
+    size_t const_dim = tau_dim + friction_dim + cop_dim;
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Const(const_dim, state_dim);
     Const << ef2tau, friction, cop;
     hrp::dvector upperConstLimit(const_dim);
