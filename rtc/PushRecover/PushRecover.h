@@ -207,7 +207,6 @@ public:
         Vec3 prev_lpf_rot;
         Vec3 lpf_drot;
         Vec3 hpf_rot;
-        float foot_roll_gain;
         float transition_gain;
         float transition_gain_diff;
         bool  transition_state;
@@ -222,7 +221,6 @@ public:
             rot( Vec3Zero() ),
             rot_offset( Vec3Zero() ),
             filtered_rot( Vec3Zero() ),
-            foot_roll_gain(0.0f),
             lpf_rot( Vec3Zero() ),
             prev_lpf_rot( Vec3Zero() ),
             lpf_drot( Vec3Zero() ),
@@ -242,6 +240,12 @@ public:
             onlineWalkParam.lpf_fp    = 0.9995;
             onlineWalkParam.modify_rot_gain_x = 0.0;
             onlineWalkParam.modify_rot_gain_y  = 0.0;
+            onlineWalkParam.fz_contact_threshold_upper = 15.0;
+            onlineWalkParam.fz_contact_threshold_lower = 8.0;
+            onlineWalkParam.foot_roll_gain = 0.0;
+            onlineWalkParam.foot_pitch_gain = 0.0;
+            onlineWalkParam.body_roll_gain = 0.0;
+            onlineWalkParam.body_pitch_gain = 0.0;
 
             onlineWalkParam.owpg_step_time     = 1000;
             onlineWalkParam.owpg_step_margin   = 300;
@@ -256,6 +260,7 @@ public:
             onlineWalkParam.owpg_rot_offset_threshold_y = 3.0f*S_PI/180.0f*0.62f;
             onlineWalkParam.owpg_rot_offset_gain_x = 0.0f;
             onlineWalkParam.owpg_rot_offset_gain_y = 0.5f;
+            onlineWalkParam.owpg_modify_first_magnity = 1.0;
             onlineWalkParam.enable = false;
             onlineWalkParam.datal  = 0;
             onlineWalkParam.dataf  = 0.0;
@@ -297,6 +302,7 @@ public:
             p_owpg->modifyFilterParam( onlineWalkParam.filter_fp,
                                        onlineWalkParam.lpf_fp
                                        );
+            p_owpg->modifyFirstMagnity( onlineWalkParam.owpg_modify_first_magnity );
         };
         void copyWalkParam( OpenHRP::PushRecoverService::OnlineWalkParam *o_param ) const{
             o_param->owpg_step_time      = onlineWalkParam.owpg_step_time;
@@ -315,12 +321,20 @@ public:
             o_param->owpg_ystep_max = onlineWalkParam.owpg_ystep_max;
             o_param->owpg_rot_offset_threshold_x = onlineWalkParam.owpg_rot_offset_threshold_x;
             o_param->owpg_rot_offset_threshold_y = onlineWalkParam.owpg_rot_offset_threshold_y;
-            o_param->owpg_rot_offset_gain_x = onlineWalkParam.owpg_rot_offset_gain_x;
-            o_param->owpg_rot_offset_gain_y = onlineWalkParam.owpg_rot_offset_gain_y;
+            o_param->owpg_rot_offset_gain_x    = onlineWalkParam.owpg_rot_offset_gain_x;
+            o_param->owpg_rot_offset_gain_y    = onlineWalkParam.owpg_rot_offset_gain_y;
+            o_param->owpg_modify_first_magnity = onlineWalkParam.owpg_modify_first_magnity;
 
             o_param->enable = onlineWalkParam.enable;
             o_param->datal = onlineWalkParam.datal;
             o_param->dataf = onlineWalkParam.dataf;
+
+            o_param->foot_roll_gain             = onlineWalkParam.foot_roll_gain;
+            o_param->foot_pitch_gain            = onlineWalkParam.foot_pitch_gain;
+            o_param->body_roll_gain             = onlineWalkParam.body_roll_gain;
+            o_param->body_pitch_gain            = onlineWalkParam.body_pitch_gain;
+            o_param->fz_contact_threshold_upper = onlineWalkParam.fz_contact_threshold_upper;
+            o_param->fz_contact_threshold_lower = onlineWalkParam.fz_contact_threshold_lower;
         };
     };
 
@@ -447,12 +461,14 @@ private:
     /* Joystick WatchDog Timer */
     struct JoyState {
         bool enabled;
+        bool keep_idle;
         int  wdt;
         JoyCommand prev_command;
         JoyState() :
-            enabled(false), wdt(0) {};
+            enabled(false), wdt(0), keep_idle(false) {};
         void reset(void) {
             enabled = false;
+            keep_idle = false;
             wdt = 0;
             prev_command.x = 0.0;
             prev_command.y = 0.0;
@@ -818,7 +834,8 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     //     //std::cout << "[PR] body_p_diff_at_start=" << m_body_p_diff_at_start.transpose() << std::endl;
     // }
     {
-        const bool idle_state = m_simmode==0?false:true; /* TODO */
+        //const bool idle_state = m_simmode==0?false:true; /* TODO */
+        const bool idle_state = m_joystate.keep_idle?true:m_simmode==0?false:true; /* TODO */
         m_owpg.incrementFrameNoIdle2<LegIKParam,LEG_IK_TYPE,0>(inc_frame, m_owpg_state, m_owpg_cstate, idle_state);
     }
 
@@ -868,8 +885,8 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     //TODO ここはIdentityを使うよりもKFからの姿勢を使うのが良いかも。
 #if 1
     _MM_ALIGN16 float c[4],s[4];
-    bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.rot_offset[0],
-                                           m_modify_rot_context.rot_offset[1],
+    bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.rot_offset[0] * m_modify_rot_context.onlineWalkParam.body_roll_gain,
+                                           m_modify_rot_context.rot_offset[1] * m_modify_rot_context.onlineWalkParam.body_pitch_gain,
                                            m_modify_rot_context.rot_offset[2],
                                            0.0f),
                          (bodylink::v4sf*)s, (bodylink::v4sf*)c );
@@ -898,20 +915,20 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     float foot_l_roll;
     float foot_r_roll;
     if(m_modify_rot_context.transition_state){
-        foot_l_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.transition_gain * m_modify_rot_context.foot_roll_gain;
-        foot_r_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.transition_gain * m_modify_rot_context.foot_roll_gain;
+        foot_l_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.transition_gain * m_modify_rot_context.onlineWalkParam.foot_roll_gain;
+        foot_r_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.transition_gain * m_modify_rot_context.onlineWalkParam.foot_roll_gain;
     }else{
-        foot_l_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.foot_roll_gain;
-        foot_r_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.foot_roll_gain;
+        foot_l_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.onlineWalkParam.foot_roll_gain;
+        foot_r_roll            = -m_modify_rot_context.filtered_rot[0] * m_modify_rot_context.onlineWalkParam.foot_roll_gain;
     }
     float foot_l_pitch;
     float foot_r_pitch;
     if(m_modify_rot_context.transition_state){
-        foot_l_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.transition_gain * m_modify_rot_context.foot_roll_gain;
-        foot_r_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.transition_gain * m_modify_rot_context.foot_roll_gain;
+        foot_l_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.transition_gain * m_modify_rot_context.onlineWalkParam.foot_pitch_gain;
+        foot_r_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.transition_gain * m_modify_rot_context.onlineWalkParam.foot_pitch_gain;
     }else{
-        foot_l_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.foot_roll_gain;
-        foot_r_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.foot_roll_gain;
+        foot_l_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.onlineWalkParam.foot_pitch_gain;
+        foot_r_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.onlineWalkParam.foot_pitch_gain;
     }
 #endif
     const Vec3 basePos_modif           = Vec3(ref_basePos_modif(0),
@@ -1046,15 +1063,16 @@ void PushRecover::modifyTrajectoryRot(const bool enable_modify, const bool on_gr
 #else
 #endif
     //const Vec3 rot_offset = context.rot_offset.array()*alpha + (1.0-alpha)*(pgain * context.lpf_rot.array() + dgain * ((context.lpf_drot).array()));
-    const Vec3 rot_offset = Vec3::Zero();
-    const Vec3 rot_offset_dummy = context.rot_offset.array()*alpha + (1.0-alpha)*(pgain * context.lpf_rot.array() + dgain * ((context.lpf_drot).array()));
+    //const Vec3 rot_offset = Vec3::Zero();
+    const Vec3 rot_offset = context.lpf_rot;
+    //const Vec3 rot_offset_dummy = context.rot_offset.array()*alpha + (1.0-alpha)*(pgain * context.lpf_rot.array() + dgain * ((context.lpf_drot).array()));
 
 
-#ifdef DEBUG_HOGE
-    if(loop%500==0){
-        //std::cout << "rot_offset = " << rot_offset.transpose() << std::endl;
-        std::cout << "rot_offset = " << rot_offset_dummy.transpose() << std::endl;
-        std::cout << " ========================= " << std::endl;
+#ifndef DEBUG_HOGE
+    if(loop%200==0){
+        std::cout << "rot_offset = [" << ((180.0f/S_PI)*rot_offset[0]) << ", " << ((180.0f/S_PI)*rot_offset[1]) << ", "<< ((180.0f/S_PI)*rot_offset[2]) << "]" << std::endl;
+        //std::cout << "rot_offset = " << rot_offset_dummy.transpose() << std::endl;
+        //std::cout << " ========================= " << std::endl;
     }
 #endif
 
@@ -1179,21 +1197,23 @@ void PushRecover::modifyFootHeight(const bool on_ground, ModifyTrajectoryContext
         ref_traj.footl_p[2],
         ref_traj.footr_p[2]
     };
+    const int swing_leg_lr[2] = {-1,1};
 
     for(int i=0;i<2;i++){
         /* swing legである、または接地判定が空中である場合は接地判定を行う */
-        if(( foot_pz_ref[i] > 0.001f ) || (context.fz_contact[i]==0) ){
+        if( m_owpg.isSwingLeg(swing_leg_lr[i]) || (context.fz_contact[i]==0) ){
             /* swing legの接地判定。 シュミットトリガー  */
             if( context.fz_contact[i] == 1 ){
-                if( fz[i] < 10.0 ){
+                context.fz_contact_z[i] *= 0.98;
+                if( fz[i] < context.onlineWalkParam.fz_contact_threshold_lower ){
                     context.fz_contact[i] = 0;
                     if( foot_pz_ref[i] > context.fz_contact_z[i] ){
                         context.fz_contact_z[i] = 0.0f;
                     }
                 }
             }else{
-                context.fz_contact_z[i] *= 0.98;
-                if( fz[i] > 14.0 ){
+                context.fz_contact_z[i] *= 0.94;
+                if( fz[i] > context.onlineWalkParam.fz_contact_threshold_upper ){
                     context.fz_contact[i] = 1;
                     context.fz_contact_z[i] = foot_pz_ref[i];
 #ifndef DEBUG_HOGE
@@ -1275,6 +1295,11 @@ void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, con
         jstate.enabled = true;
     }else if( (buttons.data[2]==1) && (jstate.enabled==true) ){
         jstate.enabled = false;
+    }
+    if( buttons.data[0] == 1 ){
+        jstate.keep_idle = true;
+    }else{
+        jstate.keep_idle = false;
     }
 
     command.x = -axes.data[1];

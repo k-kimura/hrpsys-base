@@ -28,6 +28,12 @@ module OpenHRP
           double lpf_fp;
           double modify_rot_gain_x;
           double modify_rot_gain_y;
+          double fz_contact_threshold_upper;
+          double fz_contact_threshold_lower;
+          double foot_roll_gain;
+          double foot_pitch_gain;
+          double body_roll_gain;
+          double body_pitch_gain;
 
           long owpg_step_time;
           long owpg_step_margin;
@@ -41,6 +47,7 @@ module OpenHRP
           double owpg_rot_offset_threshold_y;
           double owpg_rot_offset_gain_x;
           double owpg_rot_offset_gain_y;
+          double owpg_modify_first_magnity;
 
           boolean enable;
           long    datal;

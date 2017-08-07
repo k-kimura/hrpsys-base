@@ -509,104 +509,110 @@ void PushRecover::updateInputData(const bool shw_msg_flag){
         std::cout << "[pr] "  << __func__ << std::endl;
     }
 
-    for (unsigned int i=0; i<m_forceIn.size(); i++){
-        if ( m_forceIn[i]->isNew() ) {
-            m_forceIn[i]->read();
-            DEBUG_INPUT_PRINT(m_force[i].data[0]);
-            DEBUG_INPUT_PRINT(m_force[i].data[1]);
-            DEBUG_INPUT_PRINT(m_force[i].data[2]);
+    try {
+        for (unsigned int i=0; i<m_forceIn.size(); i++){
+            if ( m_forceIn[i]->isNew() ) {
+                m_forceIn[i]->read();
+                DEBUG_INPUT_PRINT(m_force[i].data[0]);
+                DEBUG_INPUT_PRINT(m_force[i].data[1]);
+                DEBUG_INPUT_PRINT(m_force[i].data[2]);
+            }
+            if ( m_ref_forceIn[i]->isNew() ) {
+                m_ref_forceIn[i]->read();
+                DEBUG_INPUT_PRINT(m_ref_force[i].data[0]);
+                DEBUG_INPUT_PRINT(m_ref_force[i].data[1]);
+                DEBUG_INPUT_PRINT(m_ref_force[i].data[2]);
+            }
         }
-        if ( m_ref_forceIn[i]->isNew() ) {
-            m_ref_forceIn[i]->read();
-            DEBUG_INPUT_PRINT(m_ref_force[i].data[0]);
-            DEBUG_INPUT_PRINT(m_ref_force[i].data[1]);
-            DEBUG_INPUT_PRINT(m_ref_force[i].data[2]);
+        if (m_basePosIn.isNew()) {
+            m_basePosIn.read();
+            input_basePos(0) = m_basePos.data.x;
+            input_basePos(1) = m_basePos.data.y;
+            input_basePos(2) = m_basePos.data.z;
+            DEBUG_INPUT_PRINT(input_basePos(0));
+            DEBUG_INPUT_PRINT(input_basePos(1));
+            DEBUG_INPUT_PRINT(input_basePos(2));
         }
-    }
-    if (m_basePosIn.isNew()) {
-        m_basePosIn.read();
-        input_basePos(0) = m_basePos.data.x;
-        input_basePos(1) = m_basePos.data.y;
-        input_basePos(2) = m_basePos.data.z;
-        DEBUG_INPUT_PRINT(input_basePos(0));
-        DEBUG_INPUT_PRINT(input_basePos(1));
-        DEBUG_INPUT_PRINT(input_basePos(2));
-    }
-    if (m_baseRpyIn.isNew()) {
-        m_baseRpyIn.read();
-        input_baseRot = hrp::rotFromRpy(m_baseRpy.data.r, m_baseRpy.data.p, m_baseRpy.data.y);
-        DEBUG_INPUT_PRINT(m_baseRpy.data.r);
-        DEBUG_INPUT_PRINT(m_baseRpy.data.p);
-        DEBUG_INPUT_PRINT(m_baseRpy.data.y);
-    }
-    if (m_zmpIn.isNew()) {
-        m_zmpIn.read();
-        input_zmp(0) = m_zmp.data.x;
-        input_zmp(1) = m_zmp.data.y;
-        input_zmp(2) = m_zmp.data.z;
-        DEBUG_INPUT_PRINT(input_zmp(0));
-        DEBUG_INPUT_PRINT(input_zmp(1));
-        DEBUG_INPUT_PRINT(input_zmp(2));
-    }
-    if (m_rpyIn.isNew()) {
-        m_rpyIn.read();
-        DEBUG_INPUT_PRINT(m_rpy.data.r);
-        DEBUG_INPUT_PRINT(m_rpy.data.p);
-        DEBUG_INPUT_PRINT(m_rpy.data.y);
-    }
-    if (m_qCurrentIn.isNew()) {
-        m_qCurrentIn.read();
-    }
-    if (m_qRefIn.isNew()) {
-        m_qRefIn.read();
-    }
-    if (m_emergencySignalIn.isNew()){
-        m_emergencySignalIn.read();
-        std::cout << "[" << m_profile.instance_name << "] emergencySignal is set!" << std::endl;
-    }
-    if (m_accRefIn.isNew()){
-        m_accRefIn.read();
-    }
-    if (m_contactStatesIn.isNew()){
-        m_contactStatesIn.read();
-    }
-    if (m_controlSwingSupportTimeIn.isNew()){
-        m_controlSwingSupportTimeIn.read();
-    }
-    if (m_walkingStatesIn.isNew()){
-        m_walkingStatesIn.read();
-    }
-    if (m_sbpCogOffsetIn.isNew()){
-        m_sbpCogOffsetIn.read();
-    }
-    if (m_joyaxesIn.isNew()){
-        m_joyaxesIn.read();
-        if((loop%200==0) && m_debugLevel==5){
-            std::cout << "[pr] joy a=[";
-            for( int i=0;i<m_joyaxes.data.length(); i++){
-                printf("%1.3lf", (double)m_joyaxes.data[i]);
-                if( i == m_joyaxes.data.length()-1 ){
-                    printf("]\n");
-                }else{
-                    printf(", ");
+        if (m_baseRpyIn.isNew()) {
+            m_baseRpyIn.read();
+            input_baseRot = hrp::rotFromRpy(m_baseRpy.data.r, m_baseRpy.data.p, m_baseRpy.data.y);
+            DEBUG_INPUT_PRINT(m_baseRpy.data.r);
+            DEBUG_INPUT_PRINT(m_baseRpy.data.p);
+            DEBUG_INPUT_PRINT(m_baseRpy.data.y);
+        }
+        if (m_zmpIn.isNew()) {
+            m_zmpIn.read();
+            input_zmp(0) = m_zmp.data.x;
+            input_zmp(1) = m_zmp.data.y;
+            input_zmp(2) = m_zmp.data.z;
+            DEBUG_INPUT_PRINT(input_zmp(0));
+            DEBUG_INPUT_PRINT(input_zmp(1));
+            DEBUG_INPUT_PRINT(input_zmp(2));
+        }
+        if (m_rpyIn.isNew()) {
+            m_rpyIn.read();
+            DEBUG_INPUT_PRINT(m_rpy.data.r);
+            DEBUG_INPUT_PRINT(m_rpy.data.p);
+            DEBUG_INPUT_PRINT(m_rpy.data.y);
+        }
+        if (m_qCurrentIn.isNew()) {
+            m_qCurrentIn.read();
+        }
+        if (m_qRefIn.isNew()) {
+            m_qRefIn.read();
+        }
+        if (m_emergencySignalIn.isNew()){
+            m_emergencySignalIn.read();
+            std::cout << "[" << m_profile.instance_name << "] emergencySignal is set!" << std::endl;
+        }
+        if (m_accRefIn.isNew()){
+            m_accRefIn.read();
+        }
+        if (m_contactStatesIn.isNew()){
+            m_contactStatesIn.read();
+        }
+        if (m_controlSwingSupportTimeIn.isNew()){
+            m_controlSwingSupportTimeIn.read();
+        }
+        if (m_walkingStatesIn.isNew()){
+            m_walkingStatesIn.read();
+        }
+        if (m_sbpCogOffsetIn.isNew()){
+            m_sbpCogOffsetIn.read();
+        }
+        if (m_joyaxesIn.isNew()){
+            m_joyaxesIn.read();
+            if((loop%200==0) && m_debugLevel==5){
+                std::cout << "[pr] joy a=[";
+                for( int i=0;i<m_joyaxes.data.length(); i++){
+                    printf("%1.3lf", (double)m_joyaxes.data[i]);
+                    if( i == m_joyaxes.data.length()-1 ){
+                        printf("]\n");
+                    }else{
+                        printf(", ");
+                    }
                 }
             }
         }
-    }
-    if (m_joybuttonsIn.isNew()){
-        m_joybuttonsIn.read();
-        if((loop%200==0) && m_debugLevel==5){
-            std::cout << "[pr] joy a=[";
-            for( int i=0;i<m_joybuttons.data.length(); i++){
-                printf("%1.3lf", (double)m_joybuttons.data[i]);
-                if( i == m_joybuttons.data.length()-1 ){
-                    printf("]\n");
-                }else{
-                    printf(", ");
+        if (m_joybuttonsIn.isNew()){
+            m_joybuttonsIn.read();
+            if((loop%200==0) && m_debugLevel==5){
+                std::cout << "[pr] joy a=[";
+                for( int i=0;i<m_joybuttons.data.length(); i++){
+                    printf("%1.3lf", (double)m_joybuttons.data[i]);
+                    if( i == m_joybuttons.data.length()-1 ){
+                        printf("]\n");
+                    }else{
+                        printf(", ");
+                    }
                 }
             }
         }
-    };
+    }catch(int e){
+        std::cerr << "[pr] " << PRED << "input PORT failed[" << e << "]" << PDEF << std::endl;
+    }catch(...){
+        std::cerr << "[pr] " << PRED << "input PORT failed" << PDEF << std::endl;
+    }
 
     {
         if(shw_msg_flag){
@@ -2219,9 +2225,8 @@ bool PushRecover::setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWa
 
     m_modify_rot_context.onlineWalkParam = i_param;
 
-    m_modify_rot_context.foot_roll_gain = i_param.dataf;
-
-    m_owpg.modifyFirstMagnity( (0.001*i_param.datal) );
+    //m_modify_rot_context.foot_roll_gain = i_param.dataf;
+    //m_owpg.modifyFirstMagnity( (0.001*i_param.datal) );
 
     std::cerr << "[" << m_profile.instance_name << "] filter_fp=" << m_modify_rot_context.onlineWalkParam.filter_fp << std::endl;
     std::cerr << "[" << m_profile.instance_name << "] lpf_fp=" << m_modify_rot_context.onlineWalkParam.lpf_fp << std::endl;
