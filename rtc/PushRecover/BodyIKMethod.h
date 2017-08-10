@@ -76,7 +76,7 @@ const static Vec3 g_CoG_offset( 0.0f, 0.0f, 0.0f ); //rootPosから見たCoG位�
 static float g_ready_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.5952, -32.9614, 0.027092,
                                        5.686155e-06,  -0.026751, -39.6337, 72.5952, -32.9614, 0.026727
 };
-const static Vec3 traj_body_init( -0.04f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - InitialLfoot_p[2] - g_CoG_offset[2]);
+const static Vec3 traj_body_init( -0.0f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - g_CoG_offset[2]);
 #else
 #error "Undefined ROBOT TYPE."
 #endif

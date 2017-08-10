@@ -639,7 +639,8 @@ void PushRecover::updateInputData(const bool shw_msg_flag){
 
 hrp::Vector3 PushRecover::updateEstimatedInputData(void){
     //com_dph = hrp::Vector3(Zc * m_rpy.data.p, Zc * m_rpy.data.r, 0.0) + com_dph_base;
-    return hrp::Vector3(Zc * m_rpy.data.p, Zc * m_rpy.data.r, 0.0);
+    //return hrp::Vector3(Zc * m_rpy.data.p, Zc * m_rpy.data.r, 0.0);
+    return hrp::Vector3(Zc * act_base_rpy[1], -Zc * act_base_rpy[0], 0.0);
 };
 
 void PushRecover::updateEstimatedOutputData(void){
@@ -1240,11 +1241,19 @@ bool PushRecover::updateToCurrentRobotPose(void){
 
     /* calc current robot root Posture */
     hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
-    const hrp::Matrix33 senR = sen->link->R * sen->localR;
+    /**
+       正しくはrootLink()->R=Identityにした上で
+       calcForwardKinematics()をして、
+       senR=sen->link->R * sen->localR;
+       sen->link->RはIdentityと仮定するとsenR=sen->localR;
+     */
+    //const hrp::Matrix33 senR = sen->link->R * sen->localR;
+    const hrp::Matrix33 senR = sen->localR;
     const hrp::Matrix33 act_Rs(hrp::rotFromRpy(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y));
 #if 0
     m_robot->rootLink()->R = act_Rs * (senR.transpose() * m_robot->rootLink()->R);
-#elif 0
+#elif 1
+    /* m_rpy should be corrected. */
     m_robot->rootLink()->R = act_Rs * senR.transpose();
 #else
     /* m_rpy is already corrected. */
@@ -1252,7 +1261,14 @@ bool PushRecover::updateToCurrentRobotPose(void){
 #endif
     m_robot->calcForwardKinematics(); /* FK on actual joint angle */
     act_base_rpy = hrp::rpyFromRot(m_robot->rootLink()->R);
-
+#ifdef DEBUG_HOGE
+    if(loop%500==0){
+        //std::cout << "senR=" << std::endl << senR << std::endl;
+        std::cout << "m_rpy=" << (180.0/3.14159265)*m_rpy.data.r << ", " << (180.0/3.14159265)*m_rpy.data.p << ", " << (180.0/3.14159265)*m_rpy.data.y << std::endl;
+        hrp::Vector3 tmpv = act_base_rpy.array() * (180.0/3.14159265);
+        std::cout << "act_base_rpy=" << tmpv.transpose() << std::endl;
+    }
+#endif
     // world_force_ps, world_force_ms
     calcWorldForceVector();
 
@@ -1324,6 +1340,29 @@ bool PushRecover::checkJointVelocity(void){
             ret = false;
         }
         m_robot->joint(i)->dq = dq;
+    }
+#endif
+#ifdef DEBUG_HOGE
+    if(loop%500==0){
+        std::cout << "[pr] " << __func__ << std::endl;
+        printf("[pr] ref_q=      [");
+        for ( int i = 0; i < m_robot->numJoints(); i++ ){
+            printf("%+3.1lf",rad2deg(ref_q[i]));
+            if(i==m_robot->numJoints()-1){
+                printf("]");
+            }else{
+                printf(", ");
+            }
+        }
+        printf("\n[pr] m_robot.q=[");
+        for ( int i = 0; i < m_robot->numJoints(); i++ ){
+            printf("%+3.1lf",rad2deg(m_robot->joint(i)->q));
+            if(i==m_robot->numJoints()-1){
+                printf("]\n");
+            }else{
+                printf(", ");
+            }
+        }
     }
 #endif
     return ret;
@@ -1584,7 +1623,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       //updateInputData(shw_msg_flag);
       //updateInputData(true);
       updateInputData(false);
-      updateRotContext( Vec3(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y ), m_modify_rot_context );
+      //updateRotContext( Vec3(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y ), m_modify_rot_context );
+      updateRotContext( Vec3(act_base_rpy[0], act_base_rpy[1], act_base_rpy[2]), m_modify_rot_context );
   }
   /* End of checking dataport input */
 
@@ -1879,7 +1919,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
   /*==================================================*/
   /* Set Target Angle Vector and publish from outport */
   /*==================================================*/
-  //const bool shw_debug_msg_outputdata = ((loop%1000==0) || ((loop%20==0) && (m_current_control_state == PR_TRANSITION_TO_READY || m_current_control_state == PR_TRANSITION_TO_IDLE)));
+  const bool shw_debug_msg_outputdata = ((loop%500==0) || ((loop%20==0) && (m_current_control_state == PR_TRANSITION_TO_READY || m_current_control_state == PR_TRANSITION_TO_IDLE)));
   //setOutputData(shw_debug_msg_outputdata);
   setOutputData(false);
 

@@ -845,8 +845,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     ref_traj.footr_p = Vec3(m_owpg_state.foot_r_p);
 
     {
-        //const Vec3 rot_rp  = Vec3(0.0f,0.0f,0.0f);
-        const Vec3 rot_rp  = Vec3(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y);
+        const Vec3 rot_rp  = Vec3(act_base_rpy[0], act_base_rpy[1], act_base_rpy[2] );
         const Vec3 rate    = Vec3(0.0f,0.0f,0.0f);
         const Vec3 zmp     = Vec3(m_ref_zmp[0], m_ref_zmp[1], m_ref_zmp[2]);
         UpdateState ustate = { Vec3(m_prev_ref_traj.p[0],m_prev_ref_traj.p[1],m_prev_ref_traj.p[2]),
@@ -891,6 +890,13 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
                                            0.0f),
                          (bodylink::v4sf*)s, (bodylink::v4sf*)c );
     const Mat3 body_R                  = rotateMat3<1>( c[1], s[1] )*rotateMat3<0>( c[0], s[0] );
+#ifdef DEBUG_HOGE
+    if(loop%500==0){
+        printf("c[0,1]=[%5.4f, %5.4f]\n",c[0],c[1]);
+        printf("s[0,1]=[%5.4f, %5.4f]\n",s[0],s[1]);
+        std::cout << "body_R=\n" << body_R << std::endl;
+    }
+#endif
 #elif 0
     _MM_ALIGN16 float c[4],s[4];
     bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.lpf_rot[0]*-0.900f,
@@ -967,7 +973,19 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     //     std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
     // }
 #elif ROBOT==1
-    //    bool error_flag = false;
+    // if(loop%500==0){
+    //     printf("\n[pr] exec jq  =[");
+    //     for ( int i = 0; i < m_robot->numJoints(); i++ ){
+    //         printf("%+3.1lf",rad2deg(target_joint_angle[i]));
+    //         if(i==m_robot->numJoints()-1){
+    //             printf("]\n");
+    //         }else{
+    //             printf(", ");
+    //         }
+    //     }
+    // }
+
+    //bool error_flag = false;
     /* set target_joint_angle */
     for(int i=0;i < 6; i++){
         /* m_robot of L1 starts from right leg. */
@@ -1065,11 +1083,11 @@ void PushRecover::modifyTrajectoryRot(const bool enable_modify, const bool on_gr
     //const Vec3 rot_offset = context.rot_offset.array()*alpha + (1.0-alpha)*(pgain * context.lpf_rot.array() + dgain * ((context.lpf_drot).array()));
     //const Vec3 rot_offset = Vec3::Zero();
     const Vec3 rot_offset = context.lpf_rot;
-    //const Vec3 rot_offset_dummy = context.rot_offset.array()*alpha + (1.0-alpha)*(pgain * context.lpf_rot.array() + dgain * ((context.lpf_drot).array()));
+    //const Vec3 rot_offset_dummy = context.rot_offset.array(*)alpha + (1.0-alpha)*(pgain * context.lpf_rot.array() + dgain * ((context.lpf_drot).array()));
 
 
 #ifndef DEBUG_HOGE
-    if(loop%200==0){
+    if(loop%500==0){
         std::cout << "rot_offset = [" << ((180.0f/S_PI)*rot_offset[0]) << ", " << ((180.0f/S_PI)*rot_offset[1]) << ", "<< ((180.0f/S_PI)*rot_offset[2]) << "]" << std::endl;
         //std::cout << "rot_offset = " << rot_offset_dummy.transpose() << std::endl;
         //std::cout << " ========================= " << std::endl;
