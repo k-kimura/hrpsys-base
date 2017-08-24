@@ -35,10 +35,17 @@ const static Vec3 InitialLfoot_p(-0.015,  0.095, 0.1045);
 const static Vec3 InitialRfoot_p(-0.015,  -0.095, 0.1045);
 #endif
 #elif ROBOT==1
+#if 1
+/// 左脚先座標の初期値
+const static Vec3 InitialLfoot_p(0.0,   0.120, 0.1335);
+/// 右脚先座標の初期値
+const static Vec3 InitialRfoot_p(0.0,  -0.120, 0.1335);
+#else
 /// 左脚先座標の初期値
 const static Vec3 InitialLfoot_p(0.0,   0.100, 0.1335);
 /// 右脚先座標の初期値
 const static Vec3 InitialRfoot_p(0.0,  -0.100, 0.1335);
+#endif
 #else
 #error "Undefined ROBOT TYPE."
 #endif
