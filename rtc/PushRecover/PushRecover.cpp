@@ -65,6 +65,7 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_joyaxesIn("joyaxes", m_joyaxes),
       m_joybuttonsIn("joybuttons", m_joybuttons),
       m_qRefOut("q", m_qRef),
+      m_tauRefOut("tau", m_tauRef),
       m_zmpOut("zmpOut", m_zmp),
       m_basePosOut("basePosOut", m_basePos),
       m_baseRpyOut("baseRpyOut", m_baseRpy),
@@ -137,6 +138,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
 
   // Set OutPort buffer
   addOutPort("q", m_qRefOut);
+  addOutPort("tau", m_tauRefOut);
   addOutPort("zmpOut", m_zmpOut);
   addOutPort("basePosOut", m_basePosOut);
   addOutPort("baseRpyOut", m_baseRpyOut);
@@ -941,6 +943,12 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     m_basePoseOut.write();
     m_qRefOut.write();
     m_zmpOut.write();
+    /* TODO */
+    m_tauRef.tm = m_qRef.tm;
+    for ( int i = 0; i < m_robot->numJoints(); i++ ){
+        m_tauRef.data[i] = 0.01*i;
+    }
+    m_tauRefOut.write();
 
     // control parameters
     /* TODO */

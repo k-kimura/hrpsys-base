@@ -360,6 +360,8 @@ protected:
 
     TimedFloatSeq   m_joyaxes;
     TimedBooleanSeq m_joybuttons;
+
+    TimedDoubleSeq m_tauRef;
     // </rtc-template>
 
     // DataInPort declaration
@@ -402,6 +404,8 @@ protected:
     RTC::OutPort<RTC::TimedDoubleSeq> m_controlSwingSupportTimeOut;
     RTC::OutPort<RTC::TimedBoolean> m_walkingStatesOut;
     RTC::OutPort<RTC::TimedPoint3D> m_sbpCogOffsetOut;
+
+    RTC::OutPort<RTC::TimedDoubleSeq> m_tauRefOut;
     // </rtc-template>
 
     // CORBA Port declaration
