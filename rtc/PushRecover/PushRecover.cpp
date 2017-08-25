@@ -139,6 +139,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   // Set OutPort buffer
   addOutPort("q", m_qRefOut);
   addOutPort("tau", m_tauRefOut);
+  m_tauRef.data.length(12); //TODO
   addOutPort("zmpOut", m_zmpOut);
   addOutPort("basePosOut", m_basePosOut);
   addOutPort("baseRpyOut", m_baseRpyOut);
