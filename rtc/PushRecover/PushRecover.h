@@ -23,6 +23,7 @@
 #include <hrpUtil/EigenTypes.h>
 
 #include "../ImpedanceController/RatsMatrix.h"
+#include "../ImpedanceController/JointPathEx.h"
 #include "../TorqueFilter/IIRFilter.h"
 
 #if defined(__INTEL_COMPILER)||defined(__ICC)
@@ -178,6 +179,8 @@ public:
         T footr_p;
         T dp;
         T body_dp;
+        T footl_f;
+        T footr_f;
         TrajectoryElement(){};
         template<class U>
         TrajectoryElement<T>& operator=(const TrajectoryElement<U>& lhs){
@@ -185,6 +188,8 @@ public:
             this->body_p  = lhs.body_p;
             this->footl_p = lhs.footl_p;
             this->footr_p = lhs.footr_p;
+            this->footl_f = lhs.footl_f;
+            this->footr_f = lhs.footr_f;
             this->dp      = lhs.dp;
             this->body_dp = lhs.body_dp;
             return *this;
@@ -194,6 +199,8 @@ public:
             body_p  = T(0.0,0.0,0.0);
             footl_p = T(0.0,0.0,0.0);
             footr_p = T(0.0,0.0,0.0);
+            footl_f = T(0.0,0.0,0.0);
+            footr_f = T(0.0,0.0,0.0);
             dp      = T(0.0,0.0,0.0);
             body_dp = T(0.0,0.0,0.0);
         };
@@ -431,12 +438,14 @@ private:
     double m_mg, m_mg2; /* m_robot->totalMass() */
     coil::Mutex m_mutex;
     std::map<std::string, hrp::Vector3> abs_forces, abs_moments, abs_ref_forces, abs_ref_moments;
-    hrp::BodyPtr m_robot;
+    hrp::BodyPtr m_robot, m_robot_current;
     unsigned int m_debugLevel;
     unsigned int m_simmode;
     unsigned int m_generator_select;
     bool emergencyStopReqFlag;
     int loop;
+
+    hrp::JointPathExPtr m_pleg[2];
 
     /* PushDetectParam */
     PushDetectorState pushDetector_state;
@@ -490,7 +499,7 @@ private:
     hrp::Matrix33     ref_baseRot;
     hrp::Vector3      prev_imu_sensor_pos, prev_imu_sensor_vel;
     hrp::Vector3      m_ref_cog, m_prev_ref_cog, m_ref_cogvel;
-    hrp::Vector3      ref_force[2];
+    hrp::Vector3      m_ref_force_vec[2];
     TrajectoryElement<hrp::Vector3e>  m_prev_ref_traj;
 
     interpolator *transition_interpolator;
@@ -847,6 +856,9 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     ref_traj.body_p  = Vec3(m_owpg_state.body_p);
     ref_traj.footl_p = Vec3(m_owpg_state.foot_l_p);
     ref_traj.footr_p = Vec3(m_owpg_state.foot_r_p);
+
+    ref_traj.footl_f = Vec3(m_owpg_state.foot_l_f);
+    ref_traj.footr_f = Vec3(m_owpg_state.foot_r_f);
 
     {
         const Vec3 rot_rp  = Vec3(act_base_rpy[0], act_base_rpy[1], act_base_rpy[2] );

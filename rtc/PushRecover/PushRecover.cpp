@@ -196,13 +196,35 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   //parameters for internal robot model
   std::cout << "Loading Model=[" << prop["model"].c_str() << std::endl;
 
-  m_robot = hrp::BodyPtr(new hrp::Body());
-  if (!loadBodyFromModelLoader(m_robot, prop["model"].c_str(),
-                               CosNaming::NamingContext::_duplicate(naming.getRootContext())
-          )){
-      std::cerr << "PR failed to load model[" << prop["model"] << "] in "
-                << m_profile.instance_name << std::endl;
+  {
+      m_robot = hrp::BodyPtr(new hrp::Body());
+      if (!loadBodyFromModelLoader(m_robot, prop["model"].c_str(),
+                                   CosNaming::NamingContext::_duplicate(naming.getRootContext())
+                                   )){
+          std::cerr << "PR failed to load model[" << prop["model"] << "] in "
+                    << m_profile.instance_name << std::endl;
+          return RTC::RTC_ERROR;
+      }
+  }
+  {
+      m_robot_current = hrp::BodyPtr(new hrp::Body());
+      if (!loadBodyFromModelLoader(m_robot_current, prop["model"].c_str(),
+                                   CosNaming::NamingContext::_duplicate(naming.getRootContext())
+                                   )){
+          std::cerr << "PR failed to load model[" << prop["model"] << "] in "
+                    << m_profile.instance_name << std::endl;
+          return RTC::RTC_ERROR;
+      }
+  }
+
+  m_pleg[EE_INDEX_LEFT] = hrp::JointPathExPtr(new hrp::JointPathEx(m_robot_current, m_robot_current->rootLink(), m_robot_current->link("LLEG_JOINT5"), m_dt, false, std::string(m_profile.instance_name)));
+  m_pleg[EE_INDEX_RIGHT] = hrp::JointPathExPtr(new hrp::JointPathEx(m_robot_current, m_robot_current->rootLink(), m_robot_current->link("RLEG_JOINT5"), m_dt, false, std::string(m_profile.instance_name)));
+
+  for(int i=0;i<2;i++){
+      if(m_pleg[i]==NULL){
+          std::cerr << "PR failed to create jointPathEx[" << i << "]" << std::endl;
       return RTC::RTC_ERROR;
+      }
   }
 
   std::cout << "[" << m_profile.instance_name << "] onInitialize() 5" << std::endl;
@@ -807,7 +829,8 @@ void PushRecover::setTargetDataWithInterpolation(void){
         for (size_t i = 0; i < 2; i++) {
             const int eei = ee_index_lr[i];
             m_ref_force[eei].tm = m_qRef.tm;
-            m_ref_force[eei].data[0] = ref_force[eei](0);
+            //m_ref_force[eei].data[0] = m_ref_force_vec[eei](0);
+            m_ref_force[eei].data[0] = m_ref_force_vec[eei](2);
             m_ref_force[eei].data[1] = 0.0;
             m_ref_force[eei].data[2] = 0.0;
         }
@@ -946,9 +969,41 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     m_zmpOut.write();
     /* TODO */
     m_tauRef.tm = m_qRef.tm;
-    for ( int i = 0; i < m_robot->numJoints(); i++ ){
-        m_tauRef.data[i] = 0.01*i;
+    for(int i=0;i<2;i++){
+        hrp::dmatrix ee_J = hrp::dmatrix::Zero(6, 6);
+        m_pleg[i]->calcJacobian(ee_J);
+        Eigen::VectorXd ee_f = Eigen::VectorXd::Zero(6);
+        ee_f[0] = m_ref_force_vec[i][0];
+        ee_f[1] = m_ref_force_vec[i][1];
+        ee_f[2] = m_ref_force_vec[i][2];
+        ee_f[3] = 0.0;
+        ee_f[4] = 0.0;
+        ee_f[5] = 0.0;
+        const Eigen::VectorXd tauref = ee_J.transpose() * ee_f;
+        if(loop%500==0){
+            //std::cout << "[pr] refforce[0]=" << m_ref_force_vec[i].transpose() << std::endl;
+            //std::cout << "[pr] ee_f[" << i << "]=" << ee_f.transpose() << std::endl;
+            //std::cout << "[pr] ee_J[" << i << "]=\n" << ee_J << std::endl;
+            //std::cout << "[pr] taur[" << i << "]=" << tauref.transpose() << std::endl;
+        }
+        for(int j=0; j<6; j++){
+            m_tauRef.data[j+6*i] = tauref[j];
+        }
     }
+    if(loop%500==0){
+        std::cout << "[pr] m_tauRef=[";
+        for(int i=0;i<m_robot->numJoints(); i++){
+            printf("%5.3lf",m_tauRef.data[i]);
+            if(i==m_robot->numJoints()-1){
+                std::cout << "]\n";
+            }else{
+                std::cout << ", ";
+            }
+        }
+    }
+    // for ( int i = 0; i < m_robot->numJoints(); i++ ){
+    //     m_tauRef.data[i] = 0.01*i;
+    // }
     m_tauRefOut.write();
 
     // control parameters
@@ -1244,9 +1299,11 @@ bool PushRecover::updateToCurrentRobotPose(void){
     // update by current joint angles
     for ( int i = 0; i < m_robot->numJoints(); i++ ){
         m_robot->joint(i)->q = m_qCurrent.data[i];
+        m_robot_current->joint(i)->q = m_qCurrent.data[i];
     }
     // tempolary set root link origin.
     m_robot->rootLink()->p = hrp::Vector3::Zero();
+    m_robot_current->rootLink()->p = hrp::Vector3::Zero();
 
     /* calc current robot root Posture */
     hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
@@ -1264,11 +1321,15 @@ bool PushRecover::updateToCurrentRobotPose(void){
 #elif 1
     /* m_rpy should be corrected. */
     m_robot->rootLink()->R = act_Rs * senR.transpose();
+
+    const hrp::Matrix33 act_RsRP(hrp::rotFromRpy(m_rpy.data.r, m_rpy.data.p, 0.0));
+    m_robot_current->rootLink()->R = act_RsRP * senR.transpose();
 #else
     /* m_rpy is already corrected. */
     m_robot->rootLink()->R = act_Rs;
 #endif
     m_robot->calcForwardKinematics(); /* FK on actual joint angle */
+    m_robot_current->calcForwardKinematics(); /* FK on actual joint angle */
     act_base_rpy = hrp::rpyFromRot(m_robot->rootLink()->R);
 #ifdef DEBUG_HOGE
     if(loop%500==0){
@@ -1594,6 +1655,10 @@ void PushRecover::trajectoryReset(void){
     m_ref_cogvel   = hrp::Vector3::Zero();
 }; /* TrajectoryReset() */
 
+// void PushRecover::convertRefForceToTorque(void){
+    
+// }; /* convertRefForceToTorque */
+
 RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 {
   struct timeval tv;
@@ -1797,20 +1862,28 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
                   double alpha = (m_ref_zmp - footr_p_ee).norm() / (footr_p_ee - footl_p_ee).norm();
                   if (alpha>1.0) alpha = 1.0;
                   if (alpha<0.0) alpha = 0.0;
-                  ref_force[0](0) = alpha * m_mg;     /*ref_force right*/
-                  ref_force[1](0) = (1-alpha) * m_mg; /*ref_force left*/
+                  m_ref_force_vec[0](0) = alpha * m_mg;     /*ref_force right*/
+                  m_ref_force_vec[1](0) = (1-alpha) * m_mg; /*ref_force left*/
               }
 #elif 0
               if( m_contactStates.data[ee_index_lr[EE_INDEX_RIGHT]] && m_contactStates.data[ee_index_lr[EE_INDEX_LEFT]] ) {
-                  ref_force[0](0) = m_mg2;
-                  ref_force[1](0) = m_mg2;
+                  m_ref_force_vec[0](0) = m_mg2;
+                  m_ref_force_vec[1](0) = m_mg2;
               }else{
-                  ref_force[0](0) = m_contactStates.data[ee_index_lr[EE_INDEX_RIGHT]]?(m_mg):0.0;     /*ref_force right*/
-                  ref_force[1](0) = m_contactStates.data[ee_index_lr[EE_INDEX_LEFT]]?(m_mg):0.0;     /*ref_force left */
+                  m_ref_force_vec[0](0) = m_contactStates.data[ee_index_lr[EE_INDEX_RIGHT]]?(m_mg):0.0;     /*ref_force right*/
+                  m_ref_force_vec[1](0) = m_contactStates.data[ee_index_lr[EE_INDEX_LEFT]]?(m_mg):0.0;     /*ref_force left */
               }
+#elif 1
+              /* m_robot_current->rootLink()->RはIMUのRollとPitchのみ考慮 */
+              m_ref_force_vec[EE_INDEX_LEFT] = m_robot_current->rootLink()->R.transpose() * hrp::Vector3(m_mg*ref_traj.footl_f[0],
+                                                                                             m_mg*ref_traj.footl_f[1],
+                                                                                             m_mg*ref_traj.footl_f[2]);
+              m_ref_force_vec[EE_INDEX_RIGHT] = m_robot_current->rootLink()->R.transpose() * hrp::Vector3(m_mg*ref_traj.footr_f[0],
+                                                                                              m_mg*ref_traj.footr_f[1],
+                                                                                              m_mg*ref_traj.footr_f[2]);
 #else
-              ref_force[0](0) = 0.0;
-              ref_force[1](0) = 0.0;
+              m_ref_force_vec[0](0) = 0.0;
+              m_ref_force_vec[1](0) = 0.0;
 #endif
           }
 
@@ -1828,8 +1901,10 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           m_robot->rootLink()->p = input_basePos;
           m_robot->rootLink()->R = input_baseRot;
 
-          ref_force[0](0) = m_ref_force[0].data[0]; /*ref_force right*/
-          ref_force[1](0) = m_ref_force[1].data[0]; /*ref_force left*/
+          //m_ref_force_vec[0](0) = m_ref_force[0].data[0]; /*ref_force right*/
+          //m_ref_force_vec[1](0) = m_ref_force[1].data[0]; /*ref_force left*/
+          m_ref_force_vec[EE_INDEX_LEFT] = hrp::Vector3::Zero();
+          m_ref_force_vec[EE_INDEX_RIGHT] = hrp::Vector3::Zero();
       } else { /* Transition state */
           for ( int i = 0; i < m_robot->numJoints(); i++ ) {
               //m_robot->joint(i)->q = m_qCurrent.data[i];
@@ -1957,9 +2032,9 @@ void PushRecover::printMembers(const int cycle){
         std::cout << MOVE_CURSOLN(4) << "[" << m_profile.instance_name << "] rel_ref_zmp=[";
         printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_rel_ref_zmp(0), m_rel_ref_zmp(1), m_rel_ref_zmp(2));
         std::cout << MOVE_CURSOLN(5) << "[" << m_profile.instance_name << "] ref_fource[0]=[";
-        printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", ref_force[0](0), ref_force[0](1), ref_force[0](2));
+        printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_ref_force_vec[0](0), m_ref_force_vec[0](1), m_ref_force_vec[0](2));
         std::cout << MOVE_CURSOLN(6) << "[" << m_profile.instance_name << "] ref_fource[1]=[";
-        printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", ref_force[1](0), ref_force[1](1), ref_force[1](2));
+        printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_ref_force_vec[1](0), m_ref_force_vec[1](1), m_ref_force_vec[1](2));
         std::cout << MOVE_CURSOLN(7) << "[" << m_profile.instance_name << "] act_rtp=[";
         printf("%+3.5lf, %+3.5lf, %+3.5lf]\n", m_act_root_pos(0), m_act_root_pos(1), m_act_root_pos(2));
         std::cout << "[" << m_profile.instance_name << "] act_cog=[";
