@@ -591,7 +591,7 @@ private:
 #ifdef USE_DATALOG
     //SimpleLogger *slogger;
     //SimpleLogger::DataLog  dlog;
-    data_logger_online<dlog::DataLog,false> dlogger;
+    data_logger_online<dlog::DataLog,true> dlogger;
     dlog::DataLog dlog;
 #endif
     bool                   dlog_save_flag;

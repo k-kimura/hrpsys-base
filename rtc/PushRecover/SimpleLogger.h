@@ -54,9 +54,9 @@ namespace dlog {
     }PACKING;
     //typedef hrp::Vector3 V3;
     struct DataLog {
+        float   sectime;
         float   frame;
         float   loop;
-        float   sectime;
         float   act_q[12];
         float   ref_q[12];
         float   ref_dq[12];
@@ -94,6 +94,8 @@ namespace dlog {
         V3      filtered_rot;
         V3      lpf_rot;
         V3      rot_offset;
+        V3      ref_force[2];
+        float   tau_ref[12];
     }PACKING;
 }
 
@@ -158,7 +160,8 @@ void* data_logger_online<Dlog,use_float>::dlog_thread_fun(void* arg){
 
   /* Open DataLog File  */
   FILE *fp;
-  char* homedir = getenv("HOME");
+  //char* homedir = getenv("HOME");
+  char* homedir = "/home/leus";
   char filename[256], cur_time_buf[14];
   //time_t now = time(NULL);
   //struct tm *pnow = localtime(&now);

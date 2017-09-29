@@ -970,38 +970,6 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     m_zmpOut.write();
     /* TODO */
     m_tauRef.tm = m_qRef.tm;
-    for(int i=0;i<2;i++){
-        hrp::dmatrix ee_J = hrp::dmatrix::Zero(6, 6);
-        m_pleg[i]->calcJacobian(ee_J);
-        Eigen::VectorXd ee_f = Eigen::VectorXd::Zero(6);
-        ee_f[0] = m_ref_force_vec[i][0];
-        ee_f[1] = m_ref_force_vec[i][1];
-        ee_f[2] = m_ref_force_vec[i][2];
-        ee_f[3] = 0.0;
-        ee_f[4] = 0.0;
-        ee_f[5] = 0.0;
-        const Eigen::VectorXd tauref = ee_J.transpose() * ee_f;
-        if(loop%500==0){
-            //std::cout << "[pr] refforce[0]=" << m_ref_force_vec[i].transpose() << std::endl;
-            //std::cout << "[pr] ee_f[" << i << "]=" << ee_f.transpose() << std::endl;
-            //std::cout << "[pr] ee_J[" << i << "]=\n" << ee_J << std::endl;
-            //std::cout << "[pr] taur[" << i << "]=" << tauref.transpose() << std::endl;
-        }
-        for(int j=0; j<6; j++){
-            m_tauRef.data[j+6*i] = tauref[j];
-        }
-    }
-    if(loop%500==0){
-        std::cout << "[pr] m_tauRef=[";
-        for(int i=0;i<m_robot->numJoints(); i++){
-            printf("%5.3lf",m_tauRef.data[i]);
-            if(i==m_robot->numJoints()-1){
-                std::cout << "]\n";
-            }else{
-                std::cout << ", ";
-            }
-        }
-    }
     // for ( int i = 0; i < m_robot->numJoints(); i++ ){
     //     m_tauRef.data[i] = 0.01*i;
     // }
@@ -1964,12 +1932,43 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #endif
   }/* Mutex locked region */
 
+  /* calc torque */
+  {
+      for(int i=0;i<2;i++){
+          hrp::dmatrix ee_J = hrp::dmatrix::Zero(6, 6);
+          m_pleg[i]->calcJacobian(ee_J);
+          Eigen::VectorXd ee_f = Eigen::VectorXd::Zero(6);
+          ee_f[0] = m_ref_force_vec[i][0];
+          ee_f[1] = m_ref_force_vec[i][1];
+          ee_f[2] = m_ref_force_vec[i][2];
+          ee_f[3] = 0.0;
+          ee_f[4] = 0.0;
+          ee_f[5] = 0.0;
+          const Eigen::VectorXd tauref = ee_J.transpose() * ee_f;
+          for(int j=0; j<6; j++){
+              m_tauRef.data[j+6*i] = tauref[j];
+          }
+      }
+      if(loop%500==0){
+          std::cout << "[pr] m_tauRef=[";
+          for(int i=0;i<m_robot->numJoints(); i++){
+              printf("%5.3lf",m_tauRef.data[i]);
+              if(i==m_robot->numJoints()-1){
+                  std::cout << "]\n";
+              }else{
+                  std::cout << ", ";
+              }
+          }
+      }
+  }/* calc torque*/
+
   /* Save log */
   if(true){
 #ifdef USE_DATALOG
+      dlog.sectime   = ((float)(tv.tv_sec-stv.tv_sec)) + ((float)(tv.tv_usec - stv.tv_usec)/1000000.0f);
+      //dlog.gclk       = ((((float)(tv.tv_sec-stv.tv_sec)) + ((float)(tv.tv_usec - stv.tv_usec)/1000000.0f)) * 1e8);
       dlog.frame      = (float)rate_matcher.getCurrentFrame();
       dlog.loop       = (float)loop;
-      dlog.sectime   = ((float)(tv.tv_sec-stv.tv_sec)) + ((float)(tv.tv_usec - stv.tv_usec)/1000000.0f);
       for(int i=0;i<12;i++){
           dlog.act_q[i]  = (float)rad2deg(m_qCurrent.data[i]);
           dlog.ref_q[i]  = (float)rad2deg(ref_q[i]);
@@ -1999,6 +1998,11 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       dlog.ref_basePos_modif  = CONV_HRPVEC3(m_ref_basePos_modif);
       dlog.act_world_root_pos = CONV_HRPVEC3(m_act_world_root_pos);
       //slogger->dump(&dlog);
+      dlog.ref_force[0]       = CONV_VEC3(m_ref_force_vec[EE_INDEX_LEFT]);
+      dlog.ref_force[1]       = CONV_VEC3(m_ref_force_vec[EE_INDEX_RIGHT]);
+      for(int i=0;i<12;i++){
+          dlog.tau_ref[i] = (float)m_tauRef.data[i];
+      }
       dlogger.push(dlog);
   }
 #endif
