@@ -495,8 +495,10 @@ private:
 };
 #endif
 
-#define CONV_HRPVEC3(v) (SimpleLogger::V3((float)v(0),(float)v(1),(float)v(2)))
-#define CONV_VEC3(v) (SimpleLogger::V3((float)v[0],(float)v[1],(float)v[2]))
+//#define CONV_HRPVEC3(v) (SimpleLogger::V3((float)v(0),(float)v(1),(float)v(2)))
+//#define CONV_VEC3(v) (SimpleLogger::V3((float)v[0],(float)v[1],(float)v[2]))
+#define CONV_HRPVEC3(v) (dlog::V3((float)v(0),(float)v(1),(float)v(2)))
+#define CONV_VEC3(v) (dlog::V3((float)v[0],(float)v[1],(float)v[2]))
 
 #undef PACKING
 
