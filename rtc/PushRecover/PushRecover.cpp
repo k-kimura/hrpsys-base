@@ -83,7 +83,8 @@ PushRecover::PushRecover(RTC::Manager* manager)
 // </rtc-template>
       m_simmode(0),
       m_generator_select(1),
-      m_debugLevel(0)
+      m_debugLevel(0),
+      dlogger(40*500)
 {
     m_service0.pushrecover(this);
     emergencyStopReqFlag = false;
@@ -177,7 +178,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   RTC::CorbaNaming naming(rtcManager.getORB(), nameServer.c_str());
 
 #ifdef USE_DATALOG
-    slogger = new SimpleLogger();
+  //slogger = new SimpleLogger();
     // printf("slogger ptr=%p, sizeof=%d\n", ((void*)slogger), sizeof(SimpleLogger));
     // for(int i=0;i<sizeof(SimpleLogger);i++){
     //     if(i%10==0){
@@ -485,7 +486,7 @@ RTC::ReturnCode_t PushRecover::onFinalize()
     delete transition_interpolator;
     delete m_pIKMethod;
 #ifdef USE_DATALOG
-    delete slogger;
+    //delete slogger;
 #endif
     return RTC::RTC_OK;
 }
@@ -1997,7 +1998,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       dlog.ref_zmp_modif      = CONV_HRPVEC3(ref_zmp_modif);
       dlog.ref_basePos_modif  = CONV_HRPVEC3(m_ref_basePos_modif);
       dlog.act_world_root_pos = CONV_HRPVEC3(m_act_world_root_pos);
-      slogger->dump(&dlog);
+      //slogger->dump(&dlog);
+      dlogger.push(dlog);
   }
 #endif
   /*==================================================*/
@@ -2255,6 +2257,10 @@ bool PushRecover::startLogging(void){
 
     //Guard guard(m_mutex);
 #ifdef USE_DATALOG
+#if 1 // dlogger version
+    result =  dlogger.startDumpFile();
+    return result;
+#else // slogger version
     if(!slogger->isRunning()){
         if(slogger->startLogging(true)){
             dlog_save_flag = true;
@@ -2271,6 +2277,7 @@ bool PushRecover::startLogging(void){
         result = false;
     }
     return result;
+#endif
 #else
     return true;
 #endif /* USE_DATALOG */
@@ -2278,8 +2285,8 @@ bool PushRecover::startLogging(void){
 
 bool PushRecover::stopLogging(void){
     bool result;
-    std::cout << "[" << m_profile.instance_name << "] " << __func__ << std::endl;
-
+    std::cout << "[" << m_profile.instance_name << "] " << __func__ << "\n This function is obsoleted." << std::endl;
+#if 0
     Guard guard(m_mutex);
     if(slogger->isRunning()){
         slogger->stopLogging();
@@ -2290,7 +2297,7 @@ bool PushRecover::stopLogging(void){
         std::cout << "[" << m_profile.instance_name << "] " << __func__ << ": There is no running logger" << std::endl;
         result = false;
     }
-
+#endif
     return result;
 }
 

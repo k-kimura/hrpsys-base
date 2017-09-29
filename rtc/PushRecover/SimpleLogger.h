@@ -1,7 +1,12 @@
 // -*- tab-width : 4 ; mode : C++ ; indent-tabs-mode : nil -*-
 #ifndef __SIMPLE_LOGGER_H__
 #define __SIMPLE_LOGGER_H__
-//#include <boost/circular_buffer.hpp>
+#include <stdlib.h>
+#include <iostream>
+#include <time.h>
+#include <boost/circular_buffer.hpp> //for data logger
+#include <pthread.h>
+
 #include <coil/Guard.h>
 
 #define MOVE_CURSOLN(x)         "\x1b["<< #x <<";0H"
@@ -34,6 +39,203 @@
 #define PDEF MAKE_CHAR_COLOR_DEFAULT
 
 #define PACKING __attribute__((__packed__))
+
+namespace dlog {
+    /* TODO check alignment */
+    struct V3 {
+        float x;
+        float y;
+        float z;
+        V3(){
+            x = y = z = 0.0f;
+        };
+        V3(float _x, float _y, float _z) : x(_x),y(_y),z(_z){
+        };
+    }PACKING;
+    //typedef hrp::Vector3 V3;
+    struct DataLog {
+        float   frame;
+        float   loop;
+        float   sectime;
+        float   act_q[12];
+        float   ref_q[12];
+        float   ref_dq[12];
+        V3       act_zmp;
+        V3       rel_act_zmp;
+        V3       ref_zmp;
+        V3       rel_ref_zmp;
+        V3       act_root_pos;
+        V3       ref_base_pos;
+        V3       act_cog;
+        V3       ref_cog;
+        V3       act_foot_origin_pos;
+        V3       ref_foot_origin_pos_l;
+        V3       ref_foot_origin_pos_r;
+        V3       sf_pref;
+        V3       sf_body_p;
+        V3       sf_footl_p;
+        V3       sf_footr_p;
+        float   act_force_l[6];
+        float   act_force_r[6];
+        float   ref_force_l[6];
+        float   ref_force_r[6];
+        float   act_contact_state[2];
+        float   contact_state[2];
+        float   walking_state;
+        float   controlSwingSupportTime[2];
+        float   sbpCogOffset[3];
+        V3      act_cogvel;
+        V3      ref_zmp_modif;
+        V3      ref_basePos_modif;
+        V3      act_world_root_pos;
+        V3      ref_traj_dp;
+        V3      ref_traj_body_dp;
+        V3      rpy;
+        V3      filtered_rot;
+        V3      lpf_rot;
+        V3      rot_offset;
+    }PACKING;
+}
+
+template<class Dlog, bool use_float>
+class data_logger_online {
+private:
+  boost::circular_buffer<Dlog> buf;
+  bool dumping_flag;
+  pthread_t dlog_thread;
+  static void* dlog_thread_fun(void* arg);
+  float progress;
+public:
+  data_logger_online(const int size) : buf(size), dumping_flag(false), progress(0.0){};
+  ~data_logger_online(){
+    if(dumping_flag){
+      if ( pthread_join ( dlog_thread, NULL ) ) {
+	/* スレッドのjoinに失敗 */
+	std::cerr << "[data_logger_online] failed to join pthread." << std::endl;
+      }
+    }
+  };
+  bool startDumpFile(void){
+    bool ret;
+    if(dumping_flag){
+      /* Currently running dlog thread. */
+      std::cerr << "[data_logger_online] already running dumping." << std::endl;
+      ret = false;
+    }else if(pthread_create(&dlog_thread, NULL, dlog_thread_fun, this)){
+      std::cerr << "[data_logger_online] failed to create pthread." << std::endl;
+      ret = false;
+    }else{
+      dumping_flag=true;
+      ret = true;
+    }
+    return ret;
+  };
+  void push(Dlog &v){
+    if(!dumping_flag){
+      /* push data if not dummping data into file. */
+      buf.push_back(v);
+    }
+  }; /*push()*/
+  float get_progress(void){
+    if(dumping_flag){
+      return progress;
+    }else{
+      return -1.0;
+    }
+  }; /*get_progress()*/
+};
+
+template<class Dlog, bool use_float>
+void* data_logger_online<Dlog,use_float>::dlog_thread_fun(void* arg){
+  data_logger_online<Dlog,use_float>* self = (data_logger_online<Dlog,use_float>*)arg;
+
+  /* To push this thread in Low-Priority */
+  sched_param param;
+  param.sched_priority = 0;
+  if( sched_setscheduler( 0, SCHED_OTHER, &param ) == -1 ){
+    printf("Error sched_setscheduler()\n");
+  }
+
+  /* Open DataLog File  */
+  FILE *fp;
+  char* homedir = getenv("HOME");
+  char filename[256], cur_time_buf[14];
+  //time_t now = time(NULL);
+  //struct tm *pnow = localtime(&now);
+
+  //printf("Openinig datalog.dat\n");
+  //Get current time
+  //sprintf(cur_time_buf, "%04d%02d%02d%02d%02d%02d", pnow->tm_year + 1900, pnow->tm_mon + 1, pnow->tm_mday, pnow->tm_hour, pnow->tm_min, pnow->tm_sec);
+  sprintf(filename,"%s/%s/%s",homedir,"log","datalog.dat");
+  //printf("%s\n",filename);
+  if((fp = fopen(filename,"w"))==NULL){
+    fprintf(stderr,"Error Cannot Open %s\n",filename);
+    self->dumping_flag=false;
+    return 0;
+    //exit(EXIT_FAILURE);
+  }
+  fprintf(fp,"#global_clock(1)");
+  fprintf(fp,"\n");
+
+#if 1
+  Dlog *v = self->buf.linearize();
+  int sizeof_element;
+  if(use_float){
+    sizeof_element = sizeof(float);
+  }else{
+    sizeof_element = sizeof(signed long);
+  }
+  const int datalen = sizeof(Dlog)/sizeof(float);
+  float counter = 0;
+  const float bufsize = self->buf.size();
+    
+  sleep(1);
+  for(int i=0;i<self->buf.size();i++,v++){
+    self->progress = 100.0*counter/bufsize;
+    int j;
+    if(use_float){
+      float *p_vd;
+      for(j=0, p_vd= ((float*)v);j<datalen;j++,p_vd++){
+	fprintf(fp,"%f",*p_vd);
+	if(j==datalen-1){
+	  fprintf(fp,"\n");
+	}else{
+	  fprintf(fp,", ");
+	}
+      }
+    }else{
+      signed long *p_vd;
+      for(j=0, p_vd= ((signed long*)v);j<datalen;j++,p_vd++){
+	if(j==0){
+	  /* j==0 and j==1 is 64bit gclk type */
+	  signed long long int* p_gclk = (signed long long int*)p_vd;
+	  fprintf(fp,"%lld",*p_gclk);
+	  if(j==datalen-1){
+	    fprintf(fp,"\n");
+	  }else{
+	    fprintf(fp,", ");
+	  }
+	}else if(j>1){
+	  /* j==1 is gclk upper half. */
+	  fprintf(fp,"%ld",*p_vd);
+	  if(j==datalen-1){
+	    fprintf(fp,"\n");
+	  }else{
+	    fprintf(fp,", ");
+	  }
+	}
+      }
+    }
+    counter++;
+  }
+#endif
+  fclose(fp);
+  std::cout << "[DataLogger] Done." << std::endl;
+  self->dumping_flag=false;
+
+  return 0;
+};
+
 
 #if 1
 class SimpleLogger {

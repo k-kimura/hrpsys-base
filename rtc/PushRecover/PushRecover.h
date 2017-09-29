@@ -589,8 +589,10 @@ private:
 #define USE_DATALOG
     //boost::shared_ptr<SimpleLogger> slogger;
 #ifdef USE_DATALOG
-    SimpleLogger *slogger;
-    SimpleLogger::DataLog  dlog;
+    //SimpleLogger *slogger;
+    //SimpleLogger::DataLog  dlog;
+    data_logger_online<dlog::DataLog,false> dlogger;
+    dlog::DataLog dlog;
 #endif
     bool                   dlog_save_flag;
     struct timeval         stv; /* time of OnInitialized */
