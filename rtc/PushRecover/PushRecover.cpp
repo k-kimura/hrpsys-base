@@ -1934,21 +1934,40 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
   /* calc torque */
   {
-      for(int i=0;i<2;i++){
+#if ROBOT==0
+#error "m_tauRef calculation is not defined."
+#elif ROBOT==1
+      { //calc Left
           hrp::dmatrix ee_J = hrp::dmatrix::Zero(6, 6);
-          m_pleg[i]->calcJacobian(ee_J);
+          m_pleg[EE_INDEX_LEFT]->calcJacobian(ee_J);
           Eigen::VectorXd ee_f = Eigen::VectorXd::Zero(6);
-          ee_f[0] = m_ref_force_vec[i][0];
-          ee_f[1] = m_ref_force_vec[i][1];
-          ee_f[2] = m_ref_force_vec[i][2];
+          ee_f[0] = m_ref_force_vec[EE_INDEX_LEFT][0];
+          ee_f[1] = m_ref_force_vec[EE_INDEX_LEFT][1];
+          ee_f[2] = m_ref_force_vec[EE_INDEX_LEFT][2];
           ee_f[3] = 0.0;
           ee_f[4] = 0.0;
           ee_f[5] = 0.0;
           const Eigen::VectorXd tauref = ee_J.transpose() * ee_f;
           for(int j=0; j<6; j++){
-              m_tauRef.data[j+6*i] = tauref[j];
+              m_tauRef.data[j+6] = tauref[j];
           }
       }
+      { //calc Right
+          hrp::dmatrix ee_J = hrp::dmatrix::Zero(6, 6);
+          m_pleg[EE_INDEX_RIGHT]->calcJacobian(ee_J);
+          Eigen::VectorXd ee_f = Eigen::VectorXd::Zero(6);
+          ee_f[0] = m_ref_force_vec[EE_INDEX_RIGHT][0];
+          ee_f[1] = m_ref_force_vec[EE_INDEX_RIGHT][1];
+          ee_f[2] = m_ref_force_vec[EE_INDEX_RIGHT][2];
+          ee_f[3] = 0.0;
+          ee_f[4] = 0.0;
+          ee_f[5] = 0.0;
+          const Eigen::VectorXd tauref = ee_J.transpose() * ee_f;
+          for(int j=0; j<6; j++){
+              m_tauRef.data[j] = tauref[j];
+          }
+      }
+#endif
       if(loop%500==0){
           std::cout << "[pr] m_tauRef=[";
           for(int i=0;i<m_robot->numJoints(); i++){
