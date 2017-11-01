@@ -120,7 +120,7 @@ void* ReactivePatternGenerator::func(void* arg){
                                   FastFootTrajectoryGenerator<SWING_TABLE_SIZE>::FootTrajectoryAccel,
                                   FootAccelEvaluator, Modifier > RWG;
 #endif
-    _CRT_ALIGN(64) LinkParam link_param( m, c, I );
+    _CRT_ALIGN(64) LinkParam link_param( link_param::m, link_param::c, link_param::I );
 
     // パラメータ
     TrajectoryEvalParam params_lfirst(

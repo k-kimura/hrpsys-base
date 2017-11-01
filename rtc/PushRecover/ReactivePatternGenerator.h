@@ -12,6 +12,7 @@
 #include "PatternGenerator.h"
 
 #define STEP_NUM 5
+using namespace pattern_generator;
 
 class ReactivePatternGenerator : public IPatternGenerator {
     pthread_t m_thread; /* Reactive Walk Generatorは専用スレッドにて実効する */

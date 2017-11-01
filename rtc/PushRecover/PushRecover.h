@@ -40,6 +40,8 @@
 #include "BodyIKMethod.h"
 #include "ReactivePatternGenerator.h"
 #include "OnlinePatternGenerator.h"
+#include "RobustOnlinePatternGenerator.h"
+#include "AbsolutePoseEstimator.h"
 #include "interpolator.h"  /* from hrpsys/rtc/SequencePlayer */
 #include "FrameRateMatcher.h"
 #include "SimpleLogger.h"
@@ -64,6 +66,7 @@
 using namespace RTC;
 
 #define DEBUGP(x) ((m_debugLevel==1 && loop%x==0) || m_debugLevel > 1 )
+#define USE_ROBUST_ONLINE_PATTERN_GENERATOR
 
 /**
    \brief sample RT component which has one data input port and one data output port
@@ -181,6 +184,9 @@ public:
         T body_dp;
         T footl_f;
         T footr_f;
+        T body_rpy;
+        T footl_rpy;
+        T footr_rpy;
         TrajectoryElement(){};
         template<class U>
         TrajectoryElement<T>& operator=(const TrajectoryElement<U>& lhs){
@@ -192,6 +198,9 @@ public:
             this->footr_f = lhs.footr_f;
             this->dp      = lhs.dp;
             this->body_dp = lhs.body_dp;
+            this->body_rpy = lhs.body_rpy;
+            this->footl_rpy = lhs.footl_rpy;
+            this->footr_rpy = lhs.footr_rpy;
             return *this;
         };
         void clear(void){
@@ -203,6 +212,9 @@ public:
             footr_f = T(0.0,0.0,0.0);
             dp      = T(0.0,0.0,0.0);
             body_dp = T(0.0,0.0,0.0);
+            body_rpy = T(0.0,0.0,0.0);
+            footl_rpy = T(0.0,0.0,0.0);
+            footr_rpy = T(0.0,0.0,0.0);
         };
     };
 
@@ -311,6 +323,29 @@ public:
                                        );
             p_owpg->modifyFirstMagnity( onlineWalkParam.owpg_modify_first_magnity );
         };
+        void copyWalkParam( RobustOnlinePatternGenerator *p_owpg ) const{
+            OnlinePatternGenerator::WalkParam wp;
+            wp.step_time     = p_owpg->convMsecToFrame( onlineWalkParam.owpg_step_time );
+            wp.step_margin   = p_owpg->convMsecToFrame( onlineWalkParam.owpg_step_margin );
+            wp.iterate_num   = onlineWalkParam.owpg_iterate_num;
+            wp.feedback_gain = onlineWalkParam.owpg_feedback_gain;
+
+            wp.zmp_modify_x_max = onlineWalkParam.owpg_zmp_modify_x_max;
+            wp.zmp_modify_y_max = onlineWalkParam.owpg_zmp_modify_y_max;
+            wp.xstep_max        = onlineWalkParam.owpg_xstep_max;
+            wp.ystep_max        = onlineWalkParam.owpg_ystep_max;
+            wp.rot_offset_threshold_x = onlineWalkParam.owpg_rot_offset_threshold_x;
+            wp.rot_offset_threshold_y = onlineWalkParam.owpg_rot_offset_threshold_y;
+            wp.rot_offset_gain_x = onlineWalkParam.owpg_rot_offset_gain_x;
+            wp.rot_offset_gain_y = onlineWalkParam.owpg_rot_offset_gain_y;
+
+            p_owpg->setWalkParam(wp);
+            p_owpg->modifyFilterParam( onlineWalkParam.filter_fp,
+                                       onlineWalkParam.lpf_fp
+                                       );
+            p_owpg->modifyFirstMagnity( onlineWalkParam.owpg_modify_first_magnity );
+            p_owpg->setBodyGain(onlineWalkParam.body_roll_gain, onlineWalkParam.body_pitch_gain);
+        };
         void copyWalkParam( OpenHRP::PushRecoverService::OnlineWalkParam *o_param ) const{
             o_param->owpg_step_time      = onlineWalkParam.owpg_step_time;
             o_param->owpg_step_margin    = onlineWalkParam.owpg_step_margin;
@@ -353,6 +388,8 @@ protected:
     std::vector<TimedDoubleSeq> m_force;
     std::vector<TimedDoubleSeq> m_ref_force;
     TimedOrientation3D m_rpy;
+    TimedAngularVelocity3D m_rate;
+    TimedAcceleration3D m_acc;
     TimedPoint3D m_basePos;
     TimedOrientation3D m_baseRpy;
     TimedPose3D m_basePose;
@@ -380,6 +417,8 @@ protected:
     RTC::InPort<TimedPoint3D> m_zmpIn;
     std::vector<RTC::InPort<TimedDoubleSeq> *> m_forceIn;
     std::vector<RTC::InPort<TimedDoubleSeq> *> m_ref_forceIn;
+    RTC::InPort<TimedAngularVelocity3D> m_rateIn;
+    RTC::InPort<RTC::TimedAcceleration3D> m_accIn;
     RTC::InPort<TimedOrientation3D> m_rpyIn;
     RTC::InPort<TimedLong> m_emergencySignalIn;
 
@@ -471,6 +510,8 @@ private:
     /* Estimated state data */
     hrp::Vector3 m_est_cogvel_from_rpy;
 
+    JointAngleBuffer<LegIKParam> m_ready_joint_angle;
+
     /* Joystick WatchDog Timer */
     struct JoyState {
         bool enabled;
@@ -491,7 +532,8 @@ private:
 
     /* Reference Data buffer */
     //double        *ref_q,   *prev_ref_q;
-    double        ref_q[12],   prev_ref_q[12];
+    //double        m_ref_q[12],   m_prev_ref_q[12], m_ref_q_store[12];
+    JointAngleBuffer<LegIKParam> m_ref_q, m_prev_ref_q, m_ref_q_store;
     hrp::Vector3  m_rel_ref_zmp, m_prev_rel_ref_zmp; // ref zmp in base frame
     boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > ref_zmp_modif_filter;
     boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> > ref_basePos_modif_filter;
@@ -530,7 +572,14 @@ private:
     FrameRateMatcher rate_matcher;
 
     ReactivePatternGenerator stpf;
+#if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
     OnlinePatternGenerator   m_owpg;
+#else
+    RobustOnlinePatternGenerator   m_owpg;
+#endif
+    AbsolutePoseEstimator<LegIKParam,LEG_IK_TYPE>    m_abs_est;
+    //boost::array<float, 12> qs, Dqs, DDqs;
+
     BodyControlContext ctx, cty;
     PatternState m_owpg_state;
     ControlState m_owpg_cstate;
@@ -591,8 +640,10 @@ private:
 #ifdef USE_DATALOG
     //SimpleLogger *slogger;
     //SimpleLogger::DataLog  dlog;
-    data_logger_online<dlog::DataLog,true> dlogger;
-    dlog::DataLog dlog;
+    data_logger_online<dlog::DataLog_20171023,true> dlogger;
+    //data_logger_online<dlog::DataLog,true> dlogger;
+    //dlog::DataLog dlog;
+    dlog::DataLog_20171023 dlog;
 #endif
     bool                   dlog_save_flag;
     struct timeval         stv; /* time of OnInitialized */
@@ -616,12 +667,17 @@ private:
                                                  const hrp::Vector3 &ref_basePos_modif);
     inline void selectSimmodeControlValue(const int mode, hrp::Vector3 &basepos_modif, hrp::Vector3 &basepos_vel);
     inline void extractSwingSupportTime(double* time){
+#if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
         const F64vec2 tv = m_owpg.getSwingSupportTime(0);
+#else
+        const F64vec2 tv = m_owpg.getSwingSupportTime(0);
+#endif
         time[0] = tv[0];
         time[1] = tv[1];
     };
     inline void modifyFootHeight(const bool on_ground, ModifyTrajectoryContext &context, TrajectoryElement<Vec3e> &ref_traj);
     inline void interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, OnlinePatternGenerator* p_owpg) const;
+    inline void interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, RobustOnlinePatternGenerator* p_owpg) const;
     void printMembers(const int cycle);
 };
 
@@ -746,7 +802,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
         {
             const float ystep = InitialLfoot_p[1];
             const int   step_time = m_modify_rot_context.onlineWalkParam.owpg_step_time;
-            OnlinePatternGenerator::StepCommandList steps;
+            StepCommandList steps;
             switch(m_simmode){
             case 0:
                 std::cout << "[pr] StopCommand" << std::endl;
@@ -754,69 +810,69 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
             case 1:
                 std::cout << "[pr] DEMO Step" << std::endl;
                 std::cout << "[pr] Forward Step(Right first)" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.005f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.005f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.005f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.005f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.005f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.005f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.005f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.005f, +ystep*2 , 0.0f)) );
                 break;
             case 2:
                 std::cout << "[pr] Forward Step(Right first)" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
                 break;
             case 3:
                 std::cout << "[pr] Back Step(Right first)" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
                 break;
             case 4:
                 std::cout << "[pr] Forward Step(Left first)" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
                 break;
             case 5:
                 std::cout << "[pr] Back Step(Left first)" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(-0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(-0.08f, -ystep*2 , 0.0f)) );
                 break;
             case 6:
                 std::cout << "[pr] Left Step" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, 0.06+ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, 0.06-ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, 0.06+ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, 0.06-ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, 0.06+ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, 0.06-ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, 0.06+ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, 0.06-ystep*2 , 0.0f)) );
                 break;
             case 7:
                 std::cout << "[pr] Right Step" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, -0.06-ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, -0.06+ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, -0.06-ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, -0.06+ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, -0.06-ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, -0.06+ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.0f, -0.06-ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.0f, -0.06+ystep*2 , 0.0f)) );
                 break;
             case 8:
                 std::cout << "[pr] Fast Forward Step(Right first)" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(500),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(500), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(500),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(500), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(500),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
                 break;
             case 9:
                 std::cout << "[pr] switched to idle mode" << std::endl;
                 break;
             default:
                 std::cout << "[pr] default step" << std::endl;
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
-                steps.push_back( (OnlinePatternGenerator::UnitStepCommandPtr) new OnlinePatternGenerator::UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time), -1, Vec3(0.08f, -ystep*2 , 0.0f)) );
+                steps.push_back( (UnitStepCommandPtr) new UnitStepCommand(m_owpg.convMsecToFrame(step_time),  1, Vec3(0.08f, +ystep*2 , 0.0f)) );
             }
             if(steps.size()>0){
                 m_owpg.pushSteps( steps );
@@ -825,9 +881,15 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     }
 
     if(m_owpg.isComplete() == true && m_prev_owpg_isComplete == false){
+        const Vec3 body_p_diff_offset = m_owpg_state.body_p - (Vec3)((m_owpg_state.foot_l_p+m_owpg_state.foot_r_p).array()*0.5f);
+
         m_body_p_at_start      += hrp::Vector3(m_owpg_state.body_p[0],
                                                m_owpg_state.body_p[1],
-                                               m_owpg_state.body_p[2]);
+                                               m_owpg_state.body_p[2])
+            -
+            hrp::Vector3(body_p_diff_offset[0],
+                         body_p_diff_offset[1],
+                         body_p_diff_offset[2]);
         m_body_p_diff_at_start += hrp::Vector3(m_owpg_state.p[0],
                                                m_owpg_state.p[1],
                                                m_owpg_state.p[2]);
@@ -838,8 +900,45 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
                                                m_owpg_state.foot_r_p[1],
                                                m_owpg_state.foot_r_p[2]);
         rate_matcher.setCurrentFrame(0);
+        m_abs_est.reset_estimation(&m_ready_joint_angle[0]);
     }
     m_prev_owpg_isComplete = m_owpg.isComplete();
+
+
+#if defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
+    {
+        PoseState pose_state;
+        m_abs_est.getAbsolutePoseState(pose_state);
+
+#if 0
+        const Vec3 body_p_offset = Vec3(m_body_p_at_start[0], m_body_p_at_start[1], 0.0f);
+        const Vec3 footl_p_offset = Vec3(m_footl_p_at_start[0],
+                                         m_footl_p_at_start[1] - LegIKParam::InitialLfoot_p[1],
+                                         m_footl_p_at_start[2]);
+        const Vec3 footr_p_offset = Vec3(m_footr_p_at_start[0],
+                                         m_footr_p_at_start[1] - LegIKParam::InitialRfoot_p[1],
+                                         m_footr_p_at_start[2]);
+#else
+        const Vec3 body_p_offset = Vec3::Zero() + Vec3(traj_body_init[0], 0.0f, 0.0f);
+        const Vec3 footl_p_offset = Vec3::Zero();
+        const Vec3 footr_p_offset = Vec3::Zero();
+#endif
+        UpdateState ustate;
+        ustate.pref     = Vec3::Zero();
+        ustate.zmp      = pose_state.zmp;
+        ustate.com_p    = -body_p_offset + Vec3(pose_state.body.p[0], pose_state.body.p[1], 0.0f);
+        ustate.com_dp   = Vec3::Zero();
+        ustate.rot      =  bodylink::rot2rpy<bodylink::ROBOTICS>(pose_state.body.R);
+        ustate.rate     = pose_state.body.rate;
+        ustate.foot_l_p = -footl_p_offset + pose_state.footl.p;
+        ustate.foot_r_p = -footr_p_offset + pose_state.footr.p;
+        ustate.foot_contact_state[0] = pose_state.foot_state[0];
+        ustate.foot_contact_state[1] = pose_state.foot_state[1];
+        ustate.foot_l_rpy = bodylink::rot2rpy<bodylink::ROBOTICS>(pose_state.footl.R);
+        ustate.foot_r_rpy = bodylink::rot2rpy<bodylink::ROBOTICS>(pose_state.footr.R);
+        m_owpg.update(ustate);
+    }
+#endif
 
     const int inc_frame = (int)(m_dt*1000);
     // if(loop%500==0){
@@ -851,17 +950,33 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     {
         //const bool idle_state = m_simmode==0?false:true; /* TODO */
         const bool idle_state = m_joystate.keep_idle?true:m_simmode==0?false:true; /* TODO */
+#if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
         m_owpg.incrementFrameNoIdle2<LegIKParam,LEG_IK_TYPE,0>(inc_frame, m_owpg_state, m_owpg_cstate, idle_state);
+#else
+        m_owpg.incrementFrame<LegIKParam,LEG_IK_TYPE,0>(inc_frame, m_owpg_state, idle_state);
+#endif
     }
 
     ref_traj.p       = Vec3(m_owpg_state.p);
     ref_traj.body_p  = Vec3(m_owpg_state.body_p);
+#if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
     ref_traj.footl_p = Vec3(m_owpg_state.foot_l_p);
     ref_traj.footr_p = Vec3(m_owpg_state.foot_r_p);
+#else
+    ref_traj.footl_p = Vec3(m_owpg_state.foot_l_p_mod);
+    ref_traj.footr_p = Vec3(m_owpg_state.foot_r_p_mod);
+#endif
 
     ref_traj.footl_f = Vec3(m_owpg_state.foot_l_f);
     ref_traj.footr_f = Vec3(m_owpg_state.foot_r_f);
 
+#if defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
+    ref_traj.body_rpy  = Vec3(m_owpg_state.body_rpy);
+    ref_traj.footl_rpy = m_owpg_state.foot_l_rpy_mod;
+    ref_traj.footr_rpy = m_owpg_state.foot_r_rpy_mod;
+#endif
+
+#if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
     {
         const Vec3 rot_rp  = Vec3(act_base_rpy[0], act_base_rpy[1], act_base_rpy[2] );
         const Vec3 rate    = Vec3(0.0f,0.0f,0.0f);
@@ -881,6 +996,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
         m_owpg_cstate.pxstate->body_q[1] = m_act_cogvel[0];
         m_owpg_cstate.pystate->body_q[1] = m_act_cogvel[1];
     }
+#endif
 
     /* calc the trajectory velocity dp and body_dp */
     {
@@ -900,7 +1016,7 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     _MM_ALIGN16 Mat3 body_R            = Mat3::identity();
 #elif defined(__GNUC__)
     //TODO ここはIdentityを使うよりもKFからの姿勢を使うのが良いかも。
-#if 1
+#if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
     _MM_ALIGN16 float c[4],s[4];
     bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.rot_offset[0] * m_modify_rot_context.onlineWalkParam.body_roll_gain,
                                            m_modify_rot_context.rot_offset[1] * m_modify_rot_context.onlineWalkParam.body_pitch_gain,
@@ -915,6 +1031,14 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
         std::cout << "body_R=\n" << body_R << std::endl;
     }
 #endif
+#elif 1
+    _MM_ALIGN16 float c[4],s[4];
+    bodylink::sincos_ps( bodylink::F32vec4(ref_traj.body_rpy[0] * m_modify_rot_context.onlineWalkParam.body_roll_gain,
+                                           ref_traj.body_rpy[1] * m_modify_rot_context.onlineWalkParam.body_pitch_gain,
+                                           m_modify_rot_context.rot_offset[2],
+                                           0.0f),
+                         (bodylink::v4sf*)s, (bodylink::v4sf*)c );
+    const Mat3 body_R                  = rotateMat3<1>( c[1], s[1] )*rotateMat3<0>( c[0], s[0] );
 #elif 0
     _MM_ALIGN16 float c[4],s[4];
     bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.lpf_rot[0]*-0.900f,
@@ -928,14 +1052,7 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     const Mat3 body_R                  = Mat3::Identity();
 #endif
 #endif
-#if 1
-    float foot_l_roll, foot_r_roll;
-    float foot_l_pitch, foot_r_pitch;
-    //foot_l_roll = foot_r_roll = m_modify_rot_context.rot_offset[0];
-    //foot_l_pitch = foot_r_pitch = m_modify_rot_context.rot_offset[1];
-    foot_l_roll = foot_r_roll = 0.0f;
-    foot_l_pitch = foot_r_pitch = 0.0f;
-#else
+#if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
     float foot_l_roll;
     float foot_r_roll;
     if(m_modify_rot_context.transition_state){
@@ -954,6 +1071,22 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
         foot_l_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.onlineWalkParam.foot_pitch_gain;
         foot_r_pitch            = -m_modify_rot_context.filtered_rot[1] * m_modify_rot_context.onlineWalkParam.foot_pitch_gain;
     }
+#elif 1
+    float foot_l_roll, foot_r_roll;
+    float foot_l_pitch, foot_r_pitch;
+    foot_l_roll = ref_traj.footl_rpy[0];
+    foot_r_roll = ref_traj.footr_rpy[0];
+    foot_l_pitch = ref_traj.footl_rpy[1];
+    foot_r_pitch = ref_traj.footr_rpy[1];
+#elif 0
+    float foot_l_roll, foot_r_roll;
+    float foot_l_pitch, foot_r_pitch;
+    //foot_l_roll = foot_r_roll = m_modify_rot_context.rot_offset[0];
+    //foot_l_pitch = foot_r_pitch = m_modify_rot_context.rot_offset[1];
+    foot_l_roll = foot_r_roll = 0.0f;
+    foot_l_pitch = foot_r_pitch = 0.0f;
+#else
+#error "foot rpy is not calculated"
 #endif
     const Vec3 basePos_modif           = Vec3(ref_basePos_modif(0),
                                               ref_basePos_modif(1),
@@ -979,30 +1112,8 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     for(int i=0;i < 12; i++){
         m_robot->joint(i)->q = target_joint_angle[i];  /* rad to rad */
         g_ready_joint_angle[i] = target_joint_angle[i];
-
-        // if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(std::isnan(m_robot->joint(i)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
-        //     std::cerr << "[PR] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
-        //     error_flag = true;
-        // }
     }
-    // if(error_flag){
-    //     std::cerr << "[PR] body_p  =" << ref_traj.body_p.transpose() << std::endl;
-    //     std::cerr << "[PR] footl_p =" << ref_traj.footl_p.transpose() << std::endl;
-    //     std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
-    // }
 #elif ROBOT==1
-    // if(loop%500==0){
-    //     printf("\n[pr] exec jq  =[");
-    //     for ( int i = 0; i < m_robot->numJoints(); i++ ){
-    //         printf("%+3.1lf",rad2deg(target_joint_angle[i]));
-    //         if(i==m_robot->numJoints()-1){
-    //             printf("]\n");
-    //         }else{
-    //             printf(", ");
-    //         }
-    //     }
-    // }
-
     //bool error_flag = false;
     /* set target_joint_angle */
     for(int i=0;i < 6; i++){
@@ -1012,20 +1123,7 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
         /* ready_joint_angle is the same alignment. */
         g_ready_joint_angle[i]   = target_joint_angle[i];
         g_ready_joint_angle[i+6] = target_joint_angle[i+6];
-        // if((m_robot->joint(i)->q > 10.0)||(m_robot->joint(i)->q < -10.0)||(std::isnan(m_robot->joint(i)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
-        //     std::cerr << "[PR] joint(" << i << ") = " << m_robot->joint(i)->q << std::endl;
-        //     error_flag = true;
-        // }
-        // if((m_robot->joint(i+6)->q > 10.0)||(m_robot->joint(i+6)->q < -10.0)||(std::isnan(m_robot->joint(i+6)->q))||(!(std::isfinite(m_robot->joint(i)->q)))){
-        //     std::cerr << "[PR] joint(" << i+6 << ") = " << m_robot->joint(i+6)->q << std::endl;
-        //     error_flag = true;
-        // }
     }
-    // if(error_flag){
-    //     std::cerr << "[PR] body_p  =" << ref_traj.body_p.transpose() << std::endl;
-    //     std::cerr << "[PR] footl_p =" << ref_traj.footl_p.transpose() << std::endl;
-    //     std::cerr << "[PR] footr_p =" << ref_traj.footr_p.transpose() << std::endl;
-    // }
 #else
 #error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"
 #endif
@@ -1326,6 +1424,35 @@ void PushRecover::modifyFootHeight(const bool on_ground, ModifyTrajectoryContext
 };
 
 void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, OnlinePatternGenerator* p_owpg) const{
+    JoyCommand command;
+    if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){
+        jstate.enabled = true;
+    }else if( (buttons.data[2]==1) && (jstate.enabled==true) ){
+        jstate.enabled = false;
+    }
+    if( buttons.data[0] == 1 ){
+        jstate.keep_idle = true;
+    }else{
+        jstate.keep_idle = false;
+    }
+
+    command.x = -axes.data[1];
+    command.y = -axes.data[0];
+
+    if( jstate.enabled && loop%10==0 ){
+        p_owpg->command(command);
+    }
+
+    jstate.prev_command = command;
+
+#ifdef DEBUG_HOGE
+    if( loop%200==0 ){
+        std::cout << "[pr] joycommand [" << command.x << ", " << command.y << std::endl;
+    }
+#endif
+};
+
+void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, RobustOnlinePatternGenerator* p_owpg) const{
     JoyCommand command;
     if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){
         jstate.enabled = true;

@@ -24,6 +24,7 @@
 #if defined(ROBOT)
 #if ROBOT==0
 #if 1
+// TODO : Use IKParam.InitialLfoot_p;
 /// 左脚先座標の初期値
 const static Vec3 InitialLfoot_p(-0.015,  0.10, 0.1045);
 /// 右脚先座標の初期値
@@ -36,6 +37,7 @@ const static Vec3 InitialRfoot_p(-0.015,  -0.095, 0.1045);
 #endif
 #elif ROBOT==1
 #if 1
+// TODO : Use IKParam.InitialLfoot_p;
 /// 左脚先座標の初期値
 const static Vec3 InitialLfoot_p(0.0,   0.120, 0.1335);
 /// 右脚先座標の初期値
@@ -70,6 +72,7 @@ static float g_ready_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.5
 };
 //const static Vec3 traj_body_init( -0.0586f, 0.0f, Zc - InitialLfoot_p[2]);
 const static Vec3 traj_body_init( -0.0445f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - g_CoG_offset[2]);
+//const static Vec3 traj_body_init( 0.0, 0.0f, Zc);
 //const static Vec3 traj_body_init( -0.0445f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - InitialLfoot_p[2] - g_CoG_offset[2]);
 //const static Vec3 traj_body_init( -0.0695f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - InitialLfoot_p[2] - g_CoG_offset[2]);
 
@@ -99,27 +102,28 @@ const static Vec3 body_p_default_offset(0.0f, 0.0f, 0.0f);
 const static Vec3 default_zmp_offset_l(traj_body_init[0],0.0f,0.0f);
 const static Vec3 default_zmp_offset_r(traj_body_init[0],0.0f,0.0f);
 
-
+#if 0
 inline float rad2deg(const float a){
 #if defined(__INTEL_COMPILER)||defined(__ICC)
     return a * (180.0f / Q_PI);
 #elif defined(__GNUC__)
-    return a * (180.0f / S_PI);
+    return a * (180.0f / bodylink::S_PI);
 #endif
 };
 inline float deg2rad(const float a){
 #if defined(__INTEL_COMPILER)||defined(__ICC)
     return a * (Q_PI / 180.0f);
 #elif defined(__GNUC__)
-    return a * (S_PI / 180.0f);
+    return a * (bodylink::S_PI / 180.0f);
 #endif
 };
+#endif
 
 /* IIKMethod, BodyIKMethod LinkIKParam are from ikfk_controller.h.cpp */
 #if defined(ROBOT)
 #if ROBOT==0
-typedef TestIKParam LegIKParam;
-//typedef LzeroIKParam LegIKParam;
+//typedef TestIKParam LegIKParam;
+typedef LzeroIKParam LegIKParam;
 #define LEG_IK_TYPE IK_LEG_TYPE_A
 #elif ROBOT==1
 typedef LoneIKParam LegIKParam;
@@ -173,8 +177,8 @@ public:
 #elif defined(__GNUC__)
                 _MM_ALIGN16 float c[4],s[4];
                 bodylink::sincos_ps( bodylink::F32vec4(footl_pitch,footr_pitch,0.0f,0.0f), (bodylink::v4sf*)s, (bodylink::v4sf*)c );
-                const Mat3 footl_R = rotateMat3<1>( c[0], s[0] );
-                const Mat3 footr_R = rotateMat3<1>( c[1], s[1] );
+                const Mat3 footl_R = bodylink::rotateMat3<1>( c[0], s[0] );
+                const Mat3 footr_R = bodylink::rotateMat3<1>( c[1], s[1] );
                 loop++;
 //                 if(loop%1000==0){
 // #if ROBOT==0
@@ -200,8 +204,9 @@ public:
         {
                 _MM_ALIGN16 float c[4],s[4];
                 bodylink::sincos_ps( bodylink::F32vec4(footl_pitch,footr_pitch,footl_roll,footr_roll), (bodylink::v4sf*)s, (bodylink::v4sf*)c );
-                const Mat3 footl_R = rotateMat3<1>( c[0], s[0] )*rotateMat3<0>( c[2], s[2] );
-                const Mat3 footr_R = rotateMat3<1>( c[1], s[1] )*rotateMat3<0>( c[3], s[3] );
+                const Mat3 footl_R = bodylink::rotateMat3<1>( c[0], s[0] )*bodylink::rotateMat3<0>( c[2], s[2] );
+                const Mat3 footr_R = bodylink::rotateMat3<1>( c[1], s[1] )*bodylink::rotateMat3<0>( c[3], s[3] );
+
                 loop++;
                 Vec3 body_pos = InitialBody_p + ref_pos;
                 ik_legLR<LegIKParam,LEG_IK_TYPE>(
