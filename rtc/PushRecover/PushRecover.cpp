@@ -1574,7 +1574,7 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
 }; /* controlBodyCompliance */
 
 void PushRecover::trajectoryReset(void){
-    m_abs_est.reset_estimation(&m_ready_joint_angle[0]);
+    m_abs_est.reset_estimation<true>(&m_ready_joint_angle[0]);
     m_act_world_root_pos   = hrp::Vector3(traj_body_init[0],
                                           traj_body_init[1],
                                           //traj_body_init[2] + InitialLfoot_p[2]
@@ -1774,7 +1774,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           PoseState pose_state;
           m_abs_est.getAbsolutePoseState(pose_state);
 
-          if( loop%500==0 ){
+          //if( loop%500==0 ){
+          if( 0 ){
               std::cout << "[pr] zmp="<< abs_zmp.transpose() << ", contact=" << abs_contact_state.transpose() << std::endl;
               Vec3 fl,ml,fr,mr;
               m_abs_est.getWorldForce(fl,ml,fr,mr);

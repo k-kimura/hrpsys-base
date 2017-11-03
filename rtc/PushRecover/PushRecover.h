@@ -900,7 +900,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
                                                m_owpg_state.foot_r_p[1],
                                                m_owpg_state.foot_r_p[2]);
         rate_matcher.setCurrentFrame(0);
-        m_abs_est.reset_estimation(&m_ready_joint_angle[0]);
+        m_abs_est.reset_estimation<false>(&m_ready_joint_angle[0]);
     }
     m_prev_owpg_isComplete = m_owpg.isComplete();
 
@@ -928,7 +928,11 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
         ustate.zmp      = pose_state.zmp;
         ustate.com_p    = -body_p_offset + Vec3(pose_state.body.p[0], pose_state.body.p[1], 0.0f);
         ustate.com_dp   = Vec3::Zero();
+#if 0
         ustate.rot      =  bodylink::rot2rpy<bodylink::ROBOTICS>(pose_state.body.R);
+#else
+        ustate.rot      =  pose_state.body.rp_filtered;
+#endif
         ustate.rate     = pose_state.body.rate;
         ustate.foot_l_p = -footl_p_offset + pose_state.footl.p;
         ustate.foot_r_p = -footr_p_offset + pose_state.footr.p;
