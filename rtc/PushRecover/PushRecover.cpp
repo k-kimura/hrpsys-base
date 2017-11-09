@@ -214,7 +214,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
                     << m_profile.instance_name << std::endl;
           return RTC::RTC_ERROR;
       }
-  }
+ }
   {
       m_robot_current = hrp::BodyPtr(new hrp::Body());
       if (!loadBodyFromModelLoader(m_robot_current, prop["model"].c_str(),
@@ -478,7 +478,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   m_modify_rot_context.copyWalkParam( &m_owpg );
 //#error "m_owpg is used"
 #else
-  m_owpg.setModifyThre(5e-3);
+  m_owpg.setModifyThre(20e-3);
   m_modify_rot_context.copyWalkParam( &m_owpg );
 #endif
 
@@ -1873,7 +1873,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               // modifyTrajectoryRot(enable_modify, on_ground,
               //                     m_modify_rot_context,
               //                     ref_traj);
-              modifyFootHeight(on_ground, m_modify_rot_context, ref_traj);
+              //modifyFootHeight(on_ground, m_modify_rot_context, ref_traj);
               break;
           default:
               ref_traj = m_prev_ref_traj;
@@ -2138,6 +2138,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       for(int i=0;i<12;i++){
           dlog.tau_ref[i] = (float)m_tauRef.data[i];
       }
+      dlog.x_offset      = dlog::V3( m_owpg.getXOffset() );
+      dlog.x_offset_orig = dlog::V3( m_owpg.getXOffsetOrig() );
       dlogger.push(dlog);
   }
 #endif

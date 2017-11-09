@@ -882,7 +882,6 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
 
     if(m_owpg.isComplete() == true && m_prev_owpg_isComplete == false){
         const Vec3 body_p_diff_offset = m_owpg_state.body_p - (Vec3)((m_owpg_state.foot_l_p+m_owpg_state.foot_r_p).array()*0.5f);
-
         m_body_p_at_start      += hrp::Vector3(m_owpg_state.body_p[0],
                                                m_owpg_state.body_p[1],
                                                m_owpg_state.body_p[2])
@@ -890,15 +889,15 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
             hrp::Vector3(body_p_diff_offset[0],
                          body_p_diff_offset[1],
                          body_p_diff_offset[2]);
-        m_body_p_diff_at_start += hrp::Vector3(m_owpg_state.p[0],
-                                               m_owpg_state.p[1],
-                                               m_owpg_state.p[2]);
-        m_footl_p_at_start     += hrp::Vector3(m_owpg_state.foot_l_p[0],
-                                               m_owpg_state.foot_l_p[1],
-                                               m_owpg_state.foot_l_p[2]);
-        m_footr_p_at_start     += hrp::Vector3(m_owpg_state.foot_r_p[0],
-                                               m_owpg_state.foot_r_p[1],
-                                               m_owpg_state.foot_r_p[2]);
+        // m_body_p_diff_at_start += hrp::Vector3(m_owpg_state.p[0],
+        //                                        m_owpg_state.p[1],
+        //                                        m_owpg_state.p[2]);
+        m_footl_p_at_start     += hrp::Vector3(m_owpg_state.foot_l_p_mod[0],
+                                               m_owpg_state.foot_l_p_mod[1],
+                                               m_owpg_state.foot_l_p_mod[2]);
+        m_footr_p_at_start     += hrp::Vector3(m_owpg_state.foot_r_p_mod[0],
+                                               m_owpg_state.foot_r_p_mod[1],
+                                               m_owpg_state.foot_r_p_mod[2]);
         rate_matcher.setCurrentFrame(0);
         m_abs_est.reset_estimation<false>(&m_ready_joint_angle[0]);
     }
@@ -910,19 +909,9 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
         PoseState pose_state;
         m_abs_est.getAbsolutePoseState(pose_state);
 
-#if 0
-        const Vec3 body_p_offset = Vec3(m_body_p_at_start[0], m_body_p_at_start[1], 0.0f);
-        const Vec3 footl_p_offset = Vec3(m_footl_p_at_start[0],
-                                         m_footl_p_at_start[1] - LegIKParam::InitialLfoot_p[1],
-                                         m_footl_p_at_start[2]);
-        const Vec3 footr_p_offset = Vec3(m_footr_p_at_start[0],
-                                         m_footr_p_at_start[1] - LegIKParam::InitialRfoot_p[1],
-                                         m_footr_p_at_start[2]);
-#else
         const Vec3 body_p_offset = Vec3::Zero() + Vec3(traj_body_init[0], 0.0f, 0.0f);
         const Vec3 footl_p_offset = Vec3::Zero();
         const Vec3 footr_p_offset = Vec3::Zero();
-#endif
         UpdateState ustate;
         ustate.pref     = Vec3::Zero();
         ustate.zmp      = pose_state.zmp;
@@ -945,12 +934,6 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
 #endif
 
     const int inc_frame = (int)(m_dt*1000);
-    // if(loop%500==0){
-    //     std::cout << "[PR] inc_frame=" << inc_frame << ", m_dt=" << m_dt << std::endl;
-    //     std::cout << "[PR] rpy=[" << m_rpy.data.r << ", " << m_rpy.data.p << ", " << m_rpy.data.y << "]" << std::endl;;
-    //     //std::cout << "[PR] body_p_at_start=" << m_body_p_at_start.transpose() << std::endl;
-    //     //std::cout << "[PR] body_p_diff_at_start=" << m_body_p_diff_at_start.transpose() << std::endl;
-    // }
     {
         //const bool idle_state = m_simmode==0?false:true; /* TODO */
         const bool idle_state = m_joystate.keep_idle?true:m_simmode==0?false:true; /* TODO */
@@ -1092,23 +1075,26 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
 #else
 #error "foot rpy is not calculated"
 #endif
-    const Vec3 basePos_modif           = Vec3(ref_basePos_modif(0),
-                                              ref_basePos_modif(1),
-                                              ref_basePos_modif(2));
-    const Vec3 vbasePos_modif_at_start = Vec3(m_basePos_modif_at_start(0),
-                                              m_basePos_modif_at_start(1),
-                                              m_basePos_modif_at_start(2));
-
-    m_pIKMethod->calcik_r(body_R,
-                          body_p_default_offset + ref_traj.body_p,
-                          //body_p_default_offset + ref_traj.body_p + basePos_modif - vbasePos_modif_at_start,
-                          InitialLfoot_p + ref_traj.footl_p,
-                          InitialRfoot_p + ref_traj.footr_p,
-                          foot_l_pitch,
-                          foot_r_pitch,
-                          foot_l_roll,
-                          foot_r_roll,
-                          target_joint_angle );
+    m_pIKMethod->calcik_ini(body_R,
+                            body_p_default_offset + ref_traj.body_p,
+                            ref_traj.footl_p,
+                            InitialLfoot_p,
+                            ref_traj.footr_p,
+                            InitialRfoot_p,
+                            foot_l_pitch,
+                            foot_r_pitch,
+                            foot_l_roll,
+                            foot_r_roll,
+                            target_joint_angle );
+    // m_pIKMethod->calcik_r(body_R,
+    //                       body_p_default_offset + ref_traj.body_p,
+    //                       InitialLfoot_p + ref_traj.footl_p,
+    //                       InitialRfoot_p + ref_traj.footr_p,
+    //                       foot_l_pitch,
+    //                       foot_r_pitch,
+    //                       foot_l_roll,
+    //                       foot_r_roll,
+    //                       target_joint_angle );
 
 #if ROBOT==0
     //bool error_flag = false;

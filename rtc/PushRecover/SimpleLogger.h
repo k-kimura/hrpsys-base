@@ -51,6 +51,8 @@ namespace dlog {
         };
         V3(float _x, float _y, float _z) : x(_x),y(_y),z(_z){
         };
+        V3(const Vec3& v) : x(v[0]), y(v[1]), z(v[2]){
+        };
     }PACKING;
     //typedef hrp::Vector3 V3;
     struct DataLog {
@@ -151,6 +153,8 @@ namespace dlog {
         V3      abs_cog_p;
         V3      abs_cog_v;
         V3      accIn;
+        V3      x_offset;
+        V3      x_offset_orig;
     }PACKING;
 }
 

@@ -139,12 +139,13 @@ typedef LoneIKParam LegIKParam;
 class IIKMethod : public Aligned<16>
 {
 public:
-        /// @return body_pos
-        virtual Vec3 calcik( const Mat3& body_R, const Vec3& ref_pos, const Vec3& footl_pos, const Vec3& footr_pos, const float footl_pitch, const float footr_pitch, float* joint_angle ) = 0;
-        virtual Vec3 calcik_r( const Mat3& body_R, const Vec3& ref_pos, const Vec3& footl_pos, const Vec3& footr_pos, const float footl_pitch, const float footr_pitch, const float footl_roll, const float footr_roll, float* joint_angle ) = 0;
-        /// @return ref_pos
-        virtual Vec3 calcref( JointTransform& pR ) = 0;
-        virtual ~IIKMethod(){}
+    /// @return body_pos
+    virtual Vec3 calcik( const Mat3& body_R, const Vec3& ref_pos, const Vec3& footl_pos, const Vec3& footr_pos, const float footl_pitch, const float footr_pitch, float* joint_angle ) = 0;
+    virtual Vec3 calcik_r( const Mat3& body_R, const Vec3& ref_pos, const Vec3& footl_pos, const Vec3& footr_pos, const float footl_pitch, const float footr_pitch, const float footl_roll, const float footr_roll, float* joint_angle ) = 0;
+    virtual Vec3 calcik_ini( const Mat3& body_R, const Vec3& ref_pos, const Vec3& footl_pos, const Vec3& InitialLfoot_p, const Vec3& footr_pos, const Vec3& InitialRfoot_p, const float footl_pitch, const float footr_pitch, const float footl_roll, const float footr_roll, float* joint_angle ) = 0;
+    /// @return ref_pos
+    virtual Vec3 calcref( JointTransform& pR ) = 0;
+    virtual ~IIKMethod(){}
 };
 
 class BodyIKMethod : public IIKMethod
@@ -214,11 +215,35 @@ public:
                                      footl_R, footl_pos,
                                      footr_R, footr_pos,
                                      joint_angle );
-        }
-        virtual Vec3 calcref( JointTransform& pR )
-        {
-                return pR.p[JOINT_ROOT];
-        }
+        };
+    virtual Vec3 calcik_ini( const Mat3& body_R, const Vec3& ref_pos, const Vec3& footl_pos, const Vec3& InitialLfoot_p, const Vec3& footr_pos, const Vec3& InitialRfoot_p, const float footl_pitch, const float footr_pitch, const float footl_roll, const float footr_roll, float* joint_angle )
+    {
+        _MM_ALIGN16 float c[4],s[4];
+        bodylink::sincos_ps( bodylink::F32vec4(footl_pitch,footr_pitch,footl_roll,footr_roll), (bodylink::v4sf*)s, (bodylink::v4sf*)c );
+        const Mat3 footl_R = bodylink::rotateMat3<1>( c[0], s[0] )*bodylink::rotateMat3<0>( c[2], s[2] );
+        const Mat3 footr_R = bodylink::rotateMat3<1>( c[1], s[1] )*bodylink::rotateMat3<0>( c[3], s[3] );
+        const Vec3 footl_pos_mod = footl_R * Vec3(InitialLfoot_p[0],
+                                                  0.0f,
+                                                  InitialLfoot_p[2]
+                                                  )
+            + footl_pos + Vec3(0.0f, InitialLfoot_p[1], 0.0f);
+        const Vec3 footr_pos_mod = footr_R * Vec3(InitialRfoot_p[0],
+                                                  0.0f,
+                                                  InitialRfoot_p[2]
+                                                  )
+            + footr_pos + Vec3(0.0f, InitialRfoot_p[1], 0.0f);
+        loop++;
+        Vec3 body_pos = InitialBody_p + ref_pos;
+        ik_legLR<LegIKParam,LEG_IK_TYPE>(
+                                         body_R, body_pos,
+                                         footl_R, footl_pos_mod,
+                                         footr_R, footr_pos_mod,
+                                         joint_angle );
+    };
+    virtual Vec3 calcref( JointTransform& pR )
+    {
+        return pR.p[JOINT_ROOT];
+    }
 };
 
 #endif /* __BODYIKMETHOD_H_ */
