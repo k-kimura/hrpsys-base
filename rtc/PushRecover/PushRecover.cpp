@@ -1574,7 +1574,7 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
 }; /* controlBodyCompliance */
 
 void PushRecover::trajectoryReset(void){
-    m_abs_est.reset_estimation<true>(&m_ready_joint_angle[0]);
+    m_abs_est.reset_estimation<true>(Mat3::Identity(), &m_ready_joint_angle[0]);
     m_act_world_root_pos   = hrp::Vector3(traj_body_init[0],
                                           traj_body_init[1],
                                           //traj_body_init[2] + InitialLfoot_p[2]
@@ -1621,7 +1621,8 @@ void PushRecover::trajectoryReset(void){
         m_modify_rot_context.reset();
 #else
         while( m_owpg.isComplete() != 1){
-            m_owpg.incrementFrame<LegIKParam,LEG_IK_TYPE>(inc_frame, m_owpg_state, false);
+            const bool use_iterate = false;
+            m_owpg.incrementFrame<LegIKParam,LEG_IK_TYPE,use_iterate>(inc_frame, m_owpg_state, false);
         }
         m_prev_owpg_isComplete = false;
         m_owpg_state.body_p = Vec3::Zero();
@@ -1761,6 +1762,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           Vec3 abs_cog_p = *(m_abs_est.getAbsCoGPos());
           Vec3 abs_cog_v = *(m_abs_est.getAbsCoGVel());
           const Vec3 abs_foot_origin_rpy = bodylink::rot2rpy<bodylink::ROBOTICS>(abs_foot_origin_rot);
+          const Vec3 rel_act_cp = *(m_abs_est.getRelActCP());
           dlog.abs_zmp = CONV_VEC3( abs_zmp );
           dlog.abs_rel_act_zmp = CONV_VEC3( abs_rel_act_zmp );
           dlog.abs_contact_state = CONV_VEC3( abs_contact_state );
@@ -1770,6 +1772,18 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           dlog.abs_body_v = CONV_VEC3(abs_body_v);
           dlog.abs_cog_p = CONV_VEC3(abs_cog_p);
           dlog.abs_cog_v = CONV_VEC3(abs_cog_v);
+          dlog.rel_act_cp = CONV_VEC3(rel_act_cp);
+
+          {
+              const float cp_x_thre = 0.15f;
+              const float cp_y_thre = 0.15f;
+              Vec3 rel_cp = *(m_abs_est.getRelActCP());
+              if((((cp_x_thre < rel_cp[0]) || (-cp_x_thre > rel_cp[0])) || ((cp_y_thre < rel_cp[1]) || (-cp_y_thre > rel_cp[1])))&&loop%20==0){
+                  std::cout << "[pr] " << PRED << "CP Detect Fall down!!!!" << PDEF << "[" << rel_cp[0] << ", " << rel_cp[1] << "]" << std::endl;
+              }else if(loop%500==0){
+                  //std::cout << "[pr] " << " CP [" << rel_cp[0] << ", " << rel_cp[1] << "]" << std::endl;
+              }
+          }
 
           PoseState pose_state;
           m_abs_est.getAbsolutePoseState(pose_state);
@@ -2082,6 +2096,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           }
       }
 #endif
+#if 0
       if(loop%500==0){
           std::cout << "[pr] m_tauRef=[";
           for(int i=0;i<m_robot->numJoints(); i++){
@@ -2093,6 +2108,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               }
           }
       }
+#endif
   }/* calc torque*/
 
   /* Save log */
@@ -2500,7 +2516,7 @@ bool PushRecover::setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWa
     std::cerr << "[" << m_profile.instance_name << "] setOnlineWalkParam" << std::endl;
 
     m_modify_rot_context.onlineWalkParam = i_param;
-
+    m_owpg.setMaxCalclen( i_param.owpg_step_time + 100 + i_param.datal );
     //m_modify_rot_context.foot_roll_gain = i_param.dataf;
     //m_owpg.modifyFirstMagnity( (0.001*i_param.datal) );
 

@@ -269,10 +269,10 @@ public:
             onlineWalkParam.owpg_step_time     = 1000;
             onlineWalkParam.owpg_step_margin   = 300;
             onlineWalkParam.owpg_iterate_num   = 2;
-            onlineWalkParam.owpg_feedback_gain = 1.0;
+            onlineWalkParam.owpg_feedback_gain = 0.3;
 
-            onlineWalkParam.owpg_zmp_modify_x_max = 0.08f;
-            onlineWalkParam.owpg_zmp_modify_y_max = 0.01f;
+            onlineWalkParam.owpg_zmp_modify_x_max = 0.55f;
+            onlineWalkParam.owpg_zmp_modify_y_max = 0.40f;
             onlineWalkParam.owpg_xstep_max = 0.50f;
             onlineWalkParam.owpg_ystep_max = 0.20f;
             onlineWalkParam.owpg_rot_offset_threshold_x = 3.0f*S_PI/180.0f*0.62f;
@@ -318,6 +318,7 @@ public:
             wp.rot_offset_gain_y = onlineWalkParam.owpg_rot_offset_gain_y;
 
             p_owpg->setWalkParam(wp);
+            //p_owpg->setMaxCalclen( wp.step_time+100 );
             p_owpg->modifyFilterParam( onlineWalkParam.filter_fp,
                                        onlineWalkParam.lpf_fp
                                        );
@@ -340,6 +341,7 @@ public:
             wp.rot_offset_gain_y = onlineWalkParam.owpg_rot_offset_gain_y;
 
             p_owpg->setWalkParam(wp);
+            //p_owpg->setMaxCalclen( wp.step_time+100 );
             p_owpg->modifyFilterParam( onlineWalkParam.filter_fp,
                                        onlineWalkParam.lpf_fp
                                        );
@@ -899,7 +901,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
                                                m_owpg_state.foot_r_p_mod[1],
                                                m_owpg_state.foot_r_p_mod[2]);
         rate_matcher.setCurrentFrame(0);
-        m_abs_est.reset_estimation<false>(&m_ready_joint_angle[0]);
+        //m_abs_est.reset_estimation<false>(&m_ready_joint_angle[0]);
     }
     m_prev_owpg_isComplete = m_owpg.isComplete();
 
@@ -940,7 +942,8 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
 #if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
         m_owpg.incrementFrameNoIdle2<LegIKParam,LEG_IK_TYPE,0>(inc_frame, m_owpg_state, m_owpg_cstate, idle_state);
 #else
-        m_owpg.incrementFrame<LegIKParam,LEG_IK_TYPE,0>(inc_frame, m_owpg_state, idle_state);
+        const bool use_iterate = true;
+        m_owpg.incrementFrame<LegIKParam, LEG_IK_TYPE, use_iterate, 0>(inc_frame, m_owpg_state, idle_state);
 #endif
     }
 
@@ -1086,15 +1089,6 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
                             foot_l_roll,
                             foot_r_roll,
                             target_joint_angle );
-    // m_pIKMethod->calcik_r(body_R,
-    //                       body_p_default_offset + ref_traj.body_p,
-    //                       InitialLfoot_p + ref_traj.footl_p,
-    //                       InitialRfoot_p + ref_traj.footr_p,
-    //                       foot_l_pitch,
-    //                       foot_r_pitch,
-    //                       foot_l_roll,
-    //                       foot_r_roll,
-    //                       target_joint_angle );
 
 #if ROBOT==0
     //bool error_flag = false;
@@ -1340,7 +1334,7 @@ void PushRecover::modifyFootHeight(const bool on_ground, ModifyTrajectoryContext
                 if( fz[i] > context.onlineWalkParam.fz_contact_threshold_upper ){
                     context.fz_contact[i] = 1;
                     context.fz_contact_z[i] = foot_pz_ref[i];
-#ifndef DEBUG_HOGE
+#ifdef DEBUG_HOGE
                     if(i==0){
                         std::cerr << "[pr] " << PRED << "contact" << PGRE << "LEFT" << PDEF << std::endl;
                     }else{
