@@ -3211,6 +3211,13 @@ size_t Stabilizer::makeFrictionConstraint(const std::vector<int>& enable_ee, dou
             -1, 0, coef, 0, 0, 0,
             0,  1, coef, 0, 0, 0,
             0, -1, coef, 0, 0, 0;
+        hrp::dmatrix convert_matrix = hrp::dmatrix::Identity(6, 6);
+        convert_matrix.block(3, 0, 3, 3) = - hrp::hat(stikp[enable_ee[i]].localp);
+        hrp::dmatrix tmpR = hrp::dmatrix::Zero(6, 6);
+        tmpR.block(0, 0, 3, 3) = stikp[enable_ee[i]].localR.transpose();
+        tmpR.block(3, 3, 3, 3) = stikp[enable_ee[i]].localR.transpose();
+        convert_matrix = tmpR * convert_matrix;
+        const_matrix.block(i * 4, i * 6, 4, 6) = const_matrix.block(i * 4, i * 6, 4, 6) * convert_matrix;
     }
     upper_limit = hrp::dvector::Ones(4 * ee_num) * 1e10;
     lower_limit = hrp::dvector::Zero(4 * ee_num);
@@ -3235,6 +3242,13 @@ size_t Stabilizer::makeTauzConstraint(const std::vector<int>& enable_ee, double 
         const_matrix.block(i * 2, i * 6, 2, 6)
             << 0.5*(y1-y2), 0.5*(x2-x1), 0.5*coef*(x1+x2+y1+y2), 0, 0,  1,
             0.5*(y2-y1), 0.5*(x1-x2), 0.5*coef*(x1+x2+y1+y2), 0, 0, -1;
+        hrp::dmatrix convert_matrix = hrp::dmatrix::Identity(6, 6);
+        convert_matrix.block(3, 0, 3, 3) = - hrp::hat(stikp[enable_ee[i]].localp);
+        hrp::dmatrix tmpR = hrp::dmatrix::Zero(6, 6);
+        tmpR.block(0, 0, 3, 3) = stikp[enable_ee[i]].localR.transpose();
+        tmpR.block(3, 3, 3, 3) = stikp[enable_ee[i]].localR.transpose();
+        convert_matrix = tmpR * convert_matrix;
+        const_matrix.block(i * 2, i * 6, 2, 6) = const_matrix.block(i * 2, i * 6, 2, 6) * convert_matrix;
     }
     upper_limit = hrp::dvector::Ones(2 * ee_num) * 1e10;
     lower_limit = hrp::dvector::Zero(2 * ee_num);
