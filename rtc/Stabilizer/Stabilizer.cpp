@@ -3072,13 +3072,19 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
     hrp::dvector lowerCopLimit;
     size_t cop_dim = makeCopConstraint(enable_ee, cop, upperCopLimit, lowerCopLimit);
 
-    size_t const_dim = tau_dim + friction_dim + cop_dim;
+    //tau_z constraint
+    hrp::dmatrix tauz;
+    hrp::dvector upperTauzLimit;
+    hrp::dvector lowerTauzLimit;
+    size_t tauz_dim = makeTauzConstraint(enable_ee, 0.9, tauz, upperTauzLimit, lowerTauzLimit);
+
+    size_t const_dim = tau_dim + friction_dim + cop_dim + tauz_dim;
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Const(const_dim, state_dim);
-    Const << ef2tau, friction, cop;
+    Const << ef2tau, friction, cop, tauz;
     hrp::dvector upperConstLimit(const_dim);
     hrp::dvector lowerConstLimit(const_dim);
-    upperConstLimit << upperTauLimit, upperFrictionLimit, upperCopLimit;
-    lowerConstLimit << lowerTauLimit, lowerFrictionLimit, lowerCopLimit;
+    upperConstLimit << upperTauLimit, upperFrictionLimit, upperCopLimit, upperTauzLimit;
+    lowerConstLimit << lowerTauLimit, lowerFrictionLimit, lowerCopLimit, lowerTauzLimit;
 
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> Q = Gc.transpose() * I1 * Gc + I2 + 5 * Gc2.transpose() * Gc2;
     Eigen::Matrix<double, -1, -1, Eigen::RowMajor> C = -Gc.transpose() * I1 * f_tau;
@@ -3146,6 +3152,8 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         tmp_index += friction_dim;
         Eigen::Map<hrp::dvector> tmp4(y.segment(tmp_index, cop_dim).data(), cop_dim);
         tmp_index += cop_dim;
+        Eigen::Map<hrp::dvector> tmp5(y.segment(tmp_index, tauz_dim).data(), 2, ee_num);
+        tmp_index += tauz_dim;
         std::cerr << "[" << m_profile.instance_name << "] qp result" << std::endl;
         std::cerr << "[" << m_profile.instance_name << "] try num = " << qpcounter << std::endl;
         if (qp_solver.isInfeasible()) {
@@ -3156,7 +3164,8 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
         std::cerr << "[" << m_profile.instance_name << "] end efector force and friction limit" << std::endl;
         for (size_t i = 0; i < ee_num; i++) {
             std::string axis1[6] = {"fx", "fy", "fz", "tx", "ty", "tz"};
-            std::string axis2[6] = {"x lower", "x upper", "y lower", "y upper", "tau z lower", "tau z upper"};
+            std::string axis2[4] = {"x lower", "x upper", "y lower", "y upper"};
+            std::string axis3[2] = {"lower", "upper"};
             for (size_t j = 0; j < 6; j++){
                 if (tmp1(j, i) > 0)
                     std::cerr << "[" << m_profile.instance_name << "]     ee("
@@ -3165,10 +3174,15 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
                     std::cerr << "[" << m_profile.instance_name << "]     ee("
                               << i << ")." << axis1[j] << " upper limit" << std::endl;
             }
-            for (size_t j = 0; j < 6; j++){
+            for (size_t j = 0; j < 4; j++){
                 if (tmp3(j, i) > 0)
                     std::cerr << "[" << m_profile.instance_name << "]     friction("
                               << i << ")." << axis2[j] << " limit" << std::endl;
+            }
+            for (size_t j = 0; j < 2; j++){
+                if (tmp5(j, i) > 0)
+                    std::cerr << "[" << m_profile.instance_name << "]     tau_z friction("
+                              << i << ")." << axis3[j] << " limit" << std::endl;
             }
         }
         std::cerr << "[" << m_profile.instance_name << "] torque limit" << std::endl;
@@ -3190,7 +3204,23 @@ void Stabilizer::distributeForce(const hrp::Vector3& f_ga, const hrp::Vector3& t
 size_t Stabilizer::makeFrictionConstraint(const std::vector<int>& enable_ee, double coef, hrp::dmatrix& const_matrix, hrp::dvector& upper_limit, hrp::dvector& lower_limit)
 {
     size_t ee_num = enable_ee.size();
-    const_matrix = hrp::dmatrix::Zero(6 * ee_num, 6 * ee_num);
+    const_matrix = hrp::dmatrix::Zero(4 * ee_num, 6 * ee_num);
+    for (size_t i = 0; i < ee_num; i++){
+        const_matrix.block(i * 4, i * 6, 4, 6)
+            << 1, 0,  coef, 0, 0, 0,
+            -1, 0, coef, 0, 0, 0,
+            0,  1, coef, 0, 0, 0,
+            0, -1, coef, 0, 0, 0;
+    }
+    upper_limit = hrp::dvector::Ones(4 * ee_num) * 1e10;
+    lower_limit = hrp::dvector::Zero(4 * ee_num);
+    return 4 * ee_num;
+}
+
+size_t Stabilizer::makeTauzConstraint(const std::vector<int>& enable_ee, double coef, hrp::dmatrix& const_matrix, hrp::dvector& upper_limit, hrp::dvector& lower_limit)
+{
+    size_t ee_num = enable_ee.size();
+    const_matrix = hrp::dmatrix::Zero(2 * ee_num, 6 * ee_num);
     for (size_t i = 0; i < ee_num; i++){
         double x1, x2, y1, y2;
         x1 = szd->get_leg_front_margin();
@@ -3202,17 +3232,13 @@ size_t Stabilizer::makeFrictionConstraint(const std::vector<int>& enable_ee, dou
             y1 = szd->get_leg_outside_margin();
             y2 = szd->get_leg_outside_margin();
         }
-        const_matrix.block(i * 6, i * 6, 6, 6)
-            << 1, 0,  coef, 0, 0, 0,
-            -1, 0, coef, 0, 0, 0,
-            0,  1, coef, 0, 0, 0,
-            0, -1, coef, 0, 0, 0,
-            0.5*(y1-y2), 0.5*(x2-x1), 0.5*coef*(x1+x2+y1+y2), 0, 0,  1,
+        const_matrix.block(i * 2, i * 6, 2, 6)
+            << 0.5*(y1-y2), 0.5*(x2-x1), 0.5*coef*(x1+x2+y1+y2), 0, 0,  1,
             0.5*(y2-y1), 0.5*(x1-x2), 0.5*coef*(x1+x2+y1+y2), 0, 0, -1;
     }
-    upper_limit = hrp::dvector::Ones(6 * ee_num) * 1e10;
-    lower_limit = hrp::dvector::Zero(6 * ee_num);
-    return 6 * ee_num;
+    upper_limit = hrp::dvector::Ones(2 * ee_num) * 1e10;
+    lower_limit = hrp::dvector::Zero(2 * ee_num);
+    return 2 * ee_num;
 }
 
 void Stabilizer::makeJointTorqueLimit(size_t num, const std::vector<int>& enable_joint, double pgain[], double dgain[], hrp::dvector& upper_limit, hrp::dvector& lower_limit)
