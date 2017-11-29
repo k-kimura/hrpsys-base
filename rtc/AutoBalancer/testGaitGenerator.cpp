@@ -193,17 +193,17 @@ private:
             fprintf(fp_cogzmp, "\n");
             fflush(fp_cogzmp);
 
+#define VEC1(s) std::vector<std::string> (1, s)
+
             // Foot pos
             fprintf(fp_fpos, "%f ", i * dt);
-            std::vector<std::string> tmp_string_vector = boost::assign::list_of("rleg");
-            hrp::Vector3 rfoot_pos = (gg->get_support_leg_names() == tmp_string_vector) ? gg->get_support_leg_steps().front().worldcoords.pos : gg->get_swing_leg_steps().front().worldcoords.pos;
+            hrp::Vector3 rfoot_pos = (gg->get_support_leg_names() == VEC1 ("rleg")) ? gg->get_support_leg_steps().front().worldcoords.pos : gg->get_swing_leg_steps().front().worldcoords.pos;
             for (size_t ii = 0; ii < 3; ii++) {
                 fprintf(fp_fpos, "%f ", rfoot_pos(ii));
                 min_rfoot_pos(ii) = std::min(min_rfoot_pos(ii), rfoot_pos(ii));
                 max_rfoot_pos(ii) = std::max(max_rfoot_pos(ii), rfoot_pos(ii));
             }
-            tmp_string_vector = boost::assign::list_of("lleg");
-            hrp::Vector3 lfoot_pos = (gg->get_support_leg_names() == tmp_string_vector) ? gg->get_support_leg_steps().front().worldcoords.pos : gg->get_swing_leg_steps().front().worldcoords.pos;
+            hrp::Vector3 lfoot_pos = (gg->get_support_leg_names() == VEC1("lleg")) ? gg->get_support_leg_steps().front().worldcoords.pos : gg->get_swing_leg_steps().front().worldcoords.pos;
             for (size_t ii = 0; ii < 3; ii++) {
                 fprintf(fp_fpos, "%f ", lfoot_pos(ii));
                 min_lfoot_pos(ii) = std::min(min_lfoot_pos(ii), lfoot_pos(ii));
@@ -214,14 +214,12 @@ private:
 
             // Foot rot
             fprintf(fp_frot, "%f ", i * dt);
-            tmp_string_vector = boost::assign::list_of("rleg");
-            hrp::Matrix33 rfoot_rot = (gg->get_support_leg_names() == tmp_string_vector) ? gg->get_support_leg_steps().front().worldcoords.rot : gg->get_swing_leg_steps().front().worldcoords.rot;
+    hrp::Matrix33 rfoot_rot = (gg->get_support_leg_names() == VEC1("rleg")) ? gg->get_support_leg_steps().front().worldcoords.rot : gg->get_swing_leg_steps().front().worldcoords.rot;
             hrp::Vector3 rfoot_rpy = hrp::rpyFromRot(rfoot_rot);
             for (size_t ii = 0; ii < 3; ii++) {
                 fprintf(fp_frot, "%f ", rad2deg(rfoot_rpy(ii)));
             }
-            tmp_string_vector = boost::assign::list_of("lleg");
-            hrp::Matrix33 lfoot_rot = (gg->get_support_leg_names() == tmp_string_vector) ? gg->get_support_leg_steps().front().worldcoords.rot : gg->get_swing_leg_steps().front().worldcoords.rot;
+    hrp::Matrix33 lfoot_rot = (gg->get_support_leg_names() == VEC1("lleg")) ? gg->get_support_leg_steps().front().worldcoords.rot : gg->get_swing_leg_steps().front().worldcoords.rot;
             hrp::Vector3 lfoot_rpy = hrp::rpyFromRot(lfoot_rot);
             for (size_t ii = 0; ii < 3; ii++) {
                 fprintf(fp_frot, "%f ", rad2deg(lfoot_rpy(ii)));
@@ -231,13 +229,11 @@ private:
 
             // ZMP offsets
             fprintf(fp_zoff, "%f ", i * dt);
-            tmp_string_vector = boost::assign::list_of("rleg");
-            hrp::Vector3 rfoot_zmp_offset = (gg->get_support_leg_names() == tmp_string_vector) ? gg->get_support_foot_zmp_offsets().front() : gg->get_swing_foot_zmp_offsets().front();
+    hrp::Vector3 rfoot_zmp_offset = (gg->get_support_leg_names() == VEC1("rleg")) ? gg->get_support_foot_zmp_offsets().front() : gg->get_swing_foot_zmp_offsets().front();
             for (size_t ii = 0; ii < 3; ii++) {
                 fprintf(fp_zoff, "%f ", rfoot_zmp_offset(ii));
             }
-            tmp_string_vector = boost::assign::list_of("lleg");
-            hrp::Vector3 lfoot_zmp_offset = (gg->get_support_leg_names() == tmp_string_vector) ? gg->get_support_foot_zmp_offsets().front() : gg->get_swing_foot_zmp_offsets().front();
+    hrp::Vector3 lfoot_zmp_offset = (gg->get_support_leg_names() == VEC1("lleg")) ? gg->get_support_foot_zmp_offsets().front() : gg->get_swing_foot_zmp_offsets().front();
             for (size_t ii = 0; ii < 3; ii++) {
                 fprintf(fp_zoff, "%f ", lfoot_zmp_offset(ii));
             }
@@ -248,6 +244,8 @@ private:
             else tmpzoff = lfoot_zmp_offset(0);
             min_zmp_offset_x = std::min(min_zmp_offset_x, tmpzoff);
             max_zmp_offset_x = std::max(max_zmp_offset_x, tmpzoff);
+
+#undef VEC1
 
             // Foot pos vel
             fprintf(fp_fposvel, "%f ", i * dt);
@@ -393,11 +391,11 @@ private:
                 //   Foot pos and rot
                 std::vector<hrp::Vector3> tmpvec = boost::assign::list_of(rfoot_pos)(lfoot_pos);
                 footpos_diff_checker.checkValueDiff(tmpvec);
-                tmpvec = boost::assign::list_of(rfoot_rpy)(lfoot_rpy);
+                tmpvec = boost::assign::list_of(rfoot_rpy)(lfoot_rpy).convert_to_container < std::vector<hrp::Vector3> > ();
                 footrot_diff_checker.checkValueDiff(tmpvec);
-                tmpvec = boost::assign::list_of(rfootpos_vel)(lfootpos_vel);
+                tmpvec = boost::assign::list_of(rfootpos_vel)(lfootpos_vel).convert_to_container < std::vector<hrp::Vector3> > ();
                 footposvel_diff_checker.checkValueDiff(tmpvec);
-                tmpvec = boost::assign::list_of(rfootrot_vel)(lfootrot_vel);
+                tmpvec = boost::assign::list_of(rfootrot_vel)(lfootrot_vel).convert_to_container < std::vector<hrp::Vector3> > ();
                 footrotvel_diff_checker.checkValueDiff(tmpvec);
                 //   Swing support mid coorsd
                 ssmcpos_diff_checker.checkValueDiff(tmp_ssmc.pos);
@@ -405,7 +403,7 @@ private:
                 ssmcposvel_diff_checker.checkValueDiff(tmp_ssmcpos_vel);
                 ssmcrotvel_diff_checker.checkValueDiff(tmp_ssmcrot_vel);
                 //   ZMP offset
-                tmpvec = boost::assign::list_of(rfoot_zmp_offset)(lfoot_zmp_offset);
+                tmpvec = boost::assign::list_of(rfoot_zmp_offset)(lfoot_zmp_offset).convert_to_container < std::vector<hrp::Vector3> > ();
                 zmpoffset_diff_checker.checkValueDiff(tmpvec);
             }
             //   If contact states are not change, prev_swing_support_time is not dt, otherwise prev_swing_support_time is dt.
@@ -944,7 +942,7 @@ public:
         gg->set_heel_zmp_offset_x(-105*1e-3);
         gg->set_toe_pos_offset_x(137*1e-3);
         gg->set_heel_pos_offset_x(-105*1e-3);
-        gg->set_stride_parameters(0.2,0.1,20,0.2);
+        gg->set_stride_parameters(0.2,0.1,20,0.2,0.1*0.5,20*0.5);
         gg->set_use_toe_heel_auto_set(true);
         gg->set_toe_angle(30);
         gg->set_heel_angle(10);
@@ -1230,6 +1228,40 @@ public:
         plot_and_print_errorcheck ();
     };
 
+    void test19 ()
+    {
+        test_doc_string = "test19 : Change stride parameter (translate)";
+        /* initialize sample footstep_list */
+        parse_params();
+        std::vector<hrp::Vector3> dzo;
+        dzo.push_back(hrp::Vector3(20*1e-3,-30*1e-3,0));
+        dzo.push_back(hrp::Vector3(20*1e-3,30*1e-3,0));
+        gg->set_default_zmp_offsets(dzo);
+        gg->set_stride_parameters(0.25,0.15,25,0.25,0.1,10);
+        gg->clear_footstep_nodes_list();
+        coordinates start_ref_coords;
+        mid_coords(start_ref_coords, 0.5, coordinates(leg_pos[1]), coordinates(leg_pos[0]));
+        gg->go_pos_param_2_footstep_nodes_list(600*1e-3, -300*1e-3, 0, boost::assign::list_of(coordinates(leg_pos[1])), start_ref_coords, boost::assign::list_of(LLEG));
+        gen_and_plot_walk_pattern();
+    };
+
+    void test20 ()
+    {
+        test_doc_string = "test20 : Change stride parameter (translate+rotate)";
+        /* initialize sample footstep_list */
+        parse_params();
+        std::vector<hrp::Vector3> dzo;
+        dzo.push_back(hrp::Vector3(20*1e-3,-30*1e-3,0));
+        dzo.push_back(hrp::Vector3(20*1e-3,30*1e-3,0));
+        gg->set_default_zmp_offsets(dzo);
+        gg->set_stride_parameters(0.25,0.15,25,0.25,0.1,10);
+        gg->clear_footstep_nodes_list();
+        coordinates start_ref_coords;
+        mid_coords(start_ref_coords, 0.5, coordinates(leg_pos[1]), coordinates(leg_pos[0]));
+        gg->go_pos_param_2_footstep_nodes_list(400*1e-3, -200*1e-3, -55, boost::assign::list_of(coordinates(leg_pos[1])), start_ref_coords, boost::assign::list_of(LLEG));
+        gen_and_plot_walk_pattern();
+    };
+
     void parse_params (bool is_print_doc_setring = true)
     {
       if (is_print_doc_setring) std::cerr << test_doc_string << std::endl;
@@ -1334,7 +1366,7 @@ class testGaitGeneratorHRP2JSK : public testGaitGenerator
             leg_pos.push_back(hrp::Vector3(0,1e-3* 105,0)); /* lleg */
             all_limbs.push_back("rleg");
             all_limbs.push_back("lleg");
-            gg = new gait_generator(dt, leg_pos, all_limbs, 1e-3*150, 1e-3*50, 10, 1e-3*50);
+            gg = new gait_generator(dt, leg_pos, all_limbs, 1e-3*150, 1e-3*50, 10, 1e-3*50, 1e-3*50*0.5, 10*0.5);
         };
 };
 
@@ -1361,6 +1393,8 @@ void print_usage ()
     std::cerr << "  --test16 : Set foot steps with param (toe heel contact)" << std::endl;
     std::cerr << "  --test17 : Test goVelocity (dx = 0.1, dy = 0.05, dth = 10.0)" << std::endl;
     std::cerr << "  --test18 : Test goVelocity with changing velocity (translation and rotation)" << std::endl;
+    std::cerr << "  --test19 : Change stride parameter (translate)" << std::endl;
+    std::cerr << "  --test20 : Change stride parameter (translate+rotate)" << std::endl;
     std::cerr << " [option] should be:" << std::endl;
     std::cerr << "  --use-gnuplot : Use gnuplot and dump eps file to /tmp. (true/false, true by default)" << std::endl;
     std::cerr << "  --use-graph-append : Append generated graph to /tmp/testGaitGenerator.jpg. (true/false, false by default)" << std::endl;
@@ -1413,6 +1447,10 @@ int main(int argc, char* argv[])
           tgg.test17();
       } else if (std::string(argv[1]) == "--test18") {
           tgg.test18();
+      } else if (std::string(argv[1]) == "--test19") {
+          tgg.test19();
+      } else if (std::string(argv[1]) == "--test20") {
+          tgg.test20();
       } else {
           print_usage();
           ret = 1;
