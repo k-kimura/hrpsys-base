@@ -155,6 +155,8 @@ namespace dlog {
         V3      accIn;
         V3      x_offset;
         V3      x_offset_orig;
+        V3      Dx_offset;
+        V3      Dx_offset_orig;
         V3      rel_act_cp;
     }PACKING;
 }

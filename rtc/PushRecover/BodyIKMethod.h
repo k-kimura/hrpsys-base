@@ -8,7 +8,9 @@
 //#define gen_Zc (0.620)
 #define gen_Zc (0.560)
 #elif ROBOT==1
-#define gen_Zc (0.800)
+//#define gen_Zc (0.800)
+#define gen_Zc (0.760)
+//#define gen_Zc (0.700)
 #else
 #error "Undefined ROBOT TYPE."
 #endif
@@ -86,7 +88,7 @@ const static Vec3 g_CoG_offset( 0.0f, 0.0f, 0.0f ); //rootPosから見たCoG位�
 static float g_ready_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.5952, -32.9614, 0.027092,
                                        5.686155e-06,  -0.026751, -39.6337, 72.5952, -32.9614, 0.026727
 };
-const static Vec3 traj_body_init( -0.0f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - g_CoG_offset[2]);
+const static Vec3 traj_body_init( +0.025f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - g_CoG_offset[2]);
 #else
 #error "Undefined ROBOT TYPE."
 #endif
@@ -181,18 +183,6 @@ public:
                 const Mat3 footl_R = bodylink::rotateMat3<1>( c[0], s[0] );
                 const Mat3 footr_R = bodylink::rotateMat3<1>( c[1], s[1] );
                 loop++;
-//                 if(loop%1000==0){
-// #if ROBOT==0
-//                     std::cout << "ROBOT=L0\n";
-// #endif
-// #if ROBOT==1
-//                     std::cout << "ROBOT=L1\n";
-// #endif
-//                     std::cout << "c[0,1]  = " << c[0] << ", " << c[1] << std::endl;
-//                     std::cout << "s[0,1]  = " << s[0] << ", " << s[1] << std::endl;
-//                     std::cout << "footl_R = \n" << footl_R << std::endl;
-//                     std::cout << "footr_R = \n" << footr_R << std::endl;
-//                 }
                 Vec3 body_pos = InitialBody_p + ref_pos;
                 ik_legLR<LegIKParam,LEG_IK_TYPE>(
                                      body_R, body_pos,

@@ -266,8 +266,9 @@ public:
             onlineWalkParam.body_roll_gain = 0.0;
             onlineWalkParam.body_pitch_gain = 0.0;
 
-            onlineWalkParam.owpg_step_time     = 1000;
+            onlineWalkParam.owpg_step_time     = 800;
             onlineWalkParam.owpg_step_margin   = 300;
+            onlineWalkParam.owpg_max_calclen   = onlineWalkParam.owpg_step_time + 600;
             onlineWalkParam.owpg_iterate_num   = 2;
             onlineWalkParam.owpg_feedback_gain = 0.3;
 
@@ -279,6 +280,15 @@ public:
             onlineWalkParam.owpg_rot_offset_threshold_y = 3.0f*S_PI/180.0f*0.62f;
             onlineWalkParam.owpg_rot_offset_gain_x = 0.0f;
             onlineWalkParam.owpg_rot_offset_gain_y = 0.5f;
+            onlineWalkParam.owpg_x_offset_threshold_x = 20e-3;
+            onlineWalkParam.owpg_x_offset_threshold_y = 20e-3;
+            onlineWalkParam.owpg_x_offset_gain_x = 0.1f;
+            onlineWalkParam.owpg_x_offset_gain_y = 0.1f;
+            onlineWalkParam.owpg_Dx_offset_threshold_x = 5e-6;
+            onlineWalkParam.owpg_Dx_offset_threshold_y = 5e-6;
+            onlineWalkParam.owpg_Dx_offset_gain_x = 0.1f;
+            onlineWalkParam.owpg_Dx_offset_gain_y = 0.1f;
+            onlineWalkParam.owpg_Dx_offset_acc_thre = 0.01f;
             onlineWalkParam.owpg_modify_first_magnity = 1.0;
             onlineWalkParam.enable = false;
             onlineWalkParam.datal  = 0;
@@ -305,6 +315,7 @@ public:
             OnlinePatternGenerator::WalkParam wp;
             wp.step_time     = p_owpg->convMsecToFrame( onlineWalkParam.owpg_step_time );
             wp.step_margin   = p_owpg->convMsecToFrame( onlineWalkParam.owpg_step_margin );
+            wp.max_calclen   = onlineWalkParam.owpg_max_calclen;
             wp.iterate_num   = onlineWalkParam.owpg_iterate_num;
             wp.feedback_gain = onlineWalkParam.owpg_feedback_gain;
 
@@ -316,6 +327,15 @@ public:
             wp.rot_offset_threshold_y = onlineWalkParam.owpg_rot_offset_threshold_y;
             wp.rot_offset_gain_x = onlineWalkParam.owpg_rot_offset_gain_x;
             wp.rot_offset_gain_y = onlineWalkParam.owpg_rot_offset_gain_y;
+            wp.x_offset_threshold_x = onlineWalkParam.owpg_x_offset_threshold_x;
+            wp.x_offset_threshold_y = onlineWalkParam.owpg_x_offset_threshold_y;
+            wp.x_offset_gain_x = onlineWalkParam.owpg_x_offset_gain_x;
+            wp.x_offset_gain_y = onlineWalkParam.owpg_x_offset_gain_y;
+            wp.Dx_offset_threshold_x = onlineWalkParam.owpg_Dx_offset_threshold_x;
+            wp.Dx_offset_threshold_y = onlineWalkParam.owpg_Dx_offset_threshold_y;
+            wp.Dx_offset_gain_x = onlineWalkParam.owpg_Dx_offset_gain_x;
+            wp.Dx_offset_gain_y = onlineWalkParam.owpg_Dx_offset_gain_y;
+            wp.Dx_offset_acc_thre = onlineWalkParam.owpg_Dx_offset_acc_thre;
 
             p_owpg->setWalkParam(wp);
             //p_owpg->setMaxCalclen( wp.step_time+100 );
@@ -328,6 +348,7 @@ public:
             OnlinePatternGenerator::WalkParam wp;
             wp.step_time     = p_owpg->convMsecToFrame( onlineWalkParam.owpg_step_time );
             wp.step_margin   = p_owpg->convMsecToFrame( onlineWalkParam.owpg_step_margin );
+            wp.max_calclen   = onlineWalkParam.owpg_max_calclen;
             wp.iterate_num   = onlineWalkParam.owpg_iterate_num;
             wp.feedback_gain = onlineWalkParam.owpg_feedback_gain;
 
@@ -339,6 +360,15 @@ public:
             wp.rot_offset_threshold_y = onlineWalkParam.owpg_rot_offset_threshold_y;
             wp.rot_offset_gain_x = onlineWalkParam.owpg_rot_offset_gain_x;
             wp.rot_offset_gain_y = onlineWalkParam.owpg_rot_offset_gain_y;
+            wp.x_offset_threshold_x = onlineWalkParam.owpg_x_offset_threshold_x;
+            wp.x_offset_threshold_y = onlineWalkParam.owpg_x_offset_threshold_y;
+            wp.x_offset_gain_x = onlineWalkParam.owpg_x_offset_gain_x;
+            wp.x_offset_gain_y = onlineWalkParam.owpg_x_offset_gain_y;
+            wp.Dx_offset_threshold_x = onlineWalkParam.owpg_Dx_offset_threshold_x;
+            wp.Dx_offset_threshold_y = onlineWalkParam.owpg_Dx_offset_threshold_y;
+            wp.Dx_offset_gain_x   = onlineWalkParam.owpg_Dx_offset_gain_x;
+            wp.Dx_offset_gain_y   = onlineWalkParam.owpg_Dx_offset_gain_y;
+            wp.Dx_offset_acc_thre = onlineWalkParam.owpg_Dx_offset_acc_thre;
 
             p_owpg->setWalkParam(wp);
             //p_owpg->setMaxCalclen( wp.step_time+100 );
@@ -351,6 +381,7 @@ public:
         void copyWalkParam( OpenHRP::PushRecoverService::OnlineWalkParam *o_param ) const{
             o_param->owpg_step_time      = onlineWalkParam.owpg_step_time;
             o_param->owpg_step_margin    = onlineWalkParam.owpg_step_margin;
+            o_param->owpg_max_calclen    = onlineWalkParam.owpg_max_calclen;
             o_param->owpg_iterate_num    = onlineWalkParam.owpg_iterate_num;
             o_param->owpg_feedback_gain  = onlineWalkParam.owpg_feedback_gain;
 
@@ -367,7 +398,16 @@ public:
             o_param->owpg_rot_offset_threshold_y = onlineWalkParam.owpg_rot_offset_threshold_y;
             o_param->owpg_rot_offset_gain_x    = onlineWalkParam.owpg_rot_offset_gain_x;
             o_param->owpg_rot_offset_gain_y    = onlineWalkParam.owpg_rot_offset_gain_y;
-            o_param->owpg_modify_first_magnity = onlineWalkParam.owpg_modify_first_magnity;
+            o_param->owpg_x_offset_threshold_x = onlineWalkParam.owpg_x_offset_threshold_x;
+            o_param->owpg_x_offset_threshold_y = onlineWalkParam.owpg_x_offset_threshold_y;
+            o_param->owpg_x_offset_gain_x    = onlineWalkParam.owpg_x_offset_gain_x;
+            o_param->owpg_x_offset_gain_y    = onlineWalkParam.owpg_x_offset_gain_y;
+            o_param->owpg_Dx_offset_threshold_x = onlineWalkParam.owpg_Dx_offset_threshold_x;
+            o_param->owpg_Dx_offset_threshold_y = onlineWalkParam.owpg_Dx_offset_threshold_y;
+            o_param->owpg_Dx_offset_gain_x      = onlineWalkParam.owpg_Dx_offset_gain_x;
+            o_param->owpg_Dx_offset_gain_y      = onlineWalkParam.owpg_Dx_offset_gain_y;
+            o_param->owpg_Dx_offset_acc_thre    = onlineWalkParam.owpg_Dx_offset_acc_thre;
+            o_param->owpg_modify_first_magnity  = onlineWalkParam.owpg_modify_first_magnity;
 
             o_param->enable = onlineWalkParam.enable;
             o_param->datal = onlineWalkParam.datal;
@@ -918,11 +958,12 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
         ustate.pref     = Vec3::Zero();
         ustate.zmp      = pose_state.zmp;
         ustate.com_p    = -body_p_offset + Vec3(pose_state.body.p[0], pose_state.body.p[1], 0.0f);
-        ustate.com_dp   = Vec3::Zero();
+        ustate.com_dp   = pose_state.body.Dp;
 #if 0
         ustate.rot      =  bodylink::rot2rpy<bodylink::ROBOTICS>(pose_state.body.R);
 #else
-        ustate.rot      =  pose_state.body.rp_filtered;
+        //ustate.rot      =  pose_state.body.rp_filtered;
+        ustate.rot = Vec3::Zero();
 #endif
         ustate.rate     = pose_state.body.rate;
         ustate.foot_l_p = -footl_p_offset + pose_state.footl.p;
@@ -943,6 +984,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
         m_owpg.incrementFrameNoIdle2<LegIKParam,LEG_IK_TYPE,0>(inc_frame, m_owpg_state, m_owpg_cstate, idle_state);
 #else
         const bool use_iterate = true;
+        //const bool use_iterate = false;
         m_owpg.incrementFrame<LegIKParam, LEG_IK_TYPE, use_iterate, 0>(inc_frame, m_owpg_state, idle_state);
 #endif
     }
@@ -1095,7 +1137,7 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     /* set target_joint_angle */
     for(int i=0;i < 12; i++){
         m_robot->joint(i)->q = target_joint_angle[i];  /* rad to rad */
-        g_ready_joint_angle[i] = target_joint_angle[i];
+        //g_ready_joint_angle[i] = target_joint_angle[i];
     }
 #elif ROBOT==1
     //bool error_flag = false;
@@ -1105,8 +1147,8 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
         m_robot->joint(i)->q   = target_joint_angle[i+6];  /* rad to rad */
         m_robot->joint(i+6)->q = target_joint_angle[i];  /* rad to rad */
         /* ready_joint_angle is the same alignment. */
-        g_ready_joint_angle[i]   = target_joint_angle[i];
-        g_ready_joint_angle[i+6] = target_joint_angle[i+6];
+        // g_ready_joint_angle[i]   = target_joint_angle[i];
+        // g_ready_joint_angle[i+6] = target_joint_angle[i+6];
     }
 #else
 #error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"

@@ -37,7 +37,8 @@ module OpenHRP
 
           long owpg_step_time;
           long owpg_step_margin;
-          long owpg_iterate_num;
+          long owpg_max_calclen; /* defines how long IWG generates trajectory */
+          long owpg_iterate_num; /* defines how many times IWG calc trajectory modification */
           double owpg_feedback_gain;
           double owpg_zmp_modify_x_max;
           double owpg_zmp_modify_y_max;
@@ -47,6 +48,15 @@ module OpenHRP
           double owpg_rot_offset_threshold_y;
           double owpg_rot_offset_gain_x;
           double owpg_rot_offset_gain_y;
+          double owpg_x_offset_threshold_x;
+          double owpg_x_offset_threshold_y;
+          double owpg_x_offset_gain_x;
+          double owpg_x_offset_gain_y;
+          double owpg_Dx_offset_threshold_x;
+          double owpg_Dx_offset_threshold_y;
+          double owpg_Dx_offset_gain_x;
+          double owpg_Dx_offset_gain_y;
+          double owpg_Dx_offset_acc_thre;
           double owpg_modify_first_magnity;
 
           boolean enable;

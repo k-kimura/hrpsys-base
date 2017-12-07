@@ -411,10 +411,19 @@ RTC::ReturnCode_t PushRecover::onInitialize()
                                                     foot_l_pitch,
                                                     foot_r_pitch,
                                                     target_joint_angle );
-      for(int i=0;i<12;i++){
-          g_ready_joint_angle[i] = target_joint_angle[i];
+#if ROBOT==0
+      for(int i=0;i < 12; i++){
           m_ready_joint_angle[i] = target_joint_angle[i];
       }
+#elif ROBOT==1
+      for(int i=0;i < 6; i++){
+          /* m_robot of L1 starts from right leg. */
+          m_ready_joint_angle[i+6] = target_joint_angle[i];
+          m_ready_joint_angle[i]   = target_joint_angle[i+6];
+      }
+#else
+#error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"
+#endif
   }
   std::cout << "[" << m_profile.instance_name << "] calcik end" << std::endl;
 
@@ -478,7 +487,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   m_modify_rot_context.copyWalkParam( &m_owpg );
 //#error "m_owpg is used"
 #else
-  m_owpg.setModifyThre(20e-3);
+  //m_owpg.setModifyThre(20e-3);
   m_modify_rot_context.copyWalkParam( &m_owpg );
 #endif
 
@@ -740,20 +749,24 @@ void PushRecover::setTargetDataWithInterpolation(void){
                 const float foot_r_pitch = 0.0f;
                 _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                               body_p_default_offset,
-#if 0
-                                                              InitialLfoot_p - default_zmp_offset_l,
-                                                              InitialRfoot_p - default_zmp_offset_r,
-#else
                                                               InitialLfoot_p,
                                                               InitialRfoot_p,
-#endif
                                                               foot_l_pitch,
                                                               foot_r_pitch,
                                                               target_joint_angle );
-                for(int i=0;i<12;i++){
-                    //g_ready_joint_angle[i] = target_joint_angle[i];
+#if ROBOT==0
+                for(int i=0;i < 12; i++){
                     m_ready_joint_angle[i] = target_joint_angle[i];
                 }
+#elif ROBOT==1
+                for(int i=0;i < 6; i++){
+                    /* m_robot of L1 starts from right leg. */
+                    m_ready_joint_angle[i+6] = target_joint_angle[i];
+                    m_ready_joint_angle[i]   = target_joint_angle[i+6];
+                }
+#else
+#error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"
+#endif
             }
         }else{
             transition_interpolator_ratio = 1.0; /* use controller output */
@@ -1751,7 +1764,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 #endif
           m_abs_est.setGyroRateVector(m_rate.data.avx, m_rate.data.avy, m_rate.data.avz);
           m_abs_est.setForceSensorVector(fl, fr);
-          m_abs_est.updateToCurrentRobotPose(imu_rpy, q);
+          m_abs_est.updateToCurrentRobotPose(m_dt, imu_rpy, q);
           Vec3 abs_zmp = *(m_abs_est.getZMP());
           Vec3 abs_rel_act_zmp = *(m_abs_est.getRelActZMP());
           Vec3 abs_contact_state = (*(m_abs_est.getContactState()));
@@ -2156,6 +2169,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       }
       dlog.x_offset      = dlog::V3( m_owpg.getXOffset() );
       dlog.x_offset_orig = dlog::V3( m_owpg.getXOffsetOrig() );
+      dlog.Dx_offset      = dlog::V3( m_owpg.getDXOffset() );
+      dlog.Dx_offset_orig = dlog::V3( m_owpg.getDXOffsetOrig() );
       dlogger.push(dlog);
   }
 #endif
@@ -2516,7 +2531,7 @@ bool PushRecover::setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWa
     std::cerr << "[" << m_profile.instance_name << "] setOnlineWalkParam" << std::endl;
 
     m_modify_rot_context.onlineWalkParam = i_param;
-    m_owpg.setMaxCalclen( i_param.owpg_step_time + 100 + i_param.datal );
+    //m_owpg.setMaxCalclen( i_param.owpg_step_time + 100 + i_param.datal );
     //m_modify_rot_context.foot_roll_gain = i_param.dataf;
     //m_owpg.modifyFirstMagnity( (0.001*i_param.datal) );
 
@@ -2535,6 +2550,7 @@ bool PushRecover::setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWa
 #else
     m_modify_rot_context.copyWalkParam( &m_owpg );
     m_abs_est.setGyroFilterParam( m_modify_rot_context.onlineWalkParam.filter_fp );
+    m_owpg.setFirstMagnify( (float)i_param.owpg_modify_first_magnity );
 #endif
     return true;
 };
