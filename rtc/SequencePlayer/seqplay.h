@@ -21,6 +21,8 @@ public:
     //
     void setJointAngles(const double *i_qRef, double i_tm=0.0);
     void getJointAngles(double *i_qRef);
+    void setJointTorques(const double *i_tqRef, double i_tm=0.0);
+    void getJointTorques(double *i_tqRef);
     void setZmp(const double *i_zmp, double i_tm=0.0);
     void setBasePos(const double *i_pos, double i_tm=0.0);
     void setBaseRpy(const double *i_rpy, double i_tm=0.0);
@@ -44,6 +46,7 @@ public:
     bool clearJointAnglesOfGroup(const char *gname);
     //
     void setJointAngle(unsigned int i_rank, double jv, double tm);
+    void setJointTorque(unsigned int i_rank, double jt, double tm);
     void loadPattern(const char *i_basename, double i_tm);
     void clear(double i_timeLimit=0);
     void get(double *o_q, double *o_zmp, double *o_accel,

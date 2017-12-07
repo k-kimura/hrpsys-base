@@ -670,16 +670,17 @@ def demoGaitGeneratorGrasplessManipMode():
     gv_pose_list = [av_fwd, av_bwd, av_left, av_right, av_lturn, av_rturn]
     ref_footmid_diff = [[50*1e-3,0,0],
                         [-50*1e-3,0,0],
-                        [0, 0.5*50*1e-3,0], # 0.5->inside limitation
-                        [0,-0.5*50*1e-3,0], # 0.5->inside limitation
-                        [0,0, 0.5*10], # 0.5->inside limitation
-                        [0,0,-0.5*10]] # 0.5->inside limitation
+                        [0, 50*1e-3,0],
+                        [0,-50*1e-3,0],
+                        [0,0, 10],
+                        [0,0,-10]]
     ret=True
     hcf.abc_svc.waitFootSteps()
     for idx in range(len(gv_pose_list)):
         pose = gv_pose_list[idx]
         prev_dst_foot_midcoords=hcf.abc_svc.getFootstepParam()[1].dst_foot_midcoords
-        hcf.abc_svc.goVelocity(0,0,0);
+        yvel = -0.0001 if (idx%2==0) else 0.0001 # Iff even number test, start with rleg. Otherwise, lleg.
+        hcf.abc_svc.goVelocity(0,yvel,0);
         hcf.seq_svc.setJointAngles(pose, 0.4)
         hcf.waitInterpolation()
         hcf.seq_svc.setJointAngles(pose, 1.6);hcf.waitInterpolation() # Dummy 2step
@@ -741,7 +742,7 @@ def demoGaitGeneratorChangeStrideLimitationType():
     orig_ggp = hcf.abc_svc.getGaitGeneratorParam()[1]
     ggp = hcf.abc_svc.getGaitGeneratorParam()[1]
     ggp.stride_limitation_type = OpenHRP.AutoBalancerService.CIRCLE
-    ggp.overwritable_stride_limitation = [0.15, 0.1, 0.25, 0.1]
+    ggp.stride_limitation_for_circle_type = [0.15, 0.25, 10, 0.1, 0.1]
     ggp.leg_margin = [182.0*1e-3, 72.0*1e-3, 71.12*1e-3, 71.12*1e-3]
     hcf.abc_svc.setGaitGeneratorParam(ggp)
     # gopos check 1

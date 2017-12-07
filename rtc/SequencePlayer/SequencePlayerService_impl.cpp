@@ -194,6 +194,27 @@ CORBA::Boolean SequencePlayerService_impl::setJointAngle(const char *jname, CORB
     return m_player->setJointAngle(id, jv, tm);
 }
 
+CORBA::Boolean SequencePlayerService_impl::setJointTorques(const dSequence& jts, CORBA::Double tm)
+{
+  if (jts.length() != (unsigned int)(m_player->robot()->numJoints())) {
+      std::cerr << __PRETTY_FUNCTION__ << " num of joint is differ, input:" << jts.length() << ", robot:" << (unsigned int)(m_player->robot()->numJoints()) << std::endl;
+      return false;
+  }
+  return m_player->setJointTorques(jts.get_buffer(), tm);
+}
+
+CORBA::Boolean SequencePlayerService_impl::setJointTorque(const char *jname, CORBA::Double jt, CORBA::Double tm)
+{
+    BodyPtr r = m_player->robot();
+    Link *l = r->link(jname);
+    if (!l){
+        std::cerr << "can't find(" << jname << ")" << std::endl;
+        return false;
+    }
+    int id = l->jointId;
+    return m_player->setJointAngle(id, jt, tm);
+}
+
 CORBA::Boolean SequencePlayerService_impl::setBasePos(const dSequence& pos, CORBA::Double tm)
 {
     if (pos.length() != 3) return false;

@@ -54,6 +54,23 @@ module OpenHRP
      * @return true if set successuflly, false otherwise 
      */
     boolean setJointAngle(in string jname, in double jv, in double tm);
+    
+    /**
+     * @brief Interpolate all joint torques on robot using duration specified by \em tm. Returns without waiting for whole sequence to be sent to robot.
+     * @param jts sequence of joint torques
+     * @param tm duration [s]
+     * @return true joint angles are set successfully, false otherwise
+     */
+    boolean setJointTorques(in dSequence jts, in double tm);
+    
+    /**
+     * @brief Interpolate just one joint torque specified by \em jname using duration \em tm. Function returns without waiting for interpolation to finish
+     * @param jname joint name
+     * @param jt joint torque
+     * @param tm duration [s]
+     * @return true if set successuflly, false otherwise 
+     */
+    boolean setJointTorque(in string jname, in double jt, in double tm);
 
     /**
      * @brief Interpolate position of the base link. Function returns without waiting for interpolation to finish
