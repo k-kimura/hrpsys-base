@@ -130,12 +130,12 @@ void* ReactivePatternGenerator::func(void* arg){
     // 環境構築
     RWG::Environment environment_lfirst( link_param,
                                          traj_body_init,
-                                         InitialLfoot_p,
-                                         InitialRfoot_p );
+                                         LegIKParam::InitialLfoot_p,
+                                         LegIKParam::InitialRfoot_p );
     RWG::Environment environment_rfirst( link_param,
                                          traj_body_init,
-                                         InitialLfoot_p,
-                                         InitialRfoot_p );
+                                         LegIKParam::InitialLfoot_p,
+                                         LegIKParam::InitialRfoot_p );
     while(true){
         // シグナル待ち
         if( self->m_waitcond.wait() ){

@@ -748,7 +748,7 @@ void PushRecover::executeActiveStateExtractTrajectory(const bool suppress_pr, co
 
 
     /* TODO set rootLink position default value */
-    m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]) + ref_basePos_modif;
+    m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+LegIKParam::InitialLfoot_p[2]) + ref_basePos_modif;
     /* save current reference rootlink position for checkBodyPosMergin */
     m_prev_ref_basePos = m_robot->rootLink()->p;
 
@@ -829,8 +829,8 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
 
 
     /* TODO set rootLink position default value */
-    //m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]) + ref_basePos_modif;
-    m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
+    //m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+LegIKParam::InitialLfoot_p[2]) + ref_basePos_modif;
+    m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+LegIKParam::InitialLfoot_p[2]);
     /* save current reference rootlink position for checkBodyPosMergin */
     m_prev_ref_basePos = m_robot->rootLink()->p;
 
@@ -842,7 +842,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     if(invoke_pr){
         std::cout << "Pushed Steps" << std::endl;
         {
-            const float ystep = InitialLfoot_p[1];
+            const float ystep = LegIKParam::InitialLfoot_p[1];
             const int   step_time = m_modify_rot_context.onlineWalkParam.owpg_step_time;
             StepCommandList steps;
             switch(m_simmode){
@@ -1123,9 +1123,9 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
     m_pIKMethod->calcik_ini(body_R,
                             body_p_default_offset + ref_traj.body_p,
                             ref_traj.footl_p,
-                            InitialLfoot_p,
+                            LegIKParam::InitialLfoot_p,
                             ref_traj.footr_p,
-                            InitialRfoot_p,
+                            LegIKParam::InitialRfoot_p,
                             foot_l_pitch,
                             foot_r_pitch,
                             foot_l_roll,
@@ -1166,7 +1166,7 @@ void PushRecover::updateRefPos_ZMP(const TrajectoryElement<Vec3e> &ref_traj,
     /* calc body_p on base frame coords */
     hrp::Vector3 body_p = hrp::Vector3(traj_body_init[0] + ref_traj.body_p[0],
                                        traj_body_init[1] + ref_traj.body_p[1],
-                                       traj_body_init[2] + InitialLfoot_p[2] + ref_traj.body_p[2]);
+                                       traj_body_init[2] + LegIKParam::InitialLfoot_p[2] + ref_traj.body_p[2]);
     //body_p += ref_basePos_modif;
 
     /* set body_p to m_robot loot link Rotation */

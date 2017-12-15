@@ -79,9 +79,9 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_sbpCogOffsetOut("sbpCogOffsetOut", m_sbpCogOffset),
       m_PushRecoverServicePort("PushRecoverService"),
 #if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
-      m_owpg(0.001f, Zc, InitialLfoot_p[1], traj_body_init, InitialLfoot_p, InitialRfoot_p, OnlinePatternGenerator::func<LegIKParam, LEG_IK_TYPE>), /* 500Hz*/
+      m_owpg(0.001f, Zc, LegIKParam::InitialLfoot_p[1], traj_body_init, LegIKParam::InitialLfoot_p, LegIKParam::InitialRfoot_p, OnlinePatternGenerator::func<LegIKParam, LEG_IK_TYPE>), /* 500Hz*/
 #else
-      m_owpg(0.001f, Zc, InitialLfoot_p[1], traj_body_init, InitialLfoot_p, InitialRfoot_p, RobustOnlinePatternGenerator::func<LegIKParam, LEG_IK_TYPE>), /* 500Hz*/
+      m_owpg(0.001f, Zc, LegIKParam::InitialLfoot_p[1], traj_body_init, LegIKParam::InitialLfoot_p, LegIKParam::InitialRfoot_p, RobustOnlinePatternGenerator::func<LegIKParam, LEG_IK_TYPE>), /* 500Hz*/
 #endif
       m_owpg_cstate(&ctx,&cty),
       rate_matcher(500,1000),
@@ -90,7 +90,8 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_simmode(0),
       m_generator_select(1),
       m_debugLevel(0),
-      dlogger(40*500)
+      //dlogger(40*500)
+      dlogger(40*500, "datalog_pr.dat")
 {
     m_service0.pushrecover(this);
     emergencyStopReqFlag = false;
@@ -402,11 +403,11 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                     body_p_default_offset,
 #if 0
-                                                    InitialLfoot_p - default_zmp_offset_l,
-                                                    InitialRfoot_p - default_zmp_offset_r,
+                                                    LegIKParam::InitialLfoot_p - default_zmp_offset_l,
+                                                    LegIKParam::InitialRfoot_p - default_zmp_offset_r,
 #else
-                                                    InitialLfoot_p,
-                                                    InitialRfoot_p,
+                                                    LegIKParam::InitialLfoot_p,
+                                                    LegIKParam::InitialRfoot_p,
 #endif
                                                     foot_l_pitch,
                                                     foot_r_pitch,
@@ -717,7 +718,7 @@ void PushRecover::setTargetDataWithInterpolation(void){
             stpf.reset();
 
             /* Set Initial Base Frame Reference Position */
-            m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
+            m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+LegIKParam::InitialLfoot_p[2]);
             /* Set Initial Base Frame Reference Rotation */
 
             /* Transition to state PR_READY needs to set default values */
@@ -749,8 +750,8 @@ void PushRecover::setTargetDataWithInterpolation(void){
                 const float foot_r_pitch = 0.0f;
                 _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                               body_p_default_offset,
-                                                              InitialLfoot_p,
-                                                              InitialRfoot_p,
+                                                              LegIKParam::InitialLfoot_p,
+                                                              LegIKParam::InitialRfoot_p,
                                                               foot_l_pitch,
                                                               foot_r_pitch,
                                                               target_joint_angle );
@@ -800,7 +801,7 @@ void PushRecover::setTargetDataWithInterpolation(void){
             ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * m_act_world_root_pos;
             break;
         case PR_TRANSITION_TO_READY:
-            ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+InitialLfoot_p[2]);
+            ref_basePos = (1-transition_interpolator_ratio) * input_basePos + transition_interpolator_ratio * hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+LegIKParam::InitialLfoot_p[2]);
             break;
         default:
             break;
@@ -1590,16 +1591,16 @@ void PushRecover::trajectoryReset(void){
     m_abs_est.reset_estimation<true>(Mat3::Identity(), &m_ready_joint_angle[0]);
     m_act_world_root_pos   = hrp::Vector3(traj_body_init[0],
                                           traj_body_init[1],
-                                          //traj_body_init[2] + InitialLfoot_p[2]
+                                          //traj_body_init[2] + LegIKParam::InitialLfoot_p[2]
                                           traj_body_init[2]
                                           );
     m_body_p_at_start      = m_act_world_root_pos;
     m_body_p_diff_at_start = hrp::Vector3(0.0, 0.0, 0.0);
-    m_footl_p_at_start     = hrp::Vector3(0.0, InitialLfoot_p[1], 0.0);
-    m_footr_p_at_start     = hrp::Vector3(0.0, InitialRfoot_p[1], 0.0);
+    m_footl_p_at_start     = hrp::Vector3(0.0, LegIKParam::InitialLfoot_p[1], 0.0);
+    m_footr_p_at_start     = hrp::Vector3(0.0, LegIKParam::InitialRfoot_p[1], 0.0);
     m_prev_ref_basePos     = hrp::Vector3(traj_body_init[0],
                                           traj_body_init[1],
-                                          traj_body_init[2] + InitialLfoot_p[2]
+                                          traj_body_init[2] + LegIKParam::InitialLfoot_p[2]
                                           );
 
     m_rel_ref_zmp       = hrp::Vector3(-default_zmp_offset_l[0], 0.0f, -m_prev_ref_basePos[2]);
@@ -1731,9 +1732,19 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           _MM_ALIGN32 float q[12];
           imu_rpy = Vec3(m_rpy.data.r, m_rpy.data.p, m_rpy.data.y);
           body_p = Vec3::Zero();
+#if ROBOT==0
           for ( std::size_t i = 0; i < m_robot->numJoints(); i++ ){
               q[i] = m_robot->joint(i)->q;
           }
+#elif ROBOT==1
+          for ( std::size_t i = 0; i < 6; i++ ){
+              q[i]   = m_robot->joint(i+6)->q;
+              q[i+6] = m_robot->joint(i)->q;
+          }
+#else
+#error "PushRecover Undefined ROBOT Type"
+#endif
+
 #if 1
           _MM_ALIGN16 float fl[6], fr[6];
           for(std::size_t i=0; i<6; i++){
@@ -1976,12 +1987,12 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               { /* set reference force */
 #if 0
                   const hrp::Vector3 footl_p_ee =
-                      hrp::Vector3(ref_traj.footl_p[0]+InitialLfoot_p[0],
-                                   ref_traj.footl_p[1]+InitialLfoot_p[1],
+                      hrp::Vector3(ref_traj.footl_p[0]+LegIKParam::InitialLfoot_p[0],
+                                   ref_traj.footl_p[1]+LegIKParam::InitialLfoot_p[1],
                                    ref_traj.footl_p[2]);
                   const hrp::Vector3 footr_p_ee =
-                      hrp::Vector3(ref_traj.footr_p[0]+InitialRfoot_p[0],
-                                   ref_traj.footr_p[1]+InitialRfoot_p[1],
+                      hrp::Vector3(ref_traj.footr_p[0]+LegIKParam::InitialRfoot_p[0],
+                                   ref_traj.footr_p[1]+LegIKParam::InitialRfoot_p[1],
                                    ref_traj.footr_p[2]);
 #else /* こっちが正解かな */
                   const hrp::Vector3 footl_p_ee =

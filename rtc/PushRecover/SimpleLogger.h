@@ -6,7 +6,6 @@
 #include <time.h>
 #include <boost/circular_buffer.hpp> //for data logger
 #include <pthread.h>
-
 #include <coil/Guard.h>
 
 #define MOVE_CURSOLN(x)         "\x1b["<< #x <<";0H"
@@ -51,7 +50,11 @@ namespace dlog {
         };
         V3(float _x, float _y, float _z) : x(_x),y(_y),z(_z){
         };
+#ifndef __SSE_COMMON_H__
+        V3(const hrp::Vector3& v) : x(v[0]), y(v[1]), z(v[2]){
+#else
         V3(const Vec3& v) : x(v[0]), y(v[1]), z(v[2]){
+#endif
         };
     }PACKING;
     //typedef hrp::Vector3 V3;
@@ -159,54 +162,78 @@ namespace dlog {
         V3      Dx_offset_orig;
         V3      rel_act_cp;
     }PACKING;
+    struct DataLog_20171211_TST {
+        float   sectime;
+        float   frame;
+        float   loop;
+        float   act_q[12];
+        float   ref_q[12];
+        float   ref_dq[12];
+        V3      contact_state;
+        V3      tqst_force_com0;
+        V3      tqst_moment_com0;
+        V3      tqst_force_com1;
+        V3      tqst_moment_com1;
+        V3      tqst_force[2];
+        V3      tqst_moment[2];
+        V3      ee_force[4];
+        V3      ee_moment[4];
+        float   tau_ref[12];
+    }PACKING;
 }
 
 template<class Dlog, bool use_float>
 class data_logger_online {
 private:
-  boost::circular_buffer<Dlog> buf;
-  bool dumping_flag;
-  pthread_t dlog_thread;
-  static void* dlog_thread_fun(void* arg);
-  float progress;
+    boost::circular_buffer<Dlog> buf;
+    bool dumping_flag;
+    pthread_t dlog_thread;
+    static void* dlog_thread_fun(void* arg);
+    float progress;
+    std::string fname;
 public:
-  data_logger_online(const int size) : buf(size), dumping_flag(false), progress(0.0){};
-  ~data_logger_online(){
-    if(dumping_flag){
-      if ( pthread_join ( dlog_thread, NULL ) ) {
-	/* スレッドのjoinに失敗 */
-	std::cerr << "[data_logger_online] failed to join pthread." << std::endl;
-      }
-    }
-  };
-  bool startDumpFile(void){
-    bool ret;
-    if(dumping_flag){
-      /* Currently running dlog thread. */
-      std::cerr << "[data_logger_online] already running dumping." << std::endl;
-      ret = false;
-    }else if(pthread_create(&dlog_thread, NULL, dlog_thread_fun, this)){
-      std::cerr << "[data_logger_online] failed to create pthread." << std::endl;
-      ret = false;
-    }else{
-      dumping_flag=true;
-      ret = true;
-    }
-    return ret;
-  };
-  void push(Dlog &v){
-    if(!dumping_flag){
-      /* push data if not dummping data into file. */
-      buf.push_back(v);
-    }
-  }; /*push()*/
-  float get_progress(void){
-    if(dumping_flag){
-      return progress;
-    }else{
-      return -1.0;
-    }
-  }; /*get_progress()*/
+    explicit data_logger_online(const int size) : buf(size), dumping_flag(false), progress(0.0){
+        fname = "datalog.dat";
+    };
+    data_logger_online(const int size, const char* _fname) : buf(size), dumping_flag(false), progress(0.0){
+        fname = _fname;
+    };
+    ~data_logger_online(){
+        if(dumping_flag){
+            if ( pthread_join ( dlog_thread, NULL ) ) {
+                /* スレッドのjoinに失敗 */
+                std::cerr << "[data_logger_online] failed to join pthread." << std::endl;
+            }
+        }
+    };
+    bool startDumpFile(void){
+        bool ret;
+        if(dumping_flag){
+            /* Currently running dlog thread. */
+            std::cerr << "[data_logger_online] already running dumping." << std::endl;
+            ret = false;
+        }else if(pthread_create(&dlog_thread, NULL, dlog_thread_fun, this)){
+            std::cerr << "[data_logger_online] failed to create pthread." << std::endl;
+            ret = false;
+        }else{
+            dumping_flag=true;
+            ret = true;
+        }
+        return ret;
+    };
+    void push(Dlog &v){
+        if(!dumping_flag){
+            /* push data if not dummping data into file. */
+            buf.push_back(v);
+        }
+    }; /*push()*/
+    float get_progress(void){
+        if(dumping_flag){
+            return progress;
+        }else{
+            return -1.0;
+        }
+    }; /*get_progress()*/
 };
 
 template<class Dlog, bool use_float>
@@ -231,7 +258,8 @@ void* data_logger_online<Dlog,use_float>::dlog_thread_fun(void* arg){
   //printf("Openinig datalog.dat\n");
   //Get current time
   //sprintf(cur_time_buf, "%04d%02d%02d%02d%02d%02d", pnow->tm_year + 1900, pnow->tm_mon + 1, pnow->tm_mday, pnow->tm_hour, pnow->tm_min, pnow->tm_sec);
-  sprintf(filename,"%s/%s/%s",homedir,"log","datalog.dat");
+  //sprintf(filename,"%s/%s/%s",homedir,"log","datalog.dat");
+  sprintf(filename,"%s/%s/%s",homedir,"log", self->fname.c_str());
   //printf("%s\n",filename);
   if((fp = fopen(filename,"w"))==NULL){
     fprintf(stderr,"Error Cannot Open %s\n",filename);

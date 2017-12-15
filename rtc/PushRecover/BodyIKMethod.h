@@ -28,27 +28,27 @@
 #if 1
 // TODO : Use IKParam.InitialLfoot_p;
 /// 左脚先座標の初期値
-const static Vec3 InitialLfoot_p(-0.015,  0.10, 0.1045);
+//const static Vec3 InitialLfoot_p(-0.015,  0.10, 0.1045);
 /// 右脚先座標の初期値
-const static Vec3 InitialRfoot_p(-0.015,  -0.10, 0.1045);
+//const static Vec3 InitialRfoot_p(-0.015,  -0.10, 0.1045);
 #else
 /// 左脚先座標の初期値
-const static Vec3 InitialLfoot_p(-0.015,  0.095, 0.1045);
+//const static Vec3 InitialLfoot_p(-0.015,  0.095, 0.1045);
 /// 右脚先座標の初期値
-const static Vec3 InitialRfoot_p(-0.015,  -0.095, 0.1045);
+//const static Vec3 InitialRfoot_p(-0.015,  -0.095, 0.1045);
 #endif
 #elif ROBOT==1
 #if 1
 // TODO : Use IKParam.InitialLfoot_p;
 /// 左脚先座標の初期値
-const static Vec3 InitialLfoot_p(0.0,   0.120, 0.1335);
+//const static Vec3 InitialLfoot_p(0.0,   0.120, 0.1335);
 /// 右脚先座標の初期値
-const static Vec3 InitialRfoot_p(0.0,  -0.120, 0.1335);
+//const static Vec3 InitialRfoot_p(0.0,  -0.120, 0.1335);
 #else
 /// 左脚先座標の初期値
-const static Vec3 InitialLfoot_p(0.0,   0.100, 0.1335);
+//const static Vec3 InitialLfoot_p(0.0,   0.100, 0.1335);
 /// 右脚先座標の初期値
-const static Vec3 InitialRfoot_p(0.0,  -0.100, 0.1335);
+//const static Vec3 InitialRfoot_p(0.0,  -0.100, 0.1335);
 #endif
 #else
 #error "Undefined ROBOT TYPE."
@@ -74,9 +74,6 @@ static float g_ready_joint_angle[12] = {-5.751865e-06, -0.027068, -39.6337, 72.5
 };
 //const static Vec3 traj_body_init( -0.0586f, 0.0f, Zc - InitialLfoot_p[2]);
 const static Vec3 traj_body_init( -0.0445f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - g_CoG_offset[2]);
-//const static Vec3 traj_body_init( 0.0, 0.0f, Zc);
-//const static Vec3 traj_body_init( -0.0445f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - InitialLfoot_p[2] - g_CoG_offset[2]);
-//const static Vec3 traj_body_init( -0.0695f-g_CoG_offset[0], 0.0f-g_CoG_offset[1], Zc - InitialLfoot_p[2] - g_CoG_offset[2]);
 
 #elif ROBOT==1
 /* default joint angle for Zc = 0.620 */
