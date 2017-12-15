@@ -27,6 +27,12 @@ public:
 	void setParameter(const OpenHRP::StabilizerService::stParam& i_param);
 	void stabilizer(Stabilizer *i_stabilizer);
 
+	void startTQStabilizer(void);
+	void stopTQStabilizer(void);
+	void getTQSTParameter(OpenHRP::StabilizerService::tstParam_out i_param);
+	void setTQSTParameter(const OpenHRP::StabilizerService::tstParam& i_param);
+	bool startLogging(void);
+
 	bool dummy();
 private:
 	Stabilizer *m_stabilizer;

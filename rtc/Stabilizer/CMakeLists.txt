@@ -11,7 +11,7 @@ if(USE_QPOASES)
   add_definitions(-DUSE_QPOASES)
 endif()
 
-set(comp_sources Integrator.cpp TwoDofController.cpp Stabilizer.cpp StabilizerService_impl.cpp ../ImpedanceController/JointPathEx.cpp ../ImpedanceController/RatsMatrix.cpp ../TorqueFilter/IIRFilter.h)
+set(comp_sources Integrator.cpp TwoDofController.cpp Stabilizer.cpp TorqueBasedStabilizer.cpp StabilizerService_impl.cpp ../ImpedanceController/JointPathEx.cpp ../ImpedanceController/RatsMatrix.cpp ../TorqueFilter/IIRFilter.h)
 if(USE_QPOASES)
   set(libs hrpModel-3.1 hrpUtil-3.1 hrpsysBaseStub qpOASES)
 else()
@@ -23,7 +23,8 @@ set_target_properties(Stabilizer PROPERTIES PREFIX "")
 add_executable(StabilizerComp StabilizerComp.cpp ${comp_sources})
 target_link_libraries(StabilizerComp ${libs})
 
-set(target Stabilizer StabilizerComp)
+#set(target Stabilizer StabilizerComp)
+set(target Stabilizer)
 
 add_executable(testTwoDofController testTwoDofController.cpp TwoDofController.cpp Integrator.cpp)
 target_link_libraries(testTwoDofController ${libs})

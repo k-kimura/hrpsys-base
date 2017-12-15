@@ -29,6 +29,7 @@
 #include "../ImpedanceController/JointPathEx.h"
 #include "../ImpedanceController/RatsMatrix.h"
 #include "../TorqueFilter/IIRFilter.h"
+#include "../PushRecover/SimpleLogger.h"
 
 // </rtc-template>
 
@@ -153,6 +154,11 @@ class Stabilizer
   void calcEforce2ZmpMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const double zmp_z);
   void calcEforce2TauMatrix(hrp::dmatrix& ret, const std::vector<int>& enable_ee, const std::vector<int>& enable_joint);
   void torqueST();
+  void startTQStabilizer(void);
+  void stopTQStabilizer(void);
+  void getTQSTParameter(OpenHRP::StabilizerService::tstParam& i_stp);
+  void setTQSTParameter(const OpenHRP::StabilizerService::tstParam& i_stp);
+  bool startLogging(void);
 
   inline bool isContact (const size_t idx) // 0 = right, 1 = left
   {
@@ -351,6 +357,10 @@ class Stabilizer
   std::vector<double> cp_check_margin, tilt_margin;
   OpenHRP::StabilizerService::EmergencyCheckMode emergency_check_mode;
   qpOASES::SQProblem qp_solver;
+
+  data_logger_online<dlog::DataLog_20171211_TST,true> dlogger;
+  dlog::DataLog_20171211_TST dlog;
+  struct timeval         stv; /* time of OnInitialized */
 };
 
 

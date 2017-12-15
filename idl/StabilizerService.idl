@@ -267,6 +267,53 @@ module OpenHRP
      */
     void stopStabilizer();
     boolean dummy();
+
+    /**
+     * @brief start logging on pr RTC
+     * @param
+     * @return true if set successfully, false otherwise
+     */
+    boolean startLogging();
+
+    /**
+     * @struct tstParam
+     * @brief Torque-based Stabilizer Parameters.
+     */
+    struct tstParam {
+        DblArray2 pgain;
+        DblArray2 dgain;
+        //double pgain[12];
+        //double dgain[12];
+    };
+
+    /**
+     * @brief Get Torque-based Stabilizer parameters.
+     * @param i_param is output parameters
+     * @return true if set successfully, false otherwise
+     */
+    void getTQSTParameter(out tstParam i_param);
+
+    /**
+     * @brief Set Torque-based Stabilizer parameters.
+     * @param i_param is input parameters
+     * @return true if set successfully, false otherwise
+     */
+    void setTQSTParameter(in tstParam i_param);
+
+    /**
+     * @brief Start Torque-based Stabilizer mode.
+     * @param
+     * @return
+     */
+    void startTQStabilizer();
+
+    /**
+     * @brief Sop Torque-based Stabilizer mode.
+     * @param
+     * @return
+     */
+    void stopTQStabilizer();
+
   };
 };
 
