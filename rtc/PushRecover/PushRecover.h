@@ -1480,25 +1480,57 @@ void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, con
 
 void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, const TimedBooleanSeq &buttons, JoyState &jstate, RobustOnlinePatternGenerator* p_owpg) const{
     JoyCommand command;
-    if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){
-        jstate.enabled = true;
-    }else if( (buttons.data[2]==1) && (jstate.enabled==true) ){
-        jstate.enabled = false;
-    }
-    if( buttons.data[0] == 1 ){
-        jstate.keep_idle = true;
+    const size_t button_length = buttons.data.length();
+    if( button_length==8 ){
+        /* for flight stick */
+        if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){
+            jstate.enabled = true;
+        }else if( (buttons.data[2]==1) && (jstate.enabled==true) ){
+            jstate.enabled = false;
+        }
+        if( buttons.data[0] == 1 ){
+            jstate.keep_idle = true;
+        }else{
+            jstate.keep_idle = false;
+        }
+
+        command.x = -axes.data[1];
+        command.y = -axes.data[0];
+
+        if( jstate.enabled && loop%10==0 ){
+            p_owpg->command(command);
+        }
+
+        jstate.prev_command = command;
+
+        //std::cout << "[pr] flight command.x,y=[" << command.x << ", " << command.y << "], en=" << jstate.enabled << ", keep=" << jstate.keep_idle << std::endl;
+    }else if( button_length==11 ){
+        /* for PS3 joy */
+        if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){
+            jstate.enabled = true;
+        }else if( (buttons.data[0]==1) && (jstate.enabled==true) ){
+            jstate.enabled = false;
+        }
+
+        if( buttons.data[5]==1 ){
+            jstate.keep_idle = true;
+        }else{
+            jstate.keep_idle = false;
+        }
+
+        command.x = -axes.data[1];
+        command.y = -axes.data[0];
+
+        if( jstate.enabled && loop%10==0 ){
+            p_owpg->command(command);
+        }
+
+        jstate.prev_command = command;
+
+        //std::cout << "[pr] ps3 command.x,y=[" << command.x << ", " << command.y << "], en=" << jstate.enabled << ", keep=" << jstate.keep_idle << std::endl;
     }else{
-        jstate.keep_idle = false;
+        std::cout << "[pr] button length[" << button_length << "] is not undefined." << std::endl;
     }
-
-    command.x = -axes.data[1];
-    command.y = -axes.data[0];
-
-    if( jstate.enabled && loop%10==0 ){
-        p_owpg->command(command);
-    }
-
-    jstate.prev_command = command;
 
 #ifdef DEBUG_HOGE
     if( loop%200==0 ){

@@ -143,8 +143,13 @@ RTC::ReturnCode_t PushRecover::onInitialize()
 
   addInPort("joyaxes", m_joyaxesIn);
   addInPort("joybuttons", m_joybuttonsIn);
+#if 0
   m_joyaxes.data.length(6); //TODO
   m_joybuttons.data.length(8); //TODO
+#else
+  m_joyaxes.data.length(1); //TODO
+  m_joybuttons.data.length(1); //TODO
+#endif
 
   // Set OutPort buffer
   addOutPort("q", m_qRefOut);
