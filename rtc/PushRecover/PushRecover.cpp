@@ -78,10 +78,11 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_walkingStatesOut("walkingStatesOut", m_walkingStates),
       m_sbpCogOffsetOut("sbpCogOffsetOut", m_sbpCogOffset),
       m_PushRecoverServicePort("PushRecoverService"),
+      m_dt_gen(0.002f),
 #if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
       m_owpg(0.001f, Zc, LegIKParam::InitialLfoot_p[1], traj_body_init, LegIKParam::InitialLfoot_p, LegIKParam::InitialRfoot_p, OnlinePatternGenerator::func<LegIKParam, LEG_IK_TYPE>), /* 500Hz*/
 #else
-      m_owpg(0.001f, Zc, LegIKParam::InitialLfoot_p[1], traj_body_init, LegIKParam::InitialLfoot_p, LegIKParam::InitialRfoot_p, RobustOnlinePatternGenerator::func<LegIKParam, LEG_IK_TYPE>), /* 500Hz*/
+      m_owpg(m_dt_gen, Zc, LegIKParam::InitialLfoot_p[1], traj_body_init, LegIKParam::InitialLfoot_p, LegIKParam::InitialRfoot_p, RobustOnlinePatternGenerator::func<LegIKParam, LEG_IK_TYPE>), /* 500Hz*/
 #endif
       m_owpg_cstate(&ctx,&cty),
       rate_matcher(500,1000),
@@ -1898,7 +1899,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           TrajectoryElement<Vec3e> ref_traj;
 
           const bool suppress_pr = !( !m_walkingStates.data && on_ground && m_current_control_state != PR_BUSY);
-          const int pattern_generator_selector = m_generator_select;
+          const int pattern_generator_selector = m_generator_select; // latch generator_select value
           const bool enable_modify = true;
           switch(pattern_generator_selector){
           case 0:
@@ -1918,6 +1919,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               //                     ref_traj);
               //modifyFootHeight(on_ground, m_modify_rot_context, ref_traj);
               break;
+          case 2:
+              break;
           default:
               ref_traj = m_prev_ref_traj;
               break;
@@ -1936,7 +1939,8 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               dlog.sf_footr_p       = CONV_VEC3(ref_traj.footr_p);
               dlog.ref_traj_dp      = CONV_VEC3(ref_traj.dp);
               dlog.ref_traj_body_dp = CONV_VEC3(ref_traj.body_dp);
-              dlog.rpy  = CONV_VEC3( m_modify_rot_context.rot );
+               dlog.rpy  = CONV_VEC3( m_modify_rot_context.rot );
+              //dlog.rpy  = dlog::V3((float)m_rpy.data.r, (float)m_rpy.data.p, (float)m_rpy.data.y);
               dlog.filtered_rot  = CONV_VEC3( m_modify_rot_context.filtered_rot );
               dlog.lpf_rot  = CONV_VEC3( m_modify_rot_context.lpf_rot );
               dlog.rot_offset  = CONV_VEC3( m_modify_rot_context.rot_offset );

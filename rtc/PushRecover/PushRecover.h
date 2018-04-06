@@ -514,6 +514,7 @@ protected:
     // </rtc-template>
 
 private:
+    const float m_dt_gen;
     double m_dt;
     double m_dt_i;
     double m_mg, m_mg2; /* m_robot->totalMass() */
@@ -806,27 +807,9 @@ void PushRecover::executeActiveStateExtractTrajectory(const bool suppress_pr, co
 void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground,
                                                             const hrp::Vector3 &ref_basePos_modif,
                                                             TrajectoryElement<Vec3e> &ref_traj){
-    // const double threshold  = 70;
-    // const double threshold2 = (threshold*threshold);
-
-    // /* check the state */
-    // const bool checkBodyPosflag = checkBodyPosMergin(threshold2, loop, on_ground & (pushDetector_state==PD_ENABLE));
-
     // /* Check if Emergency Stop Flag is active */
     const bool emergency_flag = checkEmergencyFlag();
     const bool invoke_pr = emergency_flag;
-
-    const float diff_x = m_act_root_pos(0) - m_prev_ref_basePos(0);
-    const float diff_y = m_act_root_pos(1) - m_prev_ref_basePos(1);
-    const float diff_z = m_act_root_pos(2) - Zc; /* TODO 効果の検証 */
-
-    /* x0[3] = [ p0, x0, Dx0] */
-    const Vec3 x0[] = {
-        Vec3(0.0f, 0.0, 0.0f),
-        Vec3( pushDetectParam.x_gain_0 * ref_basePos_modif(0), pushDetectParam.x_gain_1 * ref_basePos_modif(1), 0.0f ),
-        Vec3( (float)(pushDetectParam.dx_gain_0 * m_act_cogvel(0)), -(float)(pushDetectParam.dx_gain_1 * m_act_cogvel(1)), 0.0f)
-    };
-
 
     /* TODO set rootLink position default value */
     //m_robot->rootLink()->p = hrp::Vector3(traj_body_init[0], traj_body_init[1], traj_body_init[2]+LegIKParam::InitialLfoot_p[2]) + ref_basePos_modif;
@@ -931,9 +914,6 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
             hrp::Vector3(body_p_diff_offset[0],
                          body_p_diff_offset[1],
                          body_p_diff_offset[2]);
-        // m_body_p_diff_at_start += hrp::Vector3(m_owpg_state.p[0],
-        //                                        m_owpg_state.p[1],
-        //                                        m_owpg_state.p[2]);
         m_footl_p_at_start     += hrp::Vector3(m_owpg_state.foot_l_p_mod[0],
                                                m_owpg_state.foot_l_p_mod[1],
                                                m_owpg_state.foot_l_p_mod[2]);
@@ -962,6 +942,7 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
 #if 0
         ustate.rot      =  bodylink::rot2rpy<bodylink::ROBOTICS>(pose_state.body.R);
 #else
+        /* TODO:: Setting usate.rot is not looks like wrong, but there are some mistakes in using body R. */
         //ustate.rot      =  pose_state.body.rp_filtered;
         ustate.rot = Vec3::Zero();
 #endif
@@ -976,7 +957,13 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     }
 #endif
 
-    const int inc_frame = (int)(m_dt*1000);
+    //const int inc_frame = (int)(m_dt/m_dt_gen);
+    const int inc_frame = 1;
+    if(loop%500==0){
+        std::cout << "inc_frame = " << inc_frame << std::endl;
+        std::cout << "m_dt = " << m_dt << std::endl;
+        std::cout << "m_dt_gen = " << m_dt_gen << std::endl;
+    }
     {
         //const bool idle_state = m_simmode==0?false:true; /* TODO */
         const bool idle_state = m_joystate.keep_idle?true:m_simmode==0?false:true; /* TODO */
@@ -1006,6 +993,10 @@ void PushRecover::executeActiveStateExtractTrajectoryOnline(const bool on_ground
     ref_traj.body_rpy  = Vec3(m_owpg_state.body_rpy);
     ref_traj.footl_rpy = m_owpg_state.foot_l_rpy_mod;
     ref_traj.footr_rpy = m_owpg_state.foot_r_rpy_mod;
+    if(loop%500==0){
+        printf("m_owpg_state.body_rpy[0,1] = [%5.4f, %5.4f]\n", m_owpg_state.body_rpy[0], m_owpg_state.body_rpy[1]);
+        printf("ref_traj.body_rpy[0,1]     = [%5.4f, %5.4f]\n", ref_traj.body_rpy[0], ref_traj.body_rpy[1]);
+    }
 #endif
 
 #if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
@@ -1071,6 +1062,15 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
                                            0.0f),
                          (bodylink::v4sf*)s, (bodylink::v4sf*)c );
     const Mat3 body_R                  = rotateMat3<1>( c[1], s[1] )*rotateMat3<0>( c[0], s[0] );
+#ifdef DEBUG_HOGE
+    if(loop%500==0){
+        printf("ref_traj.body_rpy[0,1] = [%5.4f, %5.4f]\n", ref_traj.body_rpy[0], ref_traj.body_rpy[1]);
+        printf("body_roll_gain = %5.4f, body_pitch_gain=%5.4f\n", m_modify_rot_context.onlineWalkParam.body_roll_gain, m_modify_rot_context.onlineWalkParam.body_pitch_gain);
+        printf("c[0,1]=[%5.4f, %5.4f]\n",c[0],c[1]);
+        printf("s[0,1]=[%5.4f, %5.4f]\n",s[0],s[1]);
+        std::cout << "body_R=\n" << body_R << std::endl;
+    }
+#endif
 #elif 0
     _MM_ALIGN16 float c[4],s[4];
     bodylink::sincos_ps( bodylink::F32vec4(m_modify_rot_context.lpf_rot[0]*-0.900f,
@@ -1505,21 +1505,29 @@ void PushRecover::interpretJoystickCommandandSend(const TimedFloatSeq &axes, con
 
         //std::cout << "[pr] flight command.x,y=[" << command.x << ", " << command.y << "], en=" << jstate.enabled << ", keep=" << jstate.keep_idle << std::endl;
     }else if( button_length==11 ){
-        /* for PS3 joy */
-        if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){
+        /* for PS3 and XBOX joy */
+        if(( buttons.data[1] == 1 ) && (jstate.enabled==false)){ // B Botton on XBOX
             jstate.enabled = true;
-        }else if( (buttons.data[0]==1) && (jstate.enabled==true) ){
+        }else if( (buttons.data[0]==1) && (jstate.enabled==true) ){ //A Botton on XBOX
             jstate.enabled = false;
         }
 
-        if( buttons.data[5]==1 ){
+        if( buttons.data[5]==1 ){ // RB Botton on XBOX
             jstate.keep_idle = true;
         }else{
             jstate.keep_idle = false;
         }
 
-        command.x = -axes.data[1];
-        command.y = -axes.data[0];
+        {
+            const double thre = 0.0305;
+            const double d = -axes.data[1];
+            command.x = (d>=thre)?(d-thre):((d<=-thre)?(d+thre):0.0);
+        }
+        {
+            const double thre = 0.0305;
+            const double d = -axes.data[0];
+            command.y = (d>=thre)?(d-thre):((d<=-thre)?(d+thre):0.0);
+        }
 
         if( jstate.enabled && loop%10==0 ){
             p_owpg->command(command);
