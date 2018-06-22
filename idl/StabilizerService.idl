@@ -173,6 +173,56 @@ module OpenHRP
       sequence< SupportPolygonVertices > eefm_support_polygon_vertices_sequence;
       /// Use force difference control or each limb force control. True by default.
       boolean eefm_use_force_difference_control;
+      /// X-direction minisegway control parameter by zed odometry
+      double eefm_x_zed;
+      /// Yaw-direction minisegway control parameter by imu ROS topic
+      double eefm_yaw_imu;
+      /// X-direction minisegway control gain by ps3joy
+      double eefm_x_ps3joy;
+      /// Yaw-direction minisegway control gain by ps3joy
+      double eefm_yaw_ps3joy;
+      /// Yaw-direction minisegway control P gain
+      double segway_av_yaw_pgain;
+      /// Yaw-direction minisegway control I gain
+      double segway_av_yaw_igain;
+      /// Yaw-direction minisegway control D gain
+      double segway_av_yaw_dgain;
+      /// X-direction minisegway control P gain
+      double segway_lv_x_pgain;
+      /// X-direction minisegway control I gain
+      double segway_lv_x_igain;
+      /// X-direction minisegway control D gain
+      double segway_lv_x_dgain;
+      /// minisegway ride mode ON/OFF
+      boolean segway_ride_mode;
+      /// minisegway PID learning mode ON/OFF (after ride)
+      boolean segway_learning_mode_after_ride;
+      /// minisegway damping learning mode ON/OFF (during ride)
+      boolean segway_learning_mode_during_ride;
+      /// minisegway PID learning mode ON/OFF
+      boolean segway_learning_mode;
+      /// minisegway PID learning gradient vector
+      DblArray3 segway_learning_grad_J;
+      /// minisegway PID learning updated PID gain vector
+      DblArray3 segway_learning_av_yaw_pid_gain;
+      /// minisegway PID learning rate vector
+      DblArray3 segway_learning_rate_pid;
+      /// minisegway PID learning mode ON/OFF (linear velocity x)
+      boolean segway_learning_mode_lv_x;
+      /// minisegway PID learning gradient vector (linear velocity x)
+      DblArray3 segway_learning_grad_J_lv_x;
+      /// minisegway PID learning updated PID gain vector (linear velocity x)
+      DblArray3 segway_learning_lv_x_pid_gain;
+      /// minisegway PID learning rate vector (linear velocity x)
+      DblArray3 segway_learning_rate_pid_lv_x;
+      /// minisegway damping learning rate (etaQ)
+      double segway_learning_rate_etaQ;
+      /// minisegway damping learning rate (etaR)
+      double segway_learning_rate_etaR;
+      /// seesaw ride mode ON/OFF
+      boolean seesaw_ride_mode;
+      /// seesaw pos damping learning mode ON/OFF (during ride)
+      boolean seesaw_learning_mode_during_ride;
       /// Sequence of all end-effector force/moment distribution weight
       sequence<sequence<double, 6> > eefm_ee_forcemoment_distribution_weight;
       // common
@@ -212,6 +262,23 @@ module OpenHRP
     };
 
     /**
+     * @struct sgParam
+     * @brief Segway Parameters.
+     */
+    struct sgParam {
+      /// minisegway control parameter
+      double segway_param;
+      /// minisegway Yaw target angular velocity
+      double segway_av_yaw_target;
+      /// minisegway X target linear velocity
+      double segway_lv_x_target;
+      /// minisegway X actual linear velocity
+      double segway_lv_x_act;
+      /// dummy
+      string dummy;
+    };
+
+    /**
      * @brief Get Stabilizer parameters.
      * @param i_param is output parameters
      * @return true if set successfully, false otherwise
@@ -224,6 +291,20 @@ module OpenHRP
      * @return true if set successfully, false otherwise
      */
     void setParameter(in stParam i_param);
+
+    /**
+     * @brief Get Segway parameters.
+     * @param i_param is output parameters
+     * @return true if set successfully, false otherwise
+     */
+    void getSegwayParameter(out sgParam i_param);
+
+    /**
+     * @brief Set Segway parameters.
+     * @param i_param is input parameters
+     * @return true if set successfully, false otherwise
+     */
+    void setSegwayParameter(in sgParam i_param);
 
     /**
      * @brief Start Stabilizer mode.

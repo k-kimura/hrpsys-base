@@ -372,6 +372,8 @@ class HrpsysConfigurator:
         if rtm.findPort(self.rh.ref, "lfsensor") and rtm.findPort(
                                      self.rh.ref, "rfsensor") and self.st:
             connectPorts(self.kf.port("rpy"), self.st.port("rpy"))
+            connectPorts(self.kf.port("rateOut"), self.st.port("rate"))
+            connectPorts(self.kf.port("accOut"), self.st.port("acc"))
             connectPorts(self.sh.port("zmpOut"), self.abc.port("zmpIn"))
             connectPorts(self.sh.port("basePosOut"), self.abc.port("basePosIn"))
             connectPorts(self.sh.port("baseRpyOut"), self.abc.port("baseRpyIn"))
@@ -530,6 +532,8 @@ class HrpsysConfigurator:
                 connectPorts(self.el.port("beepCommand"), self.bp.port("beepCommand"))
             if self.co:
                 connectPorts(self.co.port("beepCommand"), self.bp.port("beepCommand"))
+            if self.st:
+                connectPorts(self.st.port("beepCommand"), self.bp.port("beepCommand"))
 
     def activateComps(self):
         '''!@brief
