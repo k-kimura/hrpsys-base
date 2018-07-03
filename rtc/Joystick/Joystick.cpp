@@ -19,7 +19,7 @@ static const char* joystick_spec[] =
     "description",       "Access a joystick control device.",
     "version",           HRPSYS_PACKAGE_VERSION,
     "vendor",            "AIST",
-    "category",          "Human input",
+    "category",          "Human-input",
     "activity_type",     "PERIODIC",
     "kind",              "DataFlowComponent",
     "max_instance",      "1",
@@ -107,6 +107,7 @@ RTC::ReturnCode_t Joystick::onShutdown(RTC::UniqueId ec_id)
 RTC::ReturnCode_t Joystick::onActivated(RTC::UniqueId ec_id)
 {
   std::cout << "Joystick::onActivated(" << ec_id << ")" << std::endl;
+  std::cout << "Joystick device(" << m_device << ") opening" << std::endl;
   m_js = new joystick(m_device.c_str());
   if (m_js->is_open()){
     m_axes.data.length(m_js->nAxes());
