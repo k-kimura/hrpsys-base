@@ -180,16 +180,54 @@ CORBA::Boolean RobotHardwareService_impl::readDigitalOutput(::OpenHRP::RobotHard
     return m_robot->readDigitalOutput((char *)(dout->get_buffer()));
 }
 
+CORBA::Boolean RobotHardwareService_impl::setJointInertia(const char* name, ::CORBA::Double mn)
+{
+    m_robot->setJointInertia(name, mn);
+}
+
+void RobotHardwareService_impl::setJointInertias(const ::OpenHRP::RobotHardwareService::DblSequence& mns)
+{
+    m_robot->setJointInertias(mns.get_buffer());
+}
+
+
+void RobotHardwareService_impl::enableDisturbanceObserver()
+{
+    m_robot->enableDisturbanceObserver();
+}
+
+void RobotHardwareService_impl::disableDisturbanceObserver()
+{
+    m_robot->disableDisturbanceObserver();
+}
+
+void RobotHardwareService_impl::setDisturbanceObserverGain(::CORBA::Double gain)
+{
+    m_robot->setDisturbanceObserverGain(gain);
+}
+
+
 void RobotHardwareService_impl::setJointControlMode(const char *jname, OpenHRP::RobotHardwareService::JointControlMode jcm)
 {
     joint_control_mode mode;
     switch(jcm){
+    case OpenHRP::RobotHardwareService::FREE:
+        mode = JCM_FREE;
+        break;
     case OpenHRP::RobotHardwareService::POSITION:
         mode = JCM_POSITION;
         break;
+    case OpenHRP::RobotHardwareService::TORQUE:
+        mode = JCM_TORQUE;
+        break;
+    case OpenHRP::RobotHardwareService::VELOCITY:
+        mode = JCM_VELOCITY;
+        break;
+#if defined(ROBOT_IOB_VERSION) && ROBOT_IOB_VERSION >= 4
     case OpenHRP::RobotHardwareService::POSITION_TORQUE:
         mode = JCM_POSITION_TORQUE;
         break;
+#endif
     default:
         return;
     }
