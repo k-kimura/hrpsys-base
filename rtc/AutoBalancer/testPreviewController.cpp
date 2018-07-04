@@ -24,41 +24,29 @@ int main(int argc, char* argv[])
       }
   }
 
-  double dt = 0.001, max_tm = 8.0;
+  double dt = 0.01, max_tm = 8.0;
   std::queue<hrp::Vector3> ref_zmp_list;
   std::deque<double> tm_list;
   for (size_t i = 0; i < static_cast<size_t>(round(max_tm / dt)); i++) {
     double tmp_tm = i * dt;
     tm_list.push_back(tmp_tm);
     hrp::Vector3 v;
-    if (tmp_tm < 0.5) {
+    if (tmp_tm < 2) {
       v << 0, 0, 0;
-    } else if (tmp_tm < 1.0) {
-      v << 0.095, 0.095, 0;
-    } else if (tmp_tm < 1.5) {
-      v << 0.095*2.0, -0.095, 0;
-    } else if (tmp_tm < 2.0) {
-      v << 0.095*3.0, 0.095, 0;
-    } else if (tmp_tm < 2.5) {
-      v << 0.095*4.0, -0.095, 0;
-    } else if (tmp_tm < 3.0) {
-      v << 0.095*5.0, 0.095, 0;
-    } else if (tmp_tm < 3.5) {
-      v << 0.095*6.0, -0.095, 0;
-    } else if (tmp_tm < 4.0) {
-      v << 0.095*7.0, 0.095, 0;
-    } else if (tmp_tm < 4.5) {
-      v << 0.095*8.0, -0.095, 0;
+    } else if (tmp_tm < 4) {
+      v << -0.02, 0.02, 0;
+    } else if (tmp_tm < 6) {
+      v << 0.02, -0.02, 0;
     } else {
-        v << 0.095*9.0, 0.000, 0;
+      v << 0, -0.02, 0;
     }
     ref_zmp_list.push(v);
   }
 
-  //preview_dynamics_filter<preview_control> df(dt, 0.620, ref_zmp_list.front());
-  preview_dynamics_filter<extended_preview_control> df(dt, 0.620, ref_zmp_list.front());
+  //preview_dynamics_filter<preview_control> df(dt, 0.8, ref_zmp_list.front());
+  preview_dynamics_filter<extended_preview_control> df(dt, 0.8, ref_zmp_list.front());
   std::string fname("/tmp/plot.dat");
-  FILE* fp = fopen(fname.c_str(), "w");
+  FILE* fp = fopen(fname.c_str(), "w");  
   double cart_zmp[3], refzmp[3];
   bool r = true;
   size_t index = 0;

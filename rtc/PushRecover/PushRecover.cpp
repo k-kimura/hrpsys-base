@@ -1130,9 +1130,18 @@ PushRecover::PR_CONTACT_STATE PushRecover::calcFootOriginCoords (hrp::Vector3& f
           std::cout << "--offset[" << lr << "]=" << (target->R * ee_params[eei].ee_localp).transpose() << std::endl;
           std::cout << "--eep[" << lr << "]=" << eep.transpose() << std::endl;
           std::cout << "--rot=\n" << leg_c[eei].rot << std::endl;
+          std::cout << "--eei="<<eei<<endl;
       }
 #endif
   }
+#ifdef DEBUG_HOGE
+  if(loop%1000==0){
+      std::cout << "ee_params[ee_index_lr[EE_INDEX_RIGHT]].act_contact_state = " << ee_params[ee_index_lr[EE_INDEX_RIGHT]].act_contact_state << std::endl;
+      std::cout << "ee_params[ee_index_lr[EE_INDEX_LEFT]].act_contact_state = " << ee_params[ee_index_lr[EE_INDEX_LEFT]].act_contact_state << std::endl;
+      std::cout << "ee_params[ee_index_lr[EE_INDEX_RIGHT]].fsensor_name = " << ee_params[ee_index_lr[EE_INDEX_RIGHT]].fsensor_name << std::endl;
+      std::cout << "ee_params[ee_index_lr[EE_INDEX_LEFT]].fsensor_name = " << ee_params[ee_index_lr[EE_INDEX_LEFT]].fsensor_name << std::endl;
+  }
+#endif
   if (ee_params[ee_index_lr[EE_INDEX_RIGHT]].act_contact_state &&
       ee_params[ee_index_lr[EE_INDEX_LEFT]].act_contact_state) {
       /* Both foots are on ground */
@@ -1939,8 +1948,6 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               dlog.sf_footr_p       = CONV_VEC3(ref_traj.footr_p);
               dlog.ref_traj_dp      = CONV_VEC3(ref_traj.dp);
               dlog.ref_traj_body_dp = CONV_VEC3(ref_traj.body_dp);
-               dlog.rpy  = CONV_VEC3( m_modify_rot_context.rot );
-              //dlog.rpy  = dlog::V3((float)m_rpy.data.r, (float)m_rpy.data.p, (float)m_rpy.data.y);
               dlog.filtered_rot  = CONV_VEC3( m_modify_rot_context.filtered_rot );
               dlog.lpf_rot  = CONV_VEC3( m_modify_rot_context.lpf_rot );
               dlog.rot_offset  = CONV_VEC3( m_modify_rot_context.rot_offset );
@@ -2156,6 +2163,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
           dlog.ref_q[i]  = (float)rad2deg(m_ref_q[i]);
           dlog.ref_dq[i] = (float)rad2deg(m_robot->joint(i)->dq);
       }
+      dlog.rpy  = dlog::V3((float)m_rpy.data.r, (float)m_rpy.data.p, (float)m_rpy.data.y);
       dlog.ref_zmp       = CONV_HRPVEC3(m_ref_zmp);
       dlog.rel_ref_zmp   = CONV_HRPVEC3(m_rel_ref_zmp);
       dlog.ref_base_pos  = CONV_HRPVEC3(ref_basePos);
