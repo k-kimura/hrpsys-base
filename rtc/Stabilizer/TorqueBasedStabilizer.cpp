@@ -4,6 +4,7 @@
 
 typedef coil::Guard<coil::Mutex> Guard;
 
+//#define DEBUG_HOGE
 #define DEBUGP ((m_debugLevel==1 && loop%200==0) || m_debugLevel > 1 )
 #define DEBUGP2 (0)
 
@@ -34,7 +35,11 @@ void Stabilizer::torqueST()
     m_robot->rootLink()->R = act_Rs * (senR.transpose() * m_robot->rootLink()->R);
     m_robot->calcForwardKinematics();
     calcFootOriginCoords (foot_origin_pos, foot_origin_rot);
-
+#ifdef DEBUG_HOGE
+    if(loop%500==0){
+        std::cout << "[st] rootLink()->R = " << m_robot->rootLink()->R << std::endl;
+    }
+#endif
     hrp::Vector3 f_ga, tau_ga;
     std::vector<hrp::dvector6> ee_force, ee_force2;
     std::vector<int> enable_ee, enable_ee2;
@@ -59,6 +64,20 @@ void Stabilizer::torqueST()
     {
         dlog.tqst_force_com0  = dlog::V3(f_ga);
         dlog.tqst_moment_com0 = dlog::V3(tau_ga);
+#ifdef DEBUG_HOGE
+        if(loop%500==0){
+            std::cout << "[st] act_cog  = " << act_cog.transpose() << std::endl;
+            std::cout << "[st] ref_cog  = " << ref_cog.transpose() << std::endl;
+            std::cout << "[st] f_org_ro = \n" << foot_origin_rot << std::endl;
+            std::cout << "[st] f*(ac-rc) = " << (foot_origin_rot * (act_cog - ref_cog)).transpose() << std::endl;
+        }
+#endif
+#ifdef DEBUG_HOGE
+        if(loop%500==0){
+          std::cout << "[st] force_com0 = " << f_ga.transpose() << std::endl;
+          std::cout << "[st] moment_com0 = " << tau_ga.transpose() << std::endl;
+        }
+#endif
     }
     std::vector<hrp::dmatrix> Gc1;
     std::vector<hrp::dmatrix> Gc2;
@@ -87,10 +106,21 @@ void Stabilizer::torqueST()
     {
         dlog.tqst_force_com1  = dlog::V3(f_ga);
         dlog.tqst_moment_com1 = dlog::V3(tau_ga);
+#ifdef DEBUG_HOGE
+        if(loop%500==0){
+            std::cout << "[st] force_com1 = " << f_ga.transpose() << std::endl;
+            std::cout << "[st] moment_com1 = " << tau_ga.transpose() << std::endl;
+        }
+#endif
         for( std::size_t i = 0; i<tmp_f.size(); i++){
             const hrp::dvector6 tmp = tmp_f[i];
             dlog.tqst_force[i]  = dlog::V3(tmp[0],tmp[1],tmp[2]);
             dlog.tqst_moment[i] = dlog::V3(tmp[3],tmp[4],tmp[5]);
+#ifdef DEBUG_HOGE
+            if(loop%500==0){
+                std::cout << "[st] force_moment["<<i<<"] = " << tmp.transpose() << std::endl;
+            }
+#endif
         }
     }
     size_t k = 0;
@@ -124,6 +154,11 @@ void Stabilizer::torqueST()
                 const hrp::dvector6 tmp = ee_force2[i];
                 dlog.ee_force[i]  = dlog::V3(tmp[0], tmp[1], tmp[2]);
                 dlog.ee_moment[i] = dlog::V3(tmp[3], tmp[4], tmp[5]);
+#ifdef DEBUG_HOGE
+                if(loop%500==0){
+                    std::cout << "[st] ee_force_moment["<<i<<"] = " << tmp.transpose() << std::endl;
+                }
+#endif
             }
         }
         for(std::size_t i = 0; i<12; i++){

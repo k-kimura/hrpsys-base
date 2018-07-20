@@ -1817,7 +1817,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               const float cp_x_thre = 0.15f;
               const float cp_y_thre = 0.15f;
               Vec3 rel_cp = *(m_abs_est.getRelActCP());
-              if((((cp_x_thre < rel_cp[0]) || (-cp_x_thre > rel_cp[0])) || ((cp_y_thre < rel_cp[1]) || (-cp_y_thre > rel_cp[1])))&&loop%20==0){
+              if((((cp_x_thre < rel_cp[0]) || (-cp_x_thre > rel_cp[0])) || ((cp_y_thre < rel_cp[1]) || (-cp_y_thre > rel_cp[1])))&&loop%500==0){
                   std::cout << "[pr] " << PRED << "CP Detect Fall down!!!!" << PDEF << "[" << rel_cp[0] << ", " << rel_cp[1] << "]" << std::endl;
               }else if(loop%500==0){
                   //std::cout << "[pr] " << " CP [" << rel_cp[0] << ", " << rel_cp[1] << "]" << std::endl;
