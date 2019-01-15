@@ -68,6 +68,8 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_joybuttonsIn("joybuttons", m_joybuttons),
       m_qRefOut("q", m_qRef),
       m_tauRefOut("tau", m_tauRef),
+      m_wRefOut("wc", m_wRef),
+      m_wheel_brakeOut("wb", m_wheel_brake),
       m_zmpOut("zmpOut", m_zmp),
       m_basePosOut("basePosOut", m_basePos),
       m_baseRpyOut("baseRpyOut", m_baseRpy),
@@ -91,6 +93,7 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_simmode(0),
       m_generator_select(1),
       m_debugLevel(0),
+      m_expectedJointNum(12),
       //dlogger(40*500)
       dlogger(40*500, "datalog_pr.dat")
 {
@@ -404,25 +407,47 @@ RTC::ReturnCode_t PushRecover::onInitialize()
 #elif defined(__GNUC__)
       const Mat3 body_R = Mat3::Identity();
 #endif
+      //const float foot_l_pitch = 0.0f + LegIKParam::InitialLfoot_pitch;
+      //const float foot_r_pitch = 0.0f + LegIKParam::InitialRfoot_pitch;
       const float foot_l_pitch = 0.0f;
       const float foot_r_pitch = 0.0f;
-      _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
-                                                    body_p_default_offset,
-#if 0
-                                                    LegIKParam::InitialLfoot_p - default_zmp_offset_l,
-                                                    LegIKParam::InitialRfoot_p - default_zmp_offset_r,
-#else
-                                                    LegIKParam::InitialLfoot_p,
-                                                    LegIKParam::InitialRfoot_p,
-#endif
-                                                    foot_l_pitch,
-                                                    foot_r_pitch,
-                                                    target_joint_angle );
+      const float foot_l_roll = 0.0f, foot_r_roll = 0.0f;
+      m_pIKMethod->calcik_ini(body_R,
+                              body_p_default_offset,
+                              Vec3Zero(),
+                              LegIKParam::InitialLfoot_p,
+                              Vec3Zero(),
+                              LegIKParam::InitialRfoot_p,
+                              LegIKParam::InitialLfoot_R,
+                              LegIKParam::InitialRfoot_R,
+                              foot_l_pitch,
+                              foot_r_pitch,
+                              foot_l_roll,
+                              foot_r_roll,
+                              target_joint_angle );
+//       _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
+//                                                     body_p_default_offset,
+// #if 0
+//                                                     LegIKParam::InitialLfoot_p - default_zmp_offset_l,
+//                                                     LegIKParam::InitialRfoot_p - default_zmp_offset_r,
+// #else
+//                                                     LegIKParam::InitialLfoot_p,
+//                                                     LegIKParam::InitialRfoot_p,
+// #endif
+//                                                     foot_l_pitch,
+//                                                     foot_r_pitch,
+//                                                     target_joint_angle );
 #if ROBOT==0
       for(int i=0;i < 12; i++){
           m_ready_joint_angle[i] = target_joint_angle[i];
       }
 #elif ROBOT==1
+      for(int i=0;i < 6; i++){
+          /* m_robot of L1 starts from right leg. */
+          m_ready_joint_angle[i+6] = target_joint_angle[i];
+          m_ready_joint_angle[i]   = target_joint_angle[i+6];
+      }
+#elif ROBOT==2
       for(int i=0;i < 6; i++){
           /* m_robot of L1 starts from right leg. */
           m_ready_joint_angle[i+6] = target_joint_angle[i];
@@ -498,14 +523,43 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   m_modify_rot_context.copyWalkParam( &m_owpg );
 #endif
 
-  if(m_robot->numJoints()!=12){
-      std::cout << "[" << m_profile.instance_name << "] number of joint is expected 12." << std::endl;
+  //RTC::Properties& prop = getProperties();
+  m_expectedJointNum = std::atoi(prop["expectedJointNum"].c_str());
+  std::cout << "expectedJointNum = " << m_expectedJointNum << std::endl;
+
+  if(m_robot->numJoints()!=m_expectedJointNum){
+      std::cout << "[" << m_profile.instance_name << "] number of joint is expected to be " << m_expectedJointNum << "." << std::endl;
       return RTC::RTC_ERROR;
+  }
+
+  /* Initialize Wheel Controller if robot has wheel leg. */
+  if(m_robot->name() == "L1W"){
+      std::cout << "[" << m_profile.instance_name << "] Robot name matched L1W. Generating wheel controller." << std::endl;
+      const int wheel_num = 2;
+      /* wc (Wheel Command) port exists only if robot has wheeled leg */
+      addOutPort("wc", m_wRefOut);
+      m_wRef.data.length(wheel_num);
+      addOutPort("wb", m_wheel_brakeOut);
+      m_wheel_brake.data.length(wheel_num);
+      m_wheel_ctrl = std::make_shared<WheelLeg::WheelController>(wheel_num);
+      m_wheel_ctrl->activate();
+      std::cout << "[" << m_profile.instance_name << "] Reading wheel controller initial gain from conf files." << std::endl;
+      double pgain,dgain;
+      coil::stringTo(pgain, prop["wc_pgain"].c_str());
+      coil::stringTo(dgain, prop["wc_dgain"].c_str());
+      std::cout << "[" << m_profile.instance_name << "] wheel_ctrl.pgain = " << pgain << std::endl;
+      std::cout << "[" << m_profile.instance_name << "] wheel_ctrl.dgain = " << dgain << std::endl;
+      m_wheel_ctrl->setPgain(pgain);
+      m_wheel_ctrl->setDgain(dgain);
   }else{
-      return RTC::RTC_OK;
+      m_wheel_ctrl = std::make_shared<WheelLeg::WheelController>(1);
+      m_wheel_ctrl->deactivate();
+      std::cout << "[" << m_profile.instance_name << "] Robot name does not matched L1W. Not generate Wheel controller." << std::endl;
   }
 
   std::cout << "[" << m_profile.instance_name << "] onInitialize() Finished." << std::endl;
+
+  return RTC::RTC_OK;
 }
 
 
@@ -744,6 +798,8 @@ void PushRecover::setTargetDataWithInterpolation(void){
                 m_robot->joint(i)->q = m_qRef.data[i];
             }
             /* Initialize Default joint angle on PR_READY state */
+#if 0
+            /* Initialization of m_ready_joint_angle on PR_TRANSITION_TO_READY state is obsoleted. */
             {
                 _MM_ALIGN16 float target_joint_angle[12];
                 _MM_ALIGN16 float pre_joint_angle[12];
@@ -752,8 +808,8 @@ void PushRecover::setTargetDataWithInterpolation(void){
 #elif defined(__GNUC__)
                 const Mat3 body_R = Mat3::Identity();
 #endif
-                const float foot_l_pitch = 0.0f;
-                const float foot_r_pitch = 0.0f;
+                const float foot_l_pitch = 0.0f + LegIKParam::InitialLfoot_pitch;
+                const float foot_r_pitch = 0.0f + LegIKParam::InitialRfoot_pitch;
                 _MM_ALIGN16 Vec3 body_p = m_pIKMethod->calcik(body_R,
                                                               body_p_default_offset,
                                                               LegIKParam::InitialLfoot_p,
@@ -771,10 +827,17 @@ void PushRecover::setTargetDataWithInterpolation(void){
                     m_ready_joint_angle[i+6] = target_joint_angle[i];
                     m_ready_joint_angle[i]   = target_joint_angle[i+6];
                 }
+#elif ROBOT==2
+                for(int i=0;i < 6; i++){
+                    /* m_robot of L1 starts from right leg. */
+                    m_ready_joint_angle[i+6] = target_joint_angle[i];
+                    m_ready_joint_angle[i]   = target_joint_angle[i+6];
+                }
 #else
 #error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"
 #endif
             }
+#endif
         }else{
             transition_interpolator_ratio = 1.0; /* use controller output */
         }
@@ -850,6 +913,28 @@ void PushRecover::setTargetDataWithInterpolation(void){
         }
     }/* End of Interpolation */
 
+    if(m_wheel_ctrl->isActive()){
+#if 0
+        m_ref_q[12] = m_robot->joint(12)->q = m_wheel_ctrl->calcOutput(0, act_base_rpy[1], (loop%250==0)?true:false);
+        m_ref_q[13] = m_robot->joint(13)->q = m_wheel_ctrl->calcOutput(1, act_base_rpy[1]);
+#else
+        const double pitch = m_rpy.data.p;
+        //const double pitch = act_base_rpy[1];
+        m_wRef.data[0] = m_wheel_ctrl->calcOutput(0, pitch, (loop%250==0)?true:false);
+        m_wRef.data[1] = m_wheel_ctrl->calcOutput(1, pitch);
+        m_wheel_brake.data[0] = m_wheel_ctrl->brakeState(0);
+        m_wheel_brake.data[1] = m_wheel_ctrl->brakeState(1);
+#endif
+        if(loop%250==0){
+            std::cout << "[pr] m_ref_q[12,13] = ["<<m_ref_q[12]<<", "<<m_ref_q[13]<<"], wref = [" << m_wRef.data[0] << ", " << m_wRef.data[1] << "], act_base_rpy[1] = " << act_base_rpy[1] << ", m_rpy.data.p = " << m_rpy.data.p<<std::endl;
+            if(m_wheel_ctrl->brakeState(0)){
+                std::cout << "[pr] Braking" << std::endl;
+            }else{
+                std::cout << "[pr] Brake Free" << std::endl;
+            }
+        }
+    }
+
     // reference acceleration
     hrp::Sensor* sen = m_robot->sensor<hrp::RateGyroSensor>("gyrometer");
     if (sen != NULL) {
@@ -884,9 +969,11 @@ void PushRecover::setTargetDataWithInterpolation(void){
 #if 1
     bool error_flag = false;
     for( int i=0; i<m_robot->numJoints(); i++){
-        if((m_ref_q[i]>10.0)||(m_ref_q[i]<-10.0)||(std::isnan(m_ref_q[i]))||(!(std::isfinite(m_ref_q[i])))){
-            error_flag = true;
-            std::cout << "[PR] m_ref_q[" << i << "] =" << m_ref_q[i] << std::endl;
+        if(i!=12 || i!=13){
+            if((m_ref_q[i]>10.0)||(m_ref_q[i]<-10.0)||(std::isnan(m_ref_q[i]))||(!(std::isfinite(m_ref_q[i])))){
+                error_flag = true;
+                std::cout << "[PR] m_ref_q[" << i << "] =" << m_ref_q[i] << std::endl;
+            }
         }
     }
     if(error_flag){
@@ -1004,6 +1091,14 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     //     m_tauRef.data[i] = 0.01*i;
     // }
     m_tauRefOut.write();
+
+    /* TODO */
+    if(m_wheel_ctrl->isActive()){
+        m_wRef.tm = m_qRef.tm;
+        m_wRefOut.write();
+        m_wheel_brake.tm = m_qRef.tm;
+        m_wheel_brakeOut.write();
+    }
 
     // control parameters
     /* TODO */
@@ -1561,6 +1656,9 @@ bool PushRecover::controlBodyCompliance(bool is_enable){
 #if ROBOT==1
         std::cout << "[pr] ROBOT=L1 TYPE\n";
 #endif
+#if ROBOT==2
+        std::cout << "[pr] ROBOT=L1W TYPE\n";
+#endif
         std::cout << "[pr] " << MAKE_CHAR_COLOR_RED << "controlBodyCompliance()" << MAKE_CHAR_COLOR_DEFAULT << (is_enable?"[ENABLED]":"[DISABLED]") << std::endl;
         std::cout << "[pr] simmode=" << m_simmode << std::endl;
     }
@@ -1691,6 +1789,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
   if (loop%10000==0){
       std::cout << "[" << m_profile.instance_name<< "] onExecute(" << ec_id << ")" << std::endl;
+      std::cout << "[" << m_profile.instance_name<< "] ROBOT = " << RobotConfiguration::robotname << std::endl;
       /* Show current state */
       std::string state_string;
       switch(m_current_control_state){
@@ -1714,6 +1813,7 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
       }else{
           std::cout << "[" << m_profile.instance_name << "] interpolator working" << std::endl;
       }
+      std::cout << "[" << m_profile.instance_name << "] m_robot->numJoints() = " << m_robot->numJoints() << std::endl;
   }
 
   /* check dataport input */
@@ -1752,6 +1852,11 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               q[i] = m_robot->joint(i)->q;
           }
 #elif ROBOT==1
+          for ( std::size_t i = 0; i < 6; i++ ){
+              q[i]   = m_robot->joint(i+6)->q;
+              q[i+6] = m_robot->joint(i)->q;
+          }
+#elif ROBOT==2
           for ( std::size_t i = 0; i < 6; i++ ){
               q[i]   = m_robot->joint(i+6)->q;
               q[i+6] = m_robot->joint(i)->q;
@@ -2135,6 +2240,39 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
               m_tauRef.data[j] = tauref[j];
           }
       }
+#elif ROBOT==2
+      { //calc Left
+          hrp::dmatrix ee_J = hrp::dmatrix::Zero(6, 6);
+          m_pleg[EE_INDEX_LEFT]->calcJacobian(ee_J);
+          Eigen::VectorXd ee_f = Eigen::VectorXd::Zero(6);
+          ee_f[0] = m_ref_force_vec[EE_INDEX_LEFT][0];
+          ee_f[1] = m_ref_force_vec[EE_INDEX_LEFT][1];
+          ee_f[2] = m_ref_force_vec[EE_INDEX_LEFT][2];
+          ee_f[3] = 0.0;
+          ee_f[4] = 0.0;
+          ee_f[5] = 0.0;
+          const Eigen::VectorXd tauref = ee_J.transpose() * ee_f;
+          for(int j=0; j<6; j++){
+              m_tauRef.data[j+6] = tauref[j];
+          }
+      }
+      { //calc Right
+          hrp::dmatrix ee_J = hrp::dmatrix::Zero(6, 6);
+          m_pleg[EE_INDEX_RIGHT]->calcJacobian(ee_J);
+          Eigen::VectorXd ee_f = Eigen::VectorXd::Zero(6);
+          ee_f[0] = m_ref_force_vec[EE_INDEX_RIGHT][0];
+          ee_f[1] = m_ref_force_vec[EE_INDEX_RIGHT][1];
+          ee_f[2] = m_ref_force_vec[EE_INDEX_RIGHT][2];
+          ee_f[3] = 0.0;
+          ee_f[4] = 0.0;
+          ee_f[5] = 0.0;
+          const Eigen::VectorXd tauref = ee_J.transpose() * ee_f;
+          for(int j=0; j<6; j++){
+              m_tauRef.data[j] = tauref[j];
+          }
+      }
+#else
+#error "PushRecover::onexecute() Definition of ROBOT is unavailable."
 #endif
 #if 0
       if(loop%500==0){
@@ -2588,6 +2726,32 @@ bool PushRecover::getOnlineWalkParam(OpenHRP::PushRecoverService::OnlineWalkPara
     std::cerr << "[" << m_profile.instance_name << "] getOnlineWalkParam" << std::endl;
     m_modify_rot_context.copyWalkParam( &o_param );
     return true;
+};
+
+bool PushRecover::setWheelMode(const long mode){
+    std::cerr << "[" << m_profile.instance_name << "] setWheelMode(" << mode << ")" << std::endl;
+    return m_wheel_ctrl->setControlMode(mode);
+};
+
+bool PushRecover::setWheelControllerParam(const OpenHRP::PushRecoverService::WheelControllerParamSet& i_param)
+{
+    std::cerr << "[" << m_profile.instance_name << "] setWheelControllerParam" << std::endl;
+    return m_wheel_ctrl->setParam(i_param);
+};
+
+bool PushRecover::getWheelControllerParam(OpenHRP::PushRecoverService::WheelControllerParamSet& o_param)
+{
+    std::cerr << "[" << m_profile.instance_name << "] getWheelControllerParam" << std::endl;
+    return m_wheel_ctrl->getParam(o_param);
+    //o_param.drivenum = 2;
+    //o_param.param.length(2);
+    // o_param.param[0].enable = true;
+    // o_param.param[1].enable = true;
+    // o_param.param[0].pgain = 1.0;
+    // o_param.param[1].pgain = 1.0;
+    // o_param.param[0].dgain = 1.0;
+    // o_param.param[1].dgain = 1.0;
+    //return true;
 };
 
 

@@ -76,3 +76,19 @@ CORBA::Boolean PushRecoverService_impl::getOnlineWalkParam(OpenHRP::PushRecoverS
 {
   return m_pushrecover->getOnlineWalkParam(o_param);
 };
+
+CORBA::Boolean PushRecoverService_impl::setWheelMode(const CORBA::Long mode)
+{
+    return m_pushrecover->setWheelMode((long)mode);
+};
+
+CORBA::Boolean PushRecoverService_impl::setWheelControllerParam(const OpenHRP::PushRecoverService::WheelControllerParamSet& i_param)
+{
+  return m_pushrecover->setWheelControllerParam(i_param);
+};
+
+CORBA::Boolean PushRecoverService_impl::getWheelControllerParam(OpenHRP::PushRecoverService::WheelControllerParamSet_out o_param)
+{
+    o_param = new OpenHRP::PushRecoverService::WheelControllerParamSet();
+    return m_pushrecover->getWheelControllerParam(*o_param);
+};

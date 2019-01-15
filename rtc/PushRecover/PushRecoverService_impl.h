@@ -27,6 +27,9 @@ public:
     CORBA::Boolean getPushDetectParam(OpenHRP::PushRecoverService::PushDetectParam_out o_param);
     CORBA::Boolean setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWalkParam& i_param);
     CORBA::Boolean getOnlineWalkParam(OpenHRP::PushRecoverService::OnlineWalkParam_out o_param);
+    CORBA::Boolean setWheelMode(const CORBA::Long mode);
+    CORBA::Boolean setWheelControllerParam(const OpenHRP::PushRecoverService::WheelControllerParamSet& i_param);
+    CORBA::Boolean getWheelControllerParam(OpenHRP::PushRecoverService::WheelControllerParamSet_out o_param);
     //
     void pushrecover(PushRecover *i_pushrecover);
 private:

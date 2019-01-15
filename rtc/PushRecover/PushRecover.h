@@ -51,6 +51,7 @@
 /* for gettimeofday */
 #include <sys/time.h>
 #include <time.h>
+#include "WheelController.h"
 
 // Service implementation headers
 // <rtc-template block="service_impl_h">
@@ -173,6 +174,12 @@ public:
     /* OnlineWalkParam Service function */
     bool setOnlineWalkParam(const OpenHRP::PushRecoverService::OnlineWalkParam& i_param);
     bool getOnlineWalkParam(OpenHRP::PushRecoverService::OnlineWalkParam& o_param);
+
+    /* Set wheel control mode */
+    bool setWheelMode(const long mode);
+    /* WheelControllerParam Service function */
+    bool setWheelControllerParam(const OpenHRP::PushRecoverService::WheelControllerParamSet& i_param);
+    bool getWheelControllerParam(OpenHRP::PushRecoverService::WheelControllerParamSet& o_param);
 
     template<class T>
     struct TrajectoryElement {
@@ -447,7 +454,9 @@ protected:
     TimedFloatSeq   m_joyaxes;
     TimedBooleanSeq m_joybuttons;
 
-    TimedDoubleSeq m_tauRef;
+    TimedDoubleSeq  m_tauRef;
+    TimedDoubleSeq  m_wRef;
+    TimedBooleanSeq m_wheel_brake;
     // </rtc-template>
 
     // DataInPort declaration
@@ -494,6 +503,9 @@ protected:
     RTC::OutPort<RTC::TimedPoint3D> m_sbpCogOffsetOut;
 
     RTC::OutPort<RTC::TimedDoubleSeq> m_tauRefOut;
+
+    RTC::OutPort<RTC::TimedDoubleSeq> m_wRefOut;
+    RTC::OutPort<RTC::TimedBooleanSeq> m_wheel_brakeOut;
     // </rtc-template>
 
     // CORBA Port declaration
@@ -522,6 +534,7 @@ private:
     std::map<std::string, hrp::Vector3> abs_forces, abs_moments, abs_ref_forces, abs_ref_moments;
     hrp::BodyPtr m_robot, m_robot_current;
     unsigned int m_debugLevel;
+    unsigned int m_expectedJointNum;
     unsigned int m_simmode;
     unsigned int m_generator_select;
     bool emergencyStopReqFlag;
@@ -622,6 +635,8 @@ private:
 #endif
     AbsolutePoseEstimator<LegIKParam,LEG_IK_TYPE>    m_abs_est;
     //boost::array<float, 12> qs, Dqs, DDqs;
+
+    WheelLeg::WheelControllerPtr m_wheel_ctrl;
 
     BodyControlContext ctx, cty;
     PatternState m_owpg_state;
@@ -1120,12 +1135,18 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
 #else
 #error "foot rpy is not calculated"
 #endif
+
+    //foot_l_pitch += LegIKParam::InitialLfoot_pitch;
+    //foot_r_pitch += LegIKParam::InitialRfoot_pitch;
+
     m_pIKMethod->calcik_ini(body_R,
                             body_p_default_offset + ref_traj.body_p,
                             ref_traj.footl_p,
                             LegIKParam::InitialLfoot_p,
                             ref_traj.footr_p,
                             LegIKParam::InitialRfoot_p,
+                            LegIKParam::InitialLfoot_R,
+                            LegIKParam::InitialRfoot_R,
                             foot_l_pitch,
                             foot_r_pitch,
                             foot_l_roll,
@@ -1150,6 +1171,15 @@ void PushRecover::executeActiveStateCalcJointAngle(const TrajectoryElement<Vec3e
         // g_ready_joint_angle[i]   = target_joint_angle[i];
         // g_ready_joint_angle[i+6] = target_joint_angle[i+6];
     }
+#elif ROBOT==2
+    //bool error_flag = false;
+    /* set target_joint_angle */
+    for(int i=0;i < 6; i++){
+        /* m_robot of L1W starts from right leg. */
+        m_robot->joint(i)->q   = target_joint_angle[i+6];  /* rad to rad */
+        m_robot->joint(i+6)->q = target_joint_angle[i];  /* rad to rad */
+    }
+    //m_robot->joint(12)->q = m_robot->joint(13)->q = (loop%2000<1000)?bodylink::S_PI/10.0f:-bodylink::S_PI/10.0f;
 #else
 #error "PushRecover setting m_robot->joint(i)-q. Undefined ROBOT Type"
 #endif
