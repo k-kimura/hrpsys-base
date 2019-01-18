@@ -111,14 +111,15 @@ namespace WheelLeg {
         bool   brakeState(const unsigned int index){
             return m_context[index].brakeState;
         }
-        double calcOutput(const unsigned int index, const double body_pitch, const bool debug=false){
+        double calcOutput(const unsigned int index, const double body_pitch, const double body_rate, const bool debug=false){
             double ret;
             const double max_pitch = 45 * 3.14159265/180.0;
             const OpenHRP::PushRecoverService::WheelControllerParam* p_param = &m_param.param[index];
             if(debug){
-                std::cout << "wheelcontroller.calcOutput() : index = " << index << ", body_pitch = " << body_pitch << std::endl;
+                std::cout << "wheelcontroller.calcOutput() : index = " << index << ", body_pitch = " << body_pitch << ", body_rate = " << body_rate << std::endl;
             }
             m_context[index].x = body_pitch;
+            m_context[index].dx = body_rate;
             if(p_param->enable){
                 switch(m_mode){
                 case IDLE:
@@ -153,7 +154,7 @@ namespace WheelLeg {
                 ret = 0.0;
                 m_context[index].brakeState = false;
             }
-            m_context[index].dx = m_context[index].x - m_context[index].prev_x;
+            //m_context[index].dx = m_context[index].x - m_context[index].prev_x;
             const double max_val = 39.9;
             if(ret>max_val){
                 ret = max_val;

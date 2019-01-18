@@ -8,6 +8,8 @@ module OpenHRP
   interface PushRecoverService
   {
       typedef sequence<string> sSequence;
+      typedef sequence<double> dSequence;
+      typedef double DblArray3[3];
 
       struct PushDetectParam
       {
@@ -62,6 +64,24 @@ module OpenHRP
           boolean enable;
           long    datal;
           double  dataf;
+      };
+
+      struct WheelControllerParam
+      {
+          long      id;
+          boolean   enable;
+          double odom;
+          double pgain;
+          double dgain;
+          DblArray3 imu_offset;
+      };
+
+      struct WheelControllerParamSet
+      {
+          long                           drivenum;
+          sequence<WheelControllerParam> param;
+          long   datal;
+          double dataf;
       };
 
       boolean dummy(in double a);
@@ -142,5 +162,26 @@ module OpenHRP
        * @return true if set successfully, false otherwise
        */
       boolean getOnlineWalkParam(out OnlineWalkParam o_param);
+
+      /**
+       * @brief Set Wheel control mode
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean setWheelMode(in long mode);
+
+      /**
+       * @brief Set wheel controller Param
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean setWheelControllerParam(in WheelControllerParamSet i_param);
+
+      /**
+       * @brief Get wheel Controller Param
+       * @param
+       * @return true if set successfully, false otherwise
+       */
+      boolean getWheelControllerParam(out WheelControllerParamSet o_param);
   };
 };

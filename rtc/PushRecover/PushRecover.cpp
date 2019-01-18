@@ -915,13 +915,30 @@ void PushRecover::setTargetDataWithInterpolation(void){
 
     if(m_wheel_ctrl->isActive()){
 #if 0
-        m_ref_q[12] = m_robot->joint(12)->q = m_wheel_ctrl->calcOutput(0, act_base_rpy[1], (loop%250==0)?true:false);
-        m_ref_q[13] = m_robot->joint(13)->q = m_wheel_ctrl->calcOutput(1, act_base_rpy[1]);
-#else
         const double pitch = m_rpy.data.p;
+#else
+        double rate = m_rate.data.avy;
+        double pitch;
+        double accx =  m_acc.data.ax;
+        double accy = -m_acc.data.ay;
+        double accz = -m_acc.data.az;
+        double norm2_acc = accx*accx+accz*accz;
+        if( norm2_acc > 25.0 ){
+            pitch = atan2(accx, accz);
+        }else{
+            pitch = 3.14159265/2.0;
+        }
+        if(loop%250==0){
+            std::cout << "[pr] acc = [" << accx << ", " << accy << ", " << accz << "],  pitch = " << pitch << ", norm2_acc = " << norm2_acc << ", rate = " << rate << std::endl;
+        }
+#endif
+#if 0
+        m_ref_q[12] = m_robot->joint(12)->q = m_wheel_ctrl->calcOutput(0, act_base_rpy[1], rate, (loop%250==0)?true:false);
+        m_ref_q[13] = m_robot->joint(13)->q = m_wheel_ctrl->calcOutput(1, act_base_rpy[1], rate);
+#else
         //const double pitch = act_base_rpy[1];
-        m_wRef.data[0] = m_wheel_ctrl->calcOutput(0, pitch, (loop%250==0)?true:false);
-        m_wRef.data[1] = m_wheel_ctrl->calcOutput(1, pitch);
+        m_wRef.data[0] = m_wheel_ctrl->calcOutput(0, pitch, rate, (loop%250==0)?true:false);
+        m_wRef.data[1] = m_wheel_ctrl->calcOutput(1, pitch, rate);
         m_wheel_brake.data[0] = m_wheel_ctrl->brakeState(0);
         m_wheel_brake.data[1] = m_wheel_ctrl->brakeState(1);
 #endif
