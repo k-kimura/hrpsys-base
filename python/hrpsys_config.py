@@ -193,6 +193,7 @@ class HrpsysConfigurator(object):
     ic = None  # ImpedanceController
     abc = None  # AutoBalancer
     st = None  # Stabilizer
+    pr = None  # PushRecover
 
     tf_version = None
     kf_version = None
@@ -398,6 +399,7 @@ class HrpsysConfigurator(object):
             connectPorts(self.abc.port("walkingStates"), self.st.port("walkingStates"))
             connectPorts(self.abc.port("sbpCogOffset"), self.st.port("sbpCogOffset"))
             connectPorts(self.abc.port("toeheelRatio"), self.st.port("toeheelRatio"))
+            # connectPorts(self.pr.port("debugData2"), self.st.port("debugData2"))
             if self.es:
                 connectPorts(self.st.port("emergencySignal"), self.es.port("emergencySignal"))
             connectPorts(self.st.port("emergencySignal"), self.abc.port("emergencySignal"))
@@ -753,6 +755,7 @@ class HrpsysConfigurator(object):
             ['ic', "ImpedanceController"],
             ['abc', "AutoBalancer"],
             ['st', "Stabilizer"],
+            ['pr', "PushRecover"],
             ['co', "CollisionDetector"],
             ['tc', "TorqueController"],
             ['te', "ThermoEstimator"],
@@ -906,6 +909,8 @@ class HrpsysConfigurator(object):
             self.connectLoggerPort(self.st, 'currentBasePos')
             self.connectLoggerPort(self.st, 'currentBaseRpy')
             self.connectLoggerPort(self.st, 'debugData')
+        if self.pr != None:
+            self.connectLoggerPort(self.pr, 'debugData2')
         if self.el != None:
             self.connectLoggerPort(self.el, 'q')
         if self.rh != None:

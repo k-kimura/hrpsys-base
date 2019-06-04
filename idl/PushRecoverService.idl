@@ -73,6 +73,10 @@ module OpenHRP
           double odom;
           double pgain;
           double dgain;
+          double thgain;
+          double phigain;
+          double dthgain;
+          double dphigain;
           DblArray3 imu_offset;
       };
 
@@ -82,6 +86,10 @@ module OpenHRP
           sequence<WheelControllerParam> param;
           long   datal;
           double dataf;
+          DblArray3 imu_zero;
+          boolean complementary_filter_reset;
+          double complementary_filter_pitch;
+          boolean phi_reset;
       };
 
       boolean dummy(in double a);

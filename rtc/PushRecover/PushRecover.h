@@ -457,6 +457,7 @@ protected:
     TimedDoubleSeq  m_tauRef;
     TimedDoubleSeq  m_wRef;
     TimedBooleanSeq m_wheel_brake;
+    TimedDoubleSeq m_debugData2;
     // </rtc-template>
 
     // DataInPort declaration
@@ -506,6 +507,7 @@ protected:
 
     RTC::OutPort<RTC::TimedDoubleSeq> m_wRefOut;
     RTC::OutPort<RTC::TimedBooleanSeq> m_wheel_brakeOut;
+    RTC::OutPort<RTC::TimedDoubleSeq> m_debugData2Out;
     // </rtc-template>
 
     // CORBA Port declaration
@@ -539,6 +541,7 @@ private:
     unsigned int m_generator_select;
     bool emergencyStopReqFlag;
     int loop;
+    double pitch_compl, m_qCurrent_data12_offset, m_qCurrent_data13_offset, prev_m_qCurrent_data12, prev_m_qCurrent_data13;
 
     hrp::JointPathExPtr m_pleg[2];
 
@@ -562,6 +565,8 @@ private:
     hrp::Vector3  act_base_rpy;
     hrp::Matrix33 m_prev_act_foot_origin_rot;
     double        m_prev_act_force_z[2]; /* previous force z used in calcZMP */
+
+    boost::shared_ptr<FirstOrderLowPassFilter<double> > dphi_filter;
 
     /* Estimated state data */
     hrp::Vector3 m_est_cogvel_from_rpy;

@@ -79,6 +79,7 @@ PushRecover::PushRecover(RTC::Manager* manager)
       m_controlSwingSupportTimeOut("controlSwingSupportTimeOut", m_controlSwingSupportTime),
       m_walkingStatesOut("walkingStatesOut", m_walkingStates),
       m_sbpCogOffsetOut("sbpCogOffsetOut", m_sbpCogOffset),
+      m_debugData2Out("debugData2", m_debugData2),
       m_PushRecoverServicePort("PushRecoverService"),
       m_dt_gen(0.002f),
 #if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
@@ -168,6 +169,7 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   addOutPort("controlSwingSupportTimeOut", m_controlSwingSupportTimeOut);
   addOutPort("walkingStatesOut", m_walkingStatesOut);
   addOutPort("sbpCogOffsetOut", m_sbpCogOffsetOut);
+  addOutPort("debugData2", m_debugData2Out);
   // Set OutPort buffer
 
   // Set service provider to Ports
@@ -473,6 +475,9 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   ref_zmp_modif_filter = boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> >(new FirstOrderLowPassFilter<hrp::Vector3>(4.0, m_dt, hrp::Vector3::Zero())); // [Hz]
   ref_basePos_modif_filter = boost::shared_ptr<FirstOrderLowPassFilter<hrp::Vector3> >(new FirstOrderLowPassFilter<hrp::Vector3>(4.0, m_dt, hrp::Vector3::Zero())); // [Hz]
 
+  /* Initialize dphi IIR filter */
+  dphi_filter = boost::shared_ptr<FirstOrderLowPassFilter<double> >(new FirstOrderLowPassFilter<double>(4.0, m_dt, 0.0)); // [Hz]
+
   /* Initialize PR trajectory generator related values */
   trajectoryReset();
 
@@ -515,6 +520,13 @@ RTC::ReturnCode_t PushRecover::onInitialize()
 
   loop = 1;
 
+  pitch_compl = 0.0;
+  m_qCurrent_data12_offset = 0.0;
+  m_qCurrent_data13_offset = 0.0;
+  prev_m_qCurrent_data12 = 0.0;
+  prev_m_qCurrent_data13 = 0.0;
+  m_debugData2.data.length(6); m_debugData2.data[0] = 0.0; m_debugData2.data[1] = 0.0; m_debugData2.data[2] = 0.0; m_debugData2.data[3] = 0.0; m_debugData2.data[4] = 0.0; m_debugData2.data[5] = 0.0;
+
 #if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
   m_modify_rot_context.copyWalkParam( &m_owpg );
 //#error "m_owpg is used"
@@ -551,6 +563,19 @@ RTC::ReturnCode_t PushRecover::onInitialize()
       std::cout << "[" << m_profile.instance_name << "] wheel_ctrl.dgain = " << dgain << std::endl;
       m_wheel_ctrl->setPgain(pgain);
       m_wheel_ctrl->setDgain(dgain);
+      double thgain,phigain,dthgain,dphigain;
+      coil::stringTo(thgain, prop["wc_thgain"].c_str());
+      coil::stringTo(phigain, prop["wc_phigain"].c_str());
+      coil::stringTo(dthgain, prop["wc_dthgain"].c_str());
+      coil::stringTo(dphigain, prop["wc_dphigain"].c_str());
+      std::cout << "[" << m_profile.instance_name << "] wheel_ctrl.thgain = " << thgain << std::endl;
+      std::cout << "[" << m_profile.instance_name << "] wheel_ctrl.phigain = " << phigain << std::endl;
+      std::cout << "[" << m_profile.instance_name << "] wheel_ctrl.dthgain = " << dthgain << std::endl;
+      std::cout << "[" << m_profile.instance_name << "] wheel_ctrl.dphigain = " << dphigain << std::endl;
+      m_wheel_ctrl->setTHgain(thgain);
+      m_wheel_ctrl->setPHIgain(phigain);
+      m_wheel_ctrl->setDTHgain(dthgain);
+      m_wheel_ctrl->setDPHIgain(dphigain);
   }else{
       m_wheel_ctrl = std::make_shared<WheelLeg::WheelController>(1);
       m_wheel_ctrl->deactivate();
@@ -917,32 +942,136 @@ void PushRecover::setTargetDataWithInterpolation(void){
 #if 0
         const double pitch = m_rpy.data.p;
 #else
-        double rate = m_rate.data.avy;
-        double pitch;
-        double accx =  m_acc.data.ax;
-        double accy = -m_acc.data.ay;
+        double rate_y = -m_rate.data.avy;
+        // double pitch;
+        // double pitch = m_rpy.data.p;
+        // double accx =  m_acc.data.ax;
+        double accx = -m_acc.data.ax;
+        // double accy = -m_acc.data.ay;
         double accz = -m_acc.data.az;
-        double norm2_acc = accx*accx+accz*accz;
-        if( norm2_acc > 25.0 ){
-            pitch = atan2(accx, accz);
-        }else{
-            pitch = 3.14159265/2.0;
+        // double norm2_acc = accx*accx+accz*accz;
+        // if( norm2_acc > 25.0 ){
+        //     pitch = atan2(accx, accz);
+        // }else{
+        //     pitch = 3.14159265/2.0;
+        // }
+        double pitch_acc = atan2(accx, accz);
+        const double Kconst = 0.8;
+        const double AlphaGain = Kconst / (Kconst + m_dt);
+        if( m_wheel_ctrl->getComplementaryFilterReset() ){
+            std::cout << "[KIM pr] Complementary Filter Reset !!!" << std::endl;
+            // pitch_compl = pitch_acc;
+            pitch_compl = 0.0;
+            m_wheel_ctrl->setComplementaryFilterReset(false);
         }
+        pitch_compl = AlphaGain * (pitch_compl + rate_y * m_dt) + (1 - AlphaGain) * pitch_acc; // Complementary Filter
+        m_wheel_ctrl->setComplementaryFilterPitch(pitch_compl);
+        // if(loop%250==0){
+        //     std::cout << "[pr] acc = [" << accx << ", " << accy << ", " << accz << "],  pitch = " << pitch << ", norm2_acc = " << norm2_acc << ", rate = " << rate << std::endl;
+        // }
         if(loop%250==0){
-            std::cout << "[pr] acc = [" << accx << ", " << accy << ", " << accz << "],  pitch = " << pitch << ", norm2_acc = " << norm2_acc << ", rate = " << rate << std::endl;
+            std::cout << "[KIM pr] m_dt = " << m_dt << std::endl;
+            std::cout << "[KIM pr] acc = [" << accx << ", " << accz << "],  pitch_acc = " << pitch_acc << ", rate_y = " << rate_y << std::endl;
+            // std::cout << "[KIM pr] m_wheel_ctrl->imuZero() = [" << m_wheel_ctrl->imuZero()[0] << ", " << m_wheel_ctrl->imuZero()[1] << ", " << m_wheel_ctrl->imuZero()[2] << "]" << std::endl;
+            std::cout << "[KIM pr] m_wheel_ctrl->imuZero()[1] = " << m_wheel_ctrl->imuZero()[1] << std::endl;
+            std::cout << "[KIM pr] pitch_compl = " << pitch_compl << std::endl;
+            std::cout << "[KIM pr] m_qCurrent.data[12] = " << m_qCurrent.data[12] << ",  m_qCurrent.data[13] = " << m_qCurrent.data[13] << std::endl;
         }
+        // std::cout << "[KIM pr] m_qCurrent.data[12] = " << m_qCurrent.data[12] << ",  m_qCurrent.data[13] = " << m_qCurrent.data[13] << std::endl;
+        // if(m_qCurrent.data[13] > -0.167455+2*3.14159265){
+        //     m_wheel_ctrl->setControlMode(0); // 2*PI stop test
+        // }
+        if( m_wheel_ctrl->getPhiReset() ){
+            std::cout << "[KIM pr] Phi Reset !!!" << std::endl;
+            m_qCurrent_data12_offset = m_qCurrent.data[12];
+            m_qCurrent_data13_offset = m_qCurrent.data[13];
+            std::cout << "[KIM pr] m_qCurrent_data12_offset = " << m_qCurrent_data12_offset << ",  m_qCurrent_data13_offset = " << m_qCurrent_data13_offset << std::endl;
+            m_wheel_ctrl->setPhiReset(false);
+        }
+        double m_dqCurrent_data12 = (m_qCurrent.data[12] - prev_m_qCurrent_data12)/m_dt;
+        double m_dqCurrent_data13 = (m_qCurrent.data[13] - prev_m_qCurrent_data13)/m_dt;
+
+        double theta = (pitch_compl - m_wheel_ctrl->imuZero()[1]) - 0.0;
+        m_debugData2.data[0] = theta;
+
+        double phi_R = (m_qCurrent.data[12] - m_qCurrent_data12_offset) - 0.0;
+        double phi_L = (m_qCurrent.data[13] - m_qCurrent_data13_offset) - 0.0;
+        double phi = (phi_R + phi_L)/2.0;
+        m_debugData2.data[1] = phi;
+
+        double dtheta = rate_y - 0.0;
+        m_debugData2.data[2] = dtheta;
+
+        double dphi_R = m_dqCurrent_data12 - 0.0;
+        double dphi_L = m_dqCurrent_data13 - 0.0;
+        double dphi = (dphi_R + dphi_L)/2.0;
+        // std::cout << "[KIM pr] dphi = " << dphi << std::endl;
+        m_debugData2.data[3] = dphi;
+        dphi = dphi_filter->passFilter(dphi);
+        m_debugData2.data[4] = dphi;
+        // m_wheel_ctrl->setDPHIgain(4.321); // Change gain test
 #endif
 #if 0
         m_ref_q[12] = m_robot->joint(12)->q = m_wheel_ctrl->calcOutput(0, act_base_rpy[1], rate, (loop%250==0)?true:false);
         m_ref_q[13] = m_robot->joint(13)->q = m_wheel_ctrl->calcOutput(1, act_base_rpy[1], rate);
 #else
+        /* Calculate LQR parameters m_b, m_w, L */
+        double m_robot_BaseLinks_m = 0.0;
+        hrp::Vector3 m_robot_BaseLinks_mwc = hrp::Vector3::Zero();
+        double m_robot_WheelLinks_m = 0.0;
+        hrp::Vector3 m_robot_WheelLinks_mwc = hrp::Vector3::Zero();
+        for(int i = 0; i < m_robot->numLinks(); i++){
+            if( (m_robot->link(i)->name != "RLEG_JOINT6") && (m_robot->link(i)->name != "LLEG_JOINT6") ){ // BaseLinks !!!
+                m_robot_BaseLinks_m += m_robot->link(i)->m;
+                m_robot_BaseLinks_mwc += (m_robot->link(i)->m * m_robot->link(i)->wc);
+            }else{                                                                                        // WheelLinks !!!
+                m_robot_WheelLinks_m += m_robot->link(i)->m;
+                m_robot_WheelLinks_mwc += (m_robot->link(i)->m * m_robot->link(i)->wc);
+            }
+        }
+        hrp::Vector3 m_robot_BaseLinks_CM = (1.0 / m_robot_BaseLinks_m) * m_robot_BaseLinks_mwc;
+        hrp::Vector3 m_robot_WheelLinks_CM = (1.0 / m_robot_WheelLinks_m) * m_robot_WheelLinks_mwc;
+        if(loop%250==0){
+            std::cout << "[KIM pr] m_robot_BaseLinks_m = " << m_robot_BaseLinks_m << "  // This is LQR parameter m_b." << std::endl;
+            std::cout << "[KIM pr] m_robot_BaseLinks_CM = " << m_robot_BaseLinks_CM << std::endl; // CoM of Base (BaseCM).
+            std::cout << "[KIM pr] m_robot_WheelLinks_m = " << m_robot_WheelLinks_m << "  // This is LQR parameter m_w." << std::endl;
+            std::cout << "[KIM pr] m_robot_WheelLinks_CM = " << m_robot_WheelLinks_CM << std::endl; // CoM of Wheel (WheelCM). => 車軸と一致
+            std::cout << "[KIM pr] L = " << std::sqrt( std::pow(m_robot_BaseLinks_CM[0] - m_robot_WheelLinks_CM[0], 2.0) + std::pow(m_robot_BaseLinks_CM[2] - m_robot_WheelLinks_CM[2], 2.0) ) << "  // This is LQR parameter L." << std::endl;
+        }
+        /* Calculate LQR parameters I_b, I_w */
+        double m_robot_BaseLinks_Iyy_around_BaseCM = 0.0;
+        double m_robot_WheelLinks_Iyy_around_WheelCM = 0.0;
+        for(int i = 0; i < m_robot->numLinks(); i++){
+            if( (m_robot->link(i)->name != "RLEG_JOINT6") && (m_robot->link(i)->name != "LLEG_JOINT6") ){ // BaseLinks !!!
+                double m_robot_Blinki_Iyy = hrp::Vector3(0.0, 1.0, 0.0).dot(m_robot->link(i)->I * hrp::Vector3(0.0, 1.0, 0.0));
+                double distance2_xz_between_Blinki_and_BaseCM = std::pow(m_robot->link(i)->wc[0] - m_robot_BaseLinks_CM[0], 2.0) + std::pow(m_robot->link(i)->wc[2] - m_robot_BaseLinks_CM[2], 2.0);
+                double m_robot_Blinki_Iyy_around_BaseCM = m_robot_Blinki_Iyy + m_robot->link(i)->m * distance2_xz_between_Blinki_and_BaseCM; // 平行軸の定理
+                m_robot_BaseLinks_Iyy_around_BaseCM += m_robot_Blinki_Iyy_around_BaseCM;
+            }else{                                                                                        // WheelLinks !!!
+                double m_robot_Wlinki_Iyy = hrp::Vector3(0.0, 1.0, 0.0).dot(m_robot->link(i)->I * hrp::Vector3(0.0, 1.0, 0.0));
+                double distance2_xz_between_Wlinki_and_WheelCM = std::pow(m_robot->link(i)->wc[0] - m_robot_WheelLinks_CM[0], 2.0) + std::pow(m_robot->link(i)->wc[2] - m_robot_WheelLinks_CM[2], 2.0);
+                double m_robot_Wlinki_Iyy_around_WheelCM = m_robot_Wlinki_Iyy + m_robot->link(i)->m * distance2_xz_between_Wlinki_and_WheelCM; // 平行軸の定理
+                m_robot_WheelLinks_Iyy_around_WheelCM += m_robot_Wlinki_Iyy_around_WheelCM;
+            }
+        }
+        if(loop%250==0){
+            std::cout << "[KIM pr] m_robot_BaseLinks_Iyy_around_BaseCM = " << m_robot_BaseLinks_Iyy_around_BaseCM << "  // This is LQR parameter I_b." << std::endl;
+            std::cout << "[KIM pr] m_robot_WheelLinks_Iyy_around_WheelCM = " << m_robot_WheelLinks_Iyy_around_WheelCM << "  // This is LQR parameter I_w." << std::endl;
+        }
+
         //const double pitch = act_base_rpy[1];
-        m_wRef.data[0] = m_wheel_ctrl->calcOutput(0, pitch, rate, (loop%250==0)?true:false);
-        m_wRef.data[1] = m_wheel_ctrl->calcOutput(1, pitch, rate);
+        // m_wRef.data[0] = m_wheel_ctrl->calcOutput(0, pitch, rate, (loop%250==0)?true:false);
+        // m_wRef.data[1] = m_wheel_ctrl->calcOutput(1, pitch, rate);
+        // m_wRef.data[0] = 1.0;
+        // m_wRef.data[1] = 1.0;
+        m_wRef.data[0] = 0.5 * m_wheel_ctrl->stateFeedback(0, theta, phi, dtheta, dphi, (loop%250==0)?true:false);
+        m_wRef.data[1] = 0.5 * m_wheel_ctrl->stateFeedback(1, theta, phi, dtheta, dphi);
+        m_debugData2.data[5] = m_wRef.data[0] + m_wRef.data[1];
         m_wheel_brake.data[0] = m_wheel_ctrl->brakeState(0);
         m_wheel_brake.data[1] = m_wheel_ctrl->brakeState(1);
 #endif
         if(loop%250==0){
+            std::cout << "[KIM pr] m_wRef.data[0] = " << m_wRef.data[0] <<", m_wRef.data[1] = " << m_wRef.data[1] <<std::endl;
             std::cout << "[pr] m_ref_q[12,13] = ["<<m_ref_q[12]<<", "<<m_ref_q[13]<<"], wref = [" << m_wRef.data[0] << ", " << m_wRef.data[1] << "], act_base_rpy[1] = " << act_base_rpy[1] << ", m_rpy.data.p = " << m_rpy.data.p<<std::endl;
             if(m_wheel_ctrl->brakeState(0)){
                 std::cout << "[pr] Braking" << std::endl;
@@ -950,6 +1079,8 @@ void PushRecover::setTargetDataWithInterpolation(void){
                 std::cout << "[pr] Brake Free" << std::endl;
             }
         }
+        prev_m_qCurrent_data12 = m_qCurrent.data[12];
+        prev_m_qCurrent_data13 = m_qCurrent.data[13];
     }
 
     // reference acceleration
@@ -1095,6 +1226,10 @@ void PushRecover::setOutputData(const bool shw_msg_flag){
     m_zmp.tm = m_qRef.tm;
     m_prev_rel_ref_zmp = m_rel_ref_zmp;
     PRINTVEC3(m_rel_ref_zmp, shw_msg_flag);
+
+    // for debug output
+    m_debugData2.tm = m_qRef.tm;
+    m_debugData2Out.write();
 
     /* Write to OutPort */
     m_basePosOut.write();
@@ -2012,9 +2147,9 @@ RTC::ReturnCode_t PushRecover::onExecute(RTC::UniqueId ec_id)
 
       {
 #if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
-          interpretJoystickCommandandSend(m_joyaxes, m_joybuttons, m_joystate, &m_owpg);
+          //interpretJoystickCommandandSend(m_joyaxes, m_joybuttons, m_joystate, &m_owpg);
 #else
-          interpretJoystickCommandandSend(m_joyaxes, m_joybuttons, m_joystate, &m_owpg);
+          //interpretJoystickCommandandSend(m_joyaxes, m_joybuttons, m_joystate, &m_owpg);
 #endif
       }
 
