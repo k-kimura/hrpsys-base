@@ -525,7 +525,8 @@ RTC::ReturnCode_t PushRecover::onInitialize()
   m_qCurrent_data13_offset = 0.0;
   prev_m_qCurrent_data12 = 0.0;
   prev_m_qCurrent_data13 = 0.0;
-  m_debugData2.data.length(6); m_debugData2.data[0] = 0.0; m_debugData2.data[1] = 0.0; m_debugData2.data[2] = 0.0; m_debugData2.data[3] = 0.0; m_debugData2.data[4] = 0.0; m_debugData2.data[5] = 0.0;
+  // m_debugData2.data.length(6); m_debugData2.data[0] = 0.0; m_debugData2.data[1] = 0.0; m_debugData2.data[2] = 0.0; m_debugData2.data[3] = 0.0; m_debugData2.data[4] = 0.0; m_debugData2.data[5] = 0.0;
+  m_debugData2.data.length(12); m_debugData2.data[0] = 0.0; m_debugData2.data[1] = 0.0; m_debugData2.data[2] = 0.0; m_debugData2.data[3] = 0.0; m_debugData2.data[4] = 0.0; m_debugData2.data[5] = 0.0; m_debugData2.data[6] = 0.0; m_debugData2.data[7] = 0.0; m_debugData2.data[8] = 0.0; m_debugData2.data[9] = 0.0; m_debugData2.data[10] = 0.0; m_debugData2.data[11] = 0.0;
 
 #if !defined(USE_ROBUST_ONLINE_PATTERN_GENERATOR)
   m_modify_rot_context.copyWalkParam( &m_owpg );
@@ -786,6 +787,95 @@ hrp::Vector3 PushRecover::updateEstimatedInputData(void){
 void PushRecover::updateEstimatedOutputData(void){
 };
 
+// // from http://butterfly-effect.hatenablog.com/entry/2016/12/12/003858
+// //リッカチ方程式を解く
+// Eigen::MatrixXd RiccatiSolver(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd Q, Eigen::MatrixXd R){
+
+//     int n = (int)A.rows();
+
+//     //ハミルトン行列を生成する
+//     Eigen::MatrixXd H(2*n, 2*n);
+//     H << A, -B*R.inverse()*B.transpose(), -Q, -A.transpose();
+
+//     //固有値と固有ベクトルを求める
+//     Eigen::EigenSolver<Eigen::Matrix<double,4,4>> es(H);
+//     if (es.info() != Eigen::Success) abort();
+
+//     //ベクトルセットu,vを書き出す
+//     vector<Eigen::VectorXd> v_set, u_set;
+//     for(int i=0;i<2*n;i++){
+//         if (es.eigenvalues().real()(i) < 0){
+//             v_set.push_back( es.eigenvectors().real().block(0,i,n,1) );
+//             u_set.push_back( es.eigenvectors().real().block(n,i,n,1) );
+//         }
+//     }
+
+//     int num = (int)v_set.size();
+//     Eigen::MatrixXd v(n,num), u(n,num);
+//     for(int i=0;i<num;i++){
+//         v.block(0,i,n,1) = v_set[i];
+//         u.block(0,i,n,1) = u_set[i];
+//     }
+
+//     //解Pを求める
+//     Eigen::MatrixXd P = u * v.inverse();
+//     return P;
+// }
+
+// from https://qiita.com/watakandai/items/a020aec6d74e6dc7ef30
+Eigen::MatrixXd care(const Eigen::MatrixXd A,const Eigen::MatrixXd B,const Eigen::MatrixXd Q,const Eigen::MatrixXd R)
+{
+    int n = (int)A.rows();
+    // std::cout << "n = " << n << std::endl;
+    // Hamilton Matrix
+    Eigen::MatrixXd Ham(2*n, 2*n);
+    Ham << A, -B*R.inverse()*B.transpose(), -Q, -A.transpose();
+    // std::cout << "Ham = " << Ham << std::endl;
+
+    // EigenVec, Value
+    Eigen::EigenSolver<Eigen::MatrixXd> Eigs(Ham);  // for too large Q and R, Eigs.eigenvalues() is different from matlab/octave results (riccati P is also), and choreonoid will get shut down
+    // Eigen::ComplexEigenSolver<Eigen::MatrixXd> Eigs(Ham);  // in the case of too large Q and R?  Eigs.eigenvalues() is somehow nearly matlab/octave results (riccati P is also), and choreonoid will not get shut down
+    if (Eigs.info() != Eigen::Success) abort();
+
+    // eigenvector storage
+    Eigen::MatrixXcd eigvec(2*n, n);
+    int j = 0;
+
+    // store those with negative real number
+    // std::cout << "Eigs.eigenvalues() = " << Eigs.eigenvalues() << std::endl;
+    // std::cout << "Eigs.eigenvectors() = " << Eigs.eigenvectors() << std::endl;
+    // std::cout << "Eigs.eigenvalues() ver2 = " << Eigs.eigenvectors().inverse() * Ham * Eigs.eigenvectors() << std::endl;
+    for(int i = 0; i < 2*n; ++i){
+        if(Eigs.eigenvalues()[i].real() < 0){
+            eigvec.col(j) = Eigs.eigenvectors().block(0, i, 2*n, 1);
+            ++j;
+        }
+    }
+    // std::cout << "eigvec = " << eigvec << std::endl;
+
+    Eigen::MatrixXcd U(n, n);
+    Eigen::MatrixXcd V(n, n);
+
+    U = eigvec.block(0,0,n,n);
+    V = eigvec.block(n,0,n,n);
+    // std::cout << "U = " << U << std::endl;
+    // std::cout << "V = " << V << std::endl;
+    // std::cout << "(V * U.inverse()).imag() = " << (V * U.inverse()).imag() << std::endl;
+    // std::cout << "(V * U.inverse()).real() = " << (V * U.inverse()).real() << std::endl;
+
+    return (V * U.inverse()).real();
+}
+
+// Eigen::MatrixXd calcGainK()
+// {
+//     /**
+//      * Calculate LQR Gain K
+//      * Solves Riccati Equation using Arimoto Potter Method
+//      */
+//     Eigen::MatrixXd  P = care(A, B, Q, R);
+//     return R.inverse() * B.transpose() * P;
+// }
+
 void PushRecover::setTargetDataWithInterpolation(void){
     const PushRecoveryState tmp_state = m_current_control_state;
     bool is_transition_interpolator_empty = transition_interpolator->isEmpty();
@@ -994,8 +1084,10 @@ void PushRecover::setTargetDataWithInterpolation(void){
         double theta = (pitch_compl - m_wheel_ctrl->imuZero()[1]) - 0.0;
         m_debugData2.data[0] = theta;
 
-        double phi_R = (m_qCurrent.data[12] - m_qCurrent_data12_offset) - 0.0;
-        double phi_L = (m_qCurrent.data[13] - m_qCurrent_data13_offset) - 0.0;
+        // double phi_R = (m_qCurrent.data[12] - m_qCurrent_data12_offset) - 0.0;
+        // double phi_L = (m_qCurrent.data[13] - m_qCurrent_data13_offset) - 0.0;
+        double phi_R = (m_qCurrent.data[12] - m_qCurrent_data12_offset) - m_wheel_ctrl->refPhiYaw()[0];
+        double phi_L = (m_qCurrent.data[13] - m_qCurrent_data13_offset) - m_wheel_ctrl->refPhiYaw()[0];
         double phi = (phi_R + phi_L)/2.0;
         m_debugData2.data[1] = phi;
 
@@ -1015,7 +1107,7 @@ void PushRecover::setTargetDataWithInterpolation(void){
         m_ref_q[12] = m_robot->joint(12)->q = m_wheel_ctrl->calcOutput(0, act_base_rpy[1], rate, (loop%250==0)?true:false);
         m_ref_q[13] = m_robot->joint(13)->q = m_wheel_ctrl->calcOutput(1, act_base_rpy[1], rate);
 #else
-        /* Calculate LQR parameters m_b, m_w, L */
+        /* Calculate LQR parameters m_b, m_w, L, R */
         double m_robot_BaseLinks_m = 0.0;
         hrp::Vector3 m_robot_BaseLinks_mwc = hrp::Vector3::Zero();
         double m_robot_WheelLinks_m = 0.0;
@@ -1031,13 +1123,17 @@ void PushRecover::setTargetDataWithInterpolation(void){
         }
         hrp::Vector3 m_robot_BaseLinks_CM = (1.0 / m_robot_BaseLinks_m) * m_robot_BaseLinks_mwc;
         hrp::Vector3 m_robot_WheelLinks_CM = (1.0 / m_robot_WheelLinks_m) * m_robot_WheelLinks_mwc;
+        double m_robot_L = std::sqrt( std::pow(m_robot_BaseLinks_CM[0] - m_robot_WheelLinks_CM[0], 2.0) + std::pow(m_robot_BaseLinks_CM[2] - m_robot_WheelLinks_CM[2], 2.0) );
+        double m_robot_R = 0.0447; // [m]  from "trans_robot_model/l1w/model/wheel_right.wrl" "trans_robot_model/l1w/model/wheel_left.wrl" "trans_robot_model/l1w/model/L1Wmain.wrl" "trans_robot_model/l1w/model/L1Wmain_bush_primitive.wrl"
         if(loop%250==0){
             std::cout << "[KIM pr] m_robot_BaseLinks_m = " << m_robot_BaseLinks_m << "  // This is LQR parameter m_b." << std::endl;
             std::cout << "[KIM pr] m_robot_BaseLinks_CM = " << m_robot_BaseLinks_CM << std::endl; // CoM of Base (BaseCM).
             std::cout << "[KIM pr] m_robot_WheelLinks_m = " << m_robot_WheelLinks_m << "  // This is LQR parameter m_w." << std::endl;
             std::cout << "[KIM pr] m_robot_WheelLinks_CM = " << m_robot_WheelLinks_CM << std::endl; // CoM of Wheel (WheelCM). => 車軸と一致
-            std::cout << "[KIM pr] L = " << std::sqrt( std::pow(m_robot_BaseLinks_CM[0] - m_robot_WheelLinks_CM[0], 2.0) + std::pow(m_robot_BaseLinks_CM[2] - m_robot_WheelLinks_CM[2], 2.0) ) << "  // This is LQR parameter L." << std::endl;
+            std::cout << "[KIM pr] L = " << m_robot_L << "  // This is LQR parameter L." << std::endl;
+            std::cout << "[KIM pr] R = " << m_robot_R << "  // This is LQR parameter R." << std::endl;
         }
+        m_debugData2.data[6] = m_robot_L;
         /* Calculate LQR parameters I_b, I_w */
         double m_robot_BaseLinks_Iyy_around_BaseCM = 0.0;
         double m_robot_WheelLinks_Iyy_around_WheelCM = 0.0;
@@ -1058,14 +1154,92 @@ void PushRecover::setTargetDataWithInterpolation(void){
             std::cout << "[KIM pr] m_robot_BaseLinks_Iyy_around_BaseCM = " << m_robot_BaseLinks_Iyy_around_BaseCM << "  // This is LQR parameter I_b." << std::endl;
             std::cout << "[KIM pr] m_robot_WheelLinks_Iyy_around_WheelCM = " << m_robot_WheelLinks_Iyy_around_WheelCM << "  // This is LQR parameter I_w." << std::endl;
         }
+        m_debugData2.data[7] = m_robot_BaseLinks_Iyy_around_BaseCM;
+
+        double m_robot_g = 9.8;
+
+        double m_robot_a = (m_robot_BaseLinks_m + m_robot_WheelLinks_m) * std::pow(m_robot_R, 2.0) + m_robot_WheelLinks_Iyy_around_WheelCM;
+        double m_robot_b = m_robot_BaseLinks_m * m_robot_R * m_robot_L;
+        double m_robot_c = m_robot_BaseLinks_m * std::pow(m_robot_L, 2.0) + m_robot_BaseLinks_Iyy_around_BaseCM;
+        double m_robot_d = m_robot_BaseLinks_m * m_robot_g * m_robot_L;
+
+        Eigen::MatrixXd E(4,4), A_0(4,4), B_0(4,1);
+        E << 1, 0, 0, 0,  0, 1, 0, 0,  0, 0, m_robot_a + 2*m_robot_b + m_robot_c, m_robot_a + m_robot_b,  0, 0, m_robot_a + m_robot_b, m_robot_a;
+        A_0 << 0, 0, 1, 0,  0, 0, 0, 1,  m_robot_d, 0, 0, 0,  0, 0, 0, 0;
+        B_0 << 0,  0,  0,  1;
+
+        Eigen::MatrixXd A = E.inverse() * A_0;
+        Eigen::MatrixXd B = E.inverse() * B_0;
+
+        Eigen::MatrixXd Q(4,4), R(1,1);
+        // Q << 1.0*std::pow(10, 8), 0, 0, 0,  0, 8.0*std::pow(10, 2), 0, 0,  0, 0, 9.0*std::pow(10, 11), 0,  0, 0, 0, 5.0*std::pow(10, 4);
+        // R << 7.0*std::pow(10, 5);
+        Q << 500.0, 0, 0, 0,  0, 1.0, 0, 0,  0, 0, 500.0, 0,  0, 0, 0, 0.2;
+        R << 0.005;
+        // Q << 1.0*std::pow(10, 1), 0, 0, 0,  0, 8.0*std::pow(10, 2), 0, 0,  0, 0, 9.0*std::pow(10, 1), 0,  0, 0, 0, 5.0*std::pow(10, 1);
+        // R << 7.0*std::pow(10, 2);
+        // Q << 1.0*std::pow(10, 4), 0, 0, 0,  0, 8.0*std::pow(10, -2), 0, 0,  0, 0, 9.0*std::pow(10, 5), 0,  0, 0, 0, 5.0*std::pow(10, 1);
+        // R << 7.0*std::pow(10, 2);
+
+        // A << 0, 0, 1, 0,  0, 0, 0, 1,  37.4112, 0, 0, 0,  -531.097, 0, 0, 0;
+        // B << 0,  0,  -1.9986,  39.2598;
+
+        // std::cout << "[KIM pr] A = " << A << std::endl;
+        // std::cout << "[KIM pr] B = " << B << std::endl;
+        // std::cout << "[KIM pr] Q = " << Q << std::endl;
+        // std::cout << "[KIM pr] R = " << R << std::endl;
+
+        // // int nn = (int)A.rows();
+        // // std::cout << "nn = " << nn << std::endl;
+        // // Eigen::MatrixXd HamHam(2*nn, 2*nn);
+        // // HamHam << A, -B*R.inverse()*B.transpose(), -Q, -A.transpose();
+        // // std::cout << "HamHam = " << HamHam << std::endl;
+        // Eigen::MatrixXd TesTes(8, 8);
+        // TesTes << 0.0000e+00, 0.0000e+00, 1.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        //     0.0000e+00, 0.0000e+00, 0.0000e+00, 1.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00,
+        //     3.7411e+01, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, -5.7063e-06, 1.1209e-04,
+        //     -5.3110e+02, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 0.0000e+00, 1.1209e-04, -2.2019e-03,
+        //     -1.0000e+08, 0.0000e+00, 0.0000e+00, 0.0000e+00, -0.0000e+00, -0.0000e+00, -3.7411e+01, 5.3110e+02,
+        //     0.0000e+00, -8.0000e+02, 0.0000e+00, 0.0000e+00, -0.0000e+00, -0.0000e+00, -0.0000e+00, -0.0000e+00,
+        //     0.0000e+00, 0.0000e+00, -9.0000e+11, 0.0000e+00, -1.0000e+00, -0.0000e+00, -0.0000e+00, -0.0000e+00,
+        //     0.0000e+00, 0.0000e+00, 0.0000e+00, -5.0000e+04, -0.0000e+00, -1.0000e+00, -0.0000e+00, -0.0000e+00;
+        // // Eigen::EigenSolver<Eigen::MatrixXd> EigsEigs(HamHam);
+        // Eigen::ComplexEigenSolver<Eigen::MatrixXd> EigsEigs(TesTes);
+        // if (EigsEigs.info() != Eigen::Success) abort();
+        // std::cout << "EigsEigs.eigenvalues() = " << EigsEigs.eigenvalues() << std::endl;
+
+        // std::cout << "[KIM pr] care(A, B, Q, R) = " << care(A, B, Q, R) << std::endl;
+        Eigen::MatrixXd P = care(A, B, Q, R);
+        // Eigen::MatrixXd P(4,4);
+        // P << -3.76115e+13, -4.01839e+07, -2.79758e+10, -5.79635e+08,  -2.96988e+09, 8396.73, -863211, 22773.8,  -8.65016e+11, 34016.3, 2.58112e+07, 528145,  -4.31876e+10, 2643, -1.82716e+07, 40010.5;
+        // std::cout << "[KIM pr] P = " << P << std::endl;
+        // Eigen::MatrixXd P = RiccatiSolver(A,B,Q,R);
+        Eigen::MatrixXd K = R.inverse() * B.transpose() * P;
+        if(loop%250==0){
+            std::cout << "[KIM pr] K = " << K << std::endl;
+        }
+
+        // K = 5.0 * K; // temporary
+
+        m_debugData2.data[8] = K(0,0);
+        m_debugData2.data[9] = K(0,1);
+        m_debugData2.data[10] = K(0,2);
+        m_debugData2.data[11] = K(0,3);
+
+        m_wheel_ctrl->setTHgain(K(0,0)); // Change gain
+        m_wheel_ctrl->setPHIgain(K(0,1)); // Change gain
+        m_wheel_ctrl->setDTHgain(K(0,2)); // Change gain
+        m_wheel_ctrl->setDPHIgain(K(0,3)); // Change gain
 
         //const double pitch = act_base_rpy[1];
         // m_wRef.data[0] = m_wheel_ctrl->calcOutput(0, pitch, rate, (loop%250==0)?true:false);
         // m_wRef.data[1] = m_wheel_ctrl->calcOutput(1, pitch, rate);
         // m_wRef.data[0] = 1.0;
         // m_wRef.data[1] = 1.0;
-        m_wRef.data[0] = 0.5 * m_wheel_ctrl->stateFeedback(0, theta, phi, dtheta, dphi, (loop%250==0)?true:false);
-        m_wRef.data[1] = 0.5 * m_wheel_ctrl->stateFeedback(1, theta, phi, dtheta, dphi);
+        // m_wRef.data[0] = 0.5 * m_wheel_ctrl->stateFeedback(0, theta, phi, dtheta, dphi, (loop%250==0)?true:false);
+        // m_wRef.data[1] = 0.5 * m_wheel_ctrl->stateFeedback(1, theta, phi, dtheta, dphi);
+        m_wRef.data[0] = 0.5 * m_wheel_ctrl->stateFeedback(0, theta, phi, dtheta, dphi, (loop%250==0)?true:false) + m_wheel_ctrl->gainYaw() * (m_rate.data.avz - m_wheel_ctrl->refPhiYaw()[1]);
+        m_wRef.data[1] = 0.5 * m_wheel_ctrl->stateFeedback(1, theta, phi, dtheta, dphi) - m_wheel_ctrl->gainYaw() * (m_rate.data.avz - m_wheel_ctrl->refPhiYaw()[1]);
         m_debugData2.data[5] = m_wRef.data[0] + m_wRef.data[1];
         m_wheel_brake.data[0] = m_wheel_ctrl->brakeState(0);
         m_wheel_brake.data[1] = m_wheel_ctrl->brakeState(1);

@@ -45,6 +45,10 @@ namespace WheelLeg {
             for(size_t k=0; k<3; k++){
                 m_param.imu_zero[k] = 0.0;
             }
+            for(size_t k=0; k<2; k++){
+                m_param.ref_phi_yaw[k] = 0.0;
+            }
+            m_param.gain_yaw = 0.0;
             m_param.complementary_filter_reset = true;
             m_param.complementary_filter_pitch = 0.0;
             m_param.phi_reset = false;
@@ -107,6 +111,10 @@ namespace WheelLeg {
             for(size_t k=0; k<3; k++){
                 o_param.imu_zero[k] = m_param.imu_zero[k];
             }
+            for(size_t k=0; k<2; k++){
+                o_param.ref_phi_yaw[k] = m_param.ref_phi_yaw[k];
+            }
+            o_param.gain_yaw = m_param.gain_yaw;
             o_param.complementary_filter_reset = m_param.complementary_filter_reset;
             o_param.complementary_filter_pitch = m_param.complementary_filter_pitch;
             o_param.phi_reset = m_param.phi_reset;
@@ -120,6 +128,10 @@ namespace WheelLeg {
             for(size_t k=0; k<3; k++){
                 m_param.imu_zero[k] = i_param.imu_zero[k];
             }
+            for(size_t k=0; k<2; k++){
+                m_param.ref_phi_yaw[k] = i_param.ref_phi_yaw[k];
+            }
+            m_param.gain_yaw = i_param.gain_yaw;
             m_param.complementary_filter_reset = i_param.complementary_filter_reset;
             // m_param.complementary_filter_pitch = i_param.complementary_filter_pitch;
             m_param.phi_reset = i_param.phi_reset;
@@ -281,6 +293,18 @@ namespace WheelLeg {
             for(size_t k=0; k<3; k++){
                 ret[k] = m_param.imu_zero[k];
             }
+            return ret;
+        };
+        hrp::Vector2 refPhiYaw(){
+            hrp::Vector2 ret;
+            for(size_t k=0; k<2; k++){
+                ret[k] = m_param.ref_phi_yaw[k];
+            }
+            return ret;
+        };
+        double gainYaw(){
+            double ret;
+            ret = m_param.gain_yaw;
             return ret;
         };
         void setComplementaryFilterReset(const bool a){ m_param.complementary_filter_reset = a; };

@@ -9,6 +9,7 @@ module OpenHRP
   {
       typedef sequence<string> sSequence;
       typedef sequence<double> dSequence;
+      typedef double DblArray2[2];
       typedef double DblArray3[3];
 
       struct PushDetectParam
@@ -87,6 +88,8 @@ module OpenHRP
           long   datal;
           double dataf;
           DblArray3 imu_zero;
+          DblArray2 ref_phi_yaw;
+          double gain_yaw;
           boolean complementary_filter_reset;
           double complementary_filter_pitch;
           boolean phi_reset;
