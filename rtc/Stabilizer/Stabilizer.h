@@ -324,6 +324,7 @@ class Stabilizer
   // EEFM ST
   double eefm_k1[2], eefm_k2[2], eefm_k3[2], eefm_zmp_delay_time_const[2], eefm_body_attitude_control_gain[2], eefm_body_attitude_control_time_const[2];
   double eefm_pos_time_const_swing, eefm_pos_transition_time, eefm_pos_margin_time, eefm_gravitational_acceleration;
+  double theta, dtheta, ddtheta, prev_theta, prev_dtheta, wheel_radius, wheel_acc, wheel_refzmp_x, prev_wheel_refzmp_x; // by k-kimura
   std::vector<double> eefm_swing_damping_force_thre, eefm_swing_damping_moment_thre;
   hrp::Vector3 new_refzmp, rel_cog, ref_zmp_aux, diff_foot_origin_ext_moment;
   hrp::Vector3 pos_ctrl;

@@ -414,6 +414,9 @@ RTC::ReturnCode_t Stabilizer::onInitialize()
   limb_stretch_avoidance_vlimit[1] = 50 * 1e-3 * dt; // upper limit
   root_rot_compensation_limit[0] = root_rot_compensation_limit[1] = deg2rad(90.0);
   detection_count_to_air = static_cast<int>(0.0 / dt);
+  prev_theta = 0.0; // [rad]
+  prev_dtheta = 0.0; // [rad/s]
+  wheel_radius = 0.063; // [m]  irteusgl$ (* 0.001 (elt (v- (send (send (send *robot* :rleg-wheel-p-0) :child-link) :centroid) (send (send *robot* :foot-midcoords) :worldpos)) 2))
 
   // parameters for RUNST
   double ke = 0, tc = 0;
@@ -882,6 +885,19 @@ void Stabilizer::getActualParameters ()
     for (size_t i = 0; i < 2; i++) {
       new_refzmp(i) += eefm_k1[i] * transition_smooth_gain * dcog(i) + eefm_k2[i] * transition_smooth_gain * dcogvel(i) + eefm_k3[i] * transition_smooth_gain * dzmp(i) + ref_zmp_aux(i);
     }
+    // theta = (m_qCurrent.data[6] + m_qCurrent.data[13]) / 2.0; // [rad]
+    theta = (m_qRef.data[6] + m_qRef.data[13]) / 2.0; // [rad]
+    dtheta = (theta - prev_theta) / dt; // [rad/s]
+    ddtheta = (dtheta - prev_dtheta) / dt; // [rad/s^2]
+    prev_theta = theta;
+    prev_dtheta = dtheta;
+    wheel_acc = wheel_radius * ddtheta; // [m/s^2]
+    wheel_refzmp_x = - (wheel_acc / eefm_gravitational_acceleration) * (act_cog - act_zmp)(2); // [m]
+    // apply inverse system by k-kimura
+    double tmp_wheel_refzmp_x = wheel_refzmp_x + eefm_zmp_delay_time_const[0] * (wheel_refzmp_x - prev_wheel_refzmp_x) / dt;
+    prev_wheel_refzmp_x = wheel_refzmp_x;
+    wheel_refzmp_x = tmp_wheel_refzmp_x;
+    new_refzmp(0) += wheel_refzmp_x; // [m]
     if (DEBUGP) {
       // All state variables are foot_origin coords relative
       std::cerr << "[" << m_profile.instance_name << "] state values" << std::endl;
